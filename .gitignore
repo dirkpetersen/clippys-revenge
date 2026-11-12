@@ -31,7 +31,6 @@
 # Executables
 *.exe
 *.out
-*.app
 *.i*86
 *.x86_64
 *.hex
@@ -42,14 +41,68 @@
 *.idb
 *.pdb
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
 
 # debug information files
 *.dwo
+
+# ---- C# / .NET ----
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+[Pp]ublish/
+artifacts/
+x64/
+x86/
+[Aa][Rr][Mm]64/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+!**/packages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.rsuser
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+_ReSharper*/
+*.DotSettings.user
+
+# Test results / coverage
+[Tt]est[Rr]esult*/
+*.trx
+coverage/
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+
+# Misc
+*.cache
+*.log
+*.tlog
+*.binlog
+*.VC.db
+*.VC.opendb
+
+# Local app data that must never be committed
+*.db
+*.db-wal
+*.db-shm
+token.bin
