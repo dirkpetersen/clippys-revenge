@@ -41,12 +41,12 @@ v0.0.1 release.
 - [x] M1.8 `FreeBusy.BusyIntervals` / `FreeSlots`, 28-day chunk joining + tests `{arch:brief}`
 
 ## M2 Index (SPEC §9) — deps: M1.2
-- Review: [ ] pending
-- [ ] M2.1 `EmailIndex` schema, migrations, external-content FTS + triggers, `UpsertBatch`, `Delete`, `SetUnread`, `Get` + tests `{arch:brief}`
-- [ ] M2.2 `EmailIndex.Search` with every filter, paging, snippet + tests `{arch:brief}`
-- [ ] M2.3 `PurgeOlderThan` (+ VACUUM keeps FTS working), `Status`, sync state, `Close` + tests `{arch:skip}`
-- [ ] M2.4 `MailboxIndexes` (per-mailbox files, `all` merge, `Locate`, add/disable/remove) + tests `{arch:brief}`
-- [ ] M2.5 Perf check: 50k synthetic emails, `search_emails` p95 < 20 ms (opt-in benchmark test, not in CI) `{arch:skip}`
+- Review: [x] done (8fcc2ac, approve after 1 fix round: perf p95 23→10 ms)
+- [x] M2.1 `EmailIndex` schema, migrations, external-content FTS + triggers, `UpsertBatch`, `Delete`, `SetUnread`, `Get` + tests `{arch:brief}`
+- [x] M2.2 `EmailIndex.Search` with every filter, paging, snippet + tests `{arch:brief}`
+- [x] M2.3 `PurgeOlderThan` (+ VACUUM keeps FTS working), `Status`, sync state, `Close` + tests `{arch:skip}`
+- [x] M2.4 `MailboxIndexes` (per-mailbox files, `all` merge, `Locate`, add/disable/remove) + tests `{arch:brief}`
+- [x] M2.5 Perf check: 50k synthetic emails, `search_emails` p95 < 20 ms (opt-in benchmark test, not in CI) `{arch:skip}`
 
 ## M3 Host plumbing (SPEC §7, §13) — deps: M0
 - Review: [x] done (fbe093e, approve, 0 fix rounds)
@@ -54,10 +54,10 @@ v0.0.1 release.
 - [x] M3.2 `ActivityHub` (ref-counted states, ring buffer, 10 Hz throttle) + tests `{arch:brief}`
 
 ## M4 App shell — deps: M1.7, M3
-- Review: [ ] pending
-- [ ] M4.1 `Program`: single-instance mutex + named pipe, generic host, Kestrel on loopback, `MapMcp("/mcp")` behind `BearerAuth`, an `index_status` stub tool, tool-call activity filter `{arch:brief}`
-- [ ] M4.2 `SettingsStore` (settings.json, DPAPI token, first run, Run key) `{arch:skip}`
-- [ ] M4.3 Tray: `TrayApp` with the menu from SPEC §6.2 (handlers can be stubs), icon states from `ActivityHub`, original paperclip icons (generated `.ico` resources), balloons with rate limit `{arch:brief}`
+- Review: [x] done (440597e, approve after 1 fix round: log folder → %LOCALAPPDATA%)
+- [x] M4.1 `Program`: single-instance mutex + named pipe, generic host, Kestrel on loopback, `MapMcp("/mcp")` behind `BearerAuth`, an `index_status` stub tool, tool-call activity filter `{arch:brief}`
+- [x] M4.2 `SettingsStore` (settings.json, DPAPI token, first run, Run key) `{arch:skip}`
+- [x] M4.3 Tray: `TrayApp` with the menu from SPEC §6.2 (handlers can be stubs), icon states from `ActivityHub`, original paperclip icons (generated `.ico` resources), balloons with rate limit `{arch:brief}`
 
 ## M5 Outlook core (SPEC §4, §8) — deps: M4
 - Review: [ ] pending
@@ -103,6 +103,9 @@ v0.0.1 release.
 - M4.1, M4.2: `TokenHolder.Current` exposes the raw token by design; make sure it never reaches a log line or exception message. (M1/M3 review)
 - M5.2: `Recipients.IsValidEmail` and `Settings.IsValidAddress` have different rules; unify them when SMTP addresses for shared mailboxes are resolved. (M1/M3 review)
 - M10.1: add PathPolicy tests with junction path components written as `link.` and 8.3 short names (`LINK~1`). (M1/M3 review)
+- SPEC drift (architect, next brief): §9.1 `ix_emails_folder_time` is now `(folder COLLATE NOCASE, event_time, sender_name, sender_email)` in code; `SettingsStore` lives in Core behind `ISecretProtector` (App supplies `DpapiProtector`), not in App as §3 says. Update the spec to match. (M2/M4 reviews)
+- M6.1: write `meta` keys `mailbox_smtp`, `store_id`, `retention_months` (nothing writes them yet). (M2 review)
+- MailboxIndexes small fixes, fold into M6.1 or M7.1: `Search` error should echo the caller's mailbox text, not the normalized key; `Add` must not open SQLite while holding `_lock`; constructor must `Close()` already-opened indexes if a later one throws; `SearchDates` must turn `ArgumentOutOfRangeException` (e.g. `9999-12-31`) into the standard `FormatException`. (M2 review)
 
 ## Log
 
@@ -119,3 +122,6 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-12 M3.1 implemented in parallel worktree, merged to dev (bfa56cb)
 2026-11-12 M3.2 ActivityHub: states, ring buffer, throttled Changed, 27 tests
 2026-11-12 M1+M3 milestone review: approve, 590 tests, 6 non-blocking notes (see carry-forward)
+2026-11-12 M2.1–M2.5 index: schema, search, purge/status, MailboxIndexes, perf benchmark (chain/M2 → 8fcc2ac)
+2026-11-12 M4.1–M4.3 app shell: MCP host on loopback, SettingsStore + DPAPI, tray (chain/M4 → 440597e)
+2026-11-12 M2 + M4 milestone reviews approved after 1 fix round each; dev at 946 tests passing
