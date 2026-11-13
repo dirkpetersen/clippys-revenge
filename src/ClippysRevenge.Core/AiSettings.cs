@@ -103,7 +103,8 @@ public sealed partial class AiDraftingSettings
             var path = ClaudeCliPath.Trim();
             var pathError = Settings.PathError(path);
             if (pathError is not null) Add("ClaudeCliPath", pathError);
-            else if (path.Contains('/')) Add("ClaudeCliPath", "Use backslashes in the Claude Code path.");
+            // ClaudeCliLocator rejects '/' in Windows paths; on other OSes (Core tests) '/' is the separator.
+            else if (OperatingSystem.IsWindows() && path.Contains('/')) Add("ClaudeCliPath", "Use backslashes in the Claude Code path.");
             else
             {
                 var ext = Path.GetExtension(path);
