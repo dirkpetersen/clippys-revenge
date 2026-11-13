@@ -67,7 +67,8 @@ internal static class Program
                 return fresh;
             },
             dataDir,
-            Path.Combine(dataDir, "logs")));
+            // Logs live under %LOCALAPPDATA% (SPEC 5.1). "Open data folder" opens %APPDATA% on purpose: settings.json and token.bin.
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClippysRevenge", "logs")));
 
         instance.StartListening(() =>
         {
