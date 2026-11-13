@@ -1499,7 +1499,11 @@ mode, the DASL date helper, and whether marking a message read changes
   GitHub release with the exe, `install.ps1` and `SHA256SUMS.txt`. A plain
   version (`0.0.2`) becomes the **latest** release, which the one-line
   installer uses. A version with a suffix (`0.0.3-beta.1`) is published as
-  a pre-release. **To ship, bump `<Version>` and merge to `main`.**
+  a pre-release. **To ship, bump `<Version>` and merge to `main`.** Every
+  merge ships a new version. A `prune` job then keeps the newest 3 releases,
+  plus the newest one that is at least 3 days old when all 3 are younger.
+  It deletes nothing until some release is 3 days old. It removes every
+  other release together with its tag.
 - Both workflows skip cleanly while there is no solution file.
 - The exe is not code-signed yet, so SmartScreen warns on first launch.
 

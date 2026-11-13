@@ -84,3 +84,38 @@ jobs:
             --title "Clippy's Revenge ${{ steps.ver.outputs.tag }}" \
             --generate-notes \
             $([[ "${{ steps.ver.outputs.version }}" == *-* ]] && echo --prerelease || echo --latest)
+
+  # Retention: keep the newest 3 releases. If all 3 are younger than 3 days, also keep
+  # the newest release that is at least 3 days old; if there is none, delete nothing.
+  # Every other release is deleted together with its tag. Runs after every release job.
+  prune:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete old releases and tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api --paginate "repos/$REPO/releases?per_page=100" --jq '.[] | [.tag_name, (.published_at // .created_at)] | @tsv' > releases.tsv
+          python3 - <<'EOF' > delete.txt
+          import datetime as dt
+          rows = [l.rstrip("\n").split("\t") for l in open("releases.tsv") if l.strip()]
+          parse = lambda s: dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+          rows = sorted(((t, parse(d)) for t, d in rows), key=lambda r: r[1], reverse=True)
+          now = dt.datetime.now(dt.timezone.utc)
+          old = lambda r: now - r[1] >= dt.timedelta(days=3)
+          keep = rows[:3]
+          if not any(old(r) for r in keep):
+              keep += [r for r in rows[3:] if old(r)][:1]
+          if not any(old(r) for r in keep):
+              keep = rows  # no release is 3 days old yet: delete nothing
+          kept = {t for t, _ in keep}
+          for t, d in rows:
+              print(("KEEP " if t in kept else "DELETE ") + t + " " + d.isoformat())
+          EOF
+          cat delete.txt
+          grep '^DELETE ' delete.txt | cut -d' ' -f2 | while read -r tag; do
+            gh release delete "$tag" --repo "$REPO" --cleanup-tag --yes
+            echo "Deleted release and tag $tag"
+          done

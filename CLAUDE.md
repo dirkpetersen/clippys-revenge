@@ -77,7 +77,18 @@ the user asks, with `CLIPPY_LIVE=1` set. They must never send anything.
 `<Version>` in `Directory.Build.props` is the product version. Every push
 to `main` releases `v<Version>` if that tag doesn't exist yet (see
 `.github/workflows/release.yml`). So **never push to `main` directly**.
-Work happens on a branch and lands through a PR the user merges.
+Work happens on `dev` and lands through a PR.
+
+Standing rule from the user (2026-11-13):
+- **Don't wait for the user to merge.** When CI on the PR is green, merge it
+  (`gh pr merge --merge`).
+- **Every merge ships a release.** Bump `<Version>` in that PR so the merge
+  publishes `v<Version>` as the latest full release. Versions with a `-suffix`
+  become pre-releases.
+- **Retention is automatic.** The `prune` job in `release.yml` keeps the
+  newest 3 releases. If all 3 are younger than 3 days, it also keeps the
+  newest release that is 3 days old or older. If no release is that old, it
+  deletes nothing. Every other release is deleted together with its tag.
 
 ## Agent roles
 
