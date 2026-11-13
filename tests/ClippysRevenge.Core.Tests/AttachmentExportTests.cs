@@ -180,6 +180,16 @@ public class AttachmentExportTests : IDisposable
         await Assert.ThrowsAsync<McpException>(() => Make().GetAsync("E1", null, 2, P("elsewhere"), TestContext.Current.CancellationToken));
         Assert.Equal(1, Blocked);
         Assert.Empty(_saver.Calls);
+        Assert.False(Directory.Exists(P("elsewhere")), "A refused directory must not be created.");
+    }
+
+    [Fact]
+    public async Task E10b_RefusedSaveAttachmentsCallsNoSaver()
+    {
+        await Assert.ThrowsAsync<McpException>(() => Make().SaveAsync(
+            new SaveAttachmentsArgs { SaveDir = P("elsewhere") }, TestContext.Current.CancellationToken));
+        Assert.Empty(_saver.Calls);
+        Assert.False(Directory.Exists(P("elsewhere")), "A refused directory must not be created.");
     }
 
     [Fact]

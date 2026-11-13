@@ -78,12 +78,13 @@ public sealed class LiveAttachmentTests(LiveOutlook fx)
     {
         await fx.RequireReadyAsync(TestContext.Current.CancellationToken);
         var (hit, att) = await PickAsync();
-        var outside = Path.Combine(fx.TempRoot, "outside");
+        var outside = Path.Combine(fx.TempRoot, "outside-attachment");   // own dir: LiveDraftTests seeds TempRoot\outside
         Directory.CreateDirectory(outside);   // so that only the policy can refuse it
 
         await Assert.ThrowsAnyAsync<McpException>(() =>
             Export().GetAsync(hit.Email.Id, null, att.Position, outside, TestContext.Current.CancellationToken));
-        Assert.Empty(Directory.GetFileSystemEntries(outside));
+        var entries = Directory.GetFileSystemEntries(outside);
+        Assert.True(entries.Length == 0, string.Join("; ", entries));
     }
 
     [Fact(Timeout = 180_000)]
