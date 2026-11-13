@@ -97,7 +97,7 @@ v0.0.1 release.
 - [x] M10.1 Safety source-scan test (one `.Send(`, no Outlook launch calls) `{arch:skip}`
 - [x] M10.2 Live tests (`[Trait("live","outlook")]`), run once by the user with `CLIPPY_LIVE=1` `{arch:brief}` (code done 2f7cfbd; user run 2026-11-13: 27 passed, 3 skipped (no shared mailbox), 0 failed)
 - [x] M10.3 `install.ps1` (install, Start menu shortcut, `-Uninstall`) and README (install, WSL mirrored networking, security model, index at rest) `{arch:skip}`
-- [~] M10.4 Final review of the whole branch by `reviewer`, CI green on the PR, then hand to the user to merge (→ v0.0.1 release) `{arch:skip}`
+- [x] M10.4 Final review of the whole branch by `reviewer`, CI green on the PR, then hand to the user to merge (→ v0.0.1 release) `{arch:skip}`
 
 ## Carry-forward notes from reviews
 
@@ -143,3 +143,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-13 M10.4 final review fixes merged (ec9d88c, 3a6bd12); app smoke test vs cached Outlook OK (attach, backfill, search_emails, get_message, list_events 1.6 s, sender SMTP 50/50)
 2026-11-13 Live run 1: 23 passed, 4 failed -> fixed calendar DASL in UTC + free/busy code 5 (8ac84bc), long-term table EntryIDs (a264667), attachment test folder clash (89706dd); 1788 tests
 2026-11-13 Live run 2: 27 passed, 3 skipped (shared mailbox), 0 failed; PR dev -> main opened
+2026-11-13 CI fixed (.slnx detection, 4b4a956); PR #1 green: build-windows, core-tests-linux; handed to the user to merge
