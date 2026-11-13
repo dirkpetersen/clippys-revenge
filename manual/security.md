@@ -14,7 +14,7 @@ little as possible and to keep that access on your PC.
 - **Never starts Outlook** on its own. It attaches to a running Outlook. The
   tray's **Start Outlook** item, which you click yourself, is the only exception.
 - **Never uses the cloud.** No Microsoft Graph, no Entra app registrations, no
-  OAuth. Nothing leaves your PC except what Claude Code sends to its model and, while AI drafts are on, what Clippy sends to Anthropic (see [AI drafts data flow](#ai-drafts-data-flow)).
+  OAuth. Nothing leaves your PC except what Claude Code sends to its model, update checks to GitHub, and, while AI drafts are on, what Clippy sends to Anthropic (see [Outbound connections](#outbound-connections)).
 - **Never indexes attachment contents.** Only file names.
 - **Never touches your Claude credentials.** [AI drafts](ai-drafts.md) run your own signed-in Claude Code, or an API key you type in. Clippy never reads Claude Code's stored sign-in.
 
@@ -32,6 +32,35 @@ little as possible and to keep that access on your PC.
   web page can't call the server, even from your own PC.
 - **No OAuth prompts.** The `401` carries no `WWW-Authenticate` header, so MCP
   clients don't start an OAuth flow.
+
+## Outbound connections
+
+Clippy makes exactly two kinds of outbound connection:
+
+- **GitHub, for updates.** Once a week (unless you set **Don't check**), the
+  installed copy asks GitHub for the latest release and may download
+  `ClippysRevenge.exe` and `SHA256SUMS.txt`. These are plain unauthenticated
+  requests that send only a `ClippysRevenge/<version>` user agent. Nothing about
+  you, your mail, the index or your settings is sent, and there is no telemetry.
+  See [Updates](updates.md#what-is-sent-to-github).
+- **Anthropic, only while AI drafts are on.** See [AI drafts data flow](#ai-drafts-data-flow).
+
+All connections use HTTPS with normal certificate checks. Update downloads follow
+redirects only to GitHub's own hosts.
+
+## Update trust model
+
+An update is accepted when it comes over HTTPS from the project's GitHub release
+and its SHA-256 matches the `SHA256SUMS.txt` from the same release. This proves the
+file is the one published in the release and arrived intact. It does **not** prove
+who published it: whoever can publish a release in the repository (a stolen account
+or token, a compromised workflow) could publish a matching exe, and copies set to
+**Install automatically** would install it within a week without asking. Clippy
+starts only its own installed exe after an update, never runs a script, and rolls
+back a version that doesn't start.
+
+If you want to review each release first, set Settings, General, **Updates** to
+**Only tell me** or **Don't check**. See [Updates](updates.md#trust-model).
 
 ## File access
 
@@ -101,5 +130,6 @@ text are not logged. Activity events show subjects and counts only.
 
 ## Unsigned executable
 
-The release exe is not code-signed yet. The installer checks its SHA-256 against
-`SHA256SUMS.txt` from the same release before installing.
+The release exe is not code-signed yet. The installer and the automatic updater check
+its SHA-256 against `SHA256SUMS.txt` from the same release before installing. That
+proves integrity, not the publisher. See [Update trust model](#update-trust-model).

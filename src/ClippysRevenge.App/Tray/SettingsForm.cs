@@ -16,7 +16,8 @@ internal sealed record SettingsFormServices(
     Func<string, Task>? Rebuild,
     Func<bool> IsOutlookUnavailable,
     TimeZoneInfo TimeZone,
-    AiSettingsServices Ai);
+    AiSettingsServices Ai,
+    Action? ShowAboutAndCheck = null);
 
 /// <summary>
 /// Settings window (SPEC 6.3). Edits a staged <see cref="SettingsEditor"/>; nothing reaches the live settings
@@ -88,6 +89,8 @@ internal sealed partial class SettingsForm : Form
     private readonly CheckBox _startWin = new() { Text = "Start with Windows" };
     private readonly CheckBox _notify = new() { Text = "Notify on errors" };
     private readonly ComboBox _logLevel = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _updates = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly Button _checkNow = new() { Text = "Check now" };
 
     public SettingsForm(SettingsFormServices services, SettingsTab initialTab = SettingsTab.Connection)
     {
@@ -331,7 +334,20 @@ internal sealed partial class SettingsForm : Form
         Put(p, _logLevel, 100, 312, 130, 24);
         var logNote = Lbl(p, @"Applies at once to the log in %LOCALAPPDATA%\ClippysRevenge\logs.", 240, 312, 420);
         logNote.ForeColor = SystemColors.GrayText;
+        Lbl(p, "Updates", 8, 352, 80);
+        Put(p, _updates, 100, 352, 170, 24);
+        Put(p, _checkNow, 280, 351, 90, 26);
+        var updNote = Lbl(p, "Checks GitHub once a week.", 380, 352, 280);
+        updNote.ForeColor = SystemColors.GrayText;
         _tabs.TabPages.Add(p);
+
+        foreach (var m in SettingsTexts.UpdateModes) _updates.Items.Add(SettingsTexts.UpdateModeLabel(m));
+        _checkNow.Enabled = _s.ShowAboutAndCheck is not null;
+        _checkNow.Click += (_, _) => _s.ShowAboutAndCheck?.Invoke();
+        _updates.SelectedIndexChanged += (_, _) =>
+        {
+            if (!_binding && _updates.SelectedIndex >= 0) _editor.Draft.Updates = SettingsTexts.UpdateModes[_updates.SelectedIndex];
+        };
 
         foreach (var l in SettingsTexts.LogLevels) _logLevel.Items.Add(l.ToString());
         _attachDir.TextChanged += (_, _) => { if (!_binding) _editor.Draft.AttachmentDir = _attachDir.Text; };
@@ -405,6 +421,7 @@ internal sealed partial class SettingsForm : Form
             _startWin.Checked = d.StartWithWindows;
             _notify.Checked = d.NotifyOnErrors;
             _logLevel.SelectedIndex = Math.Max(0, SettingsTexts.LogLevels.ToList().IndexOf(d.LogLevel));
+            _updates.SelectedIndex = Math.Max(0, SettingsTexts.UpdateModes.ToList().IndexOf(d.Updates));
             _wsl.Text = SettingsTexts.WslHelp(_s.GetSettings().Port);
             FillPicker(keepKey ?? _key);
             BindAi();
@@ -816,6 +833,7 @@ internal sealed partial class SettingsForm : Form
             "InviteConfirmTimeoutSeconds" => _inviteTimeout,
             "AttachmentDir" => _attachDir,
             "LogLevel" => _logLevel,
+            "Updates" => _updates,
             _ => _status,
         };
     }
@@ -823,7 +841,7 @@ internal sealed partial class SettingsForm : Form
     private void ShowErrors(IReadOnlyList<SettingsError> errors)
     {
         foreach (var c in new Control[] { _port, _retention, _sync, _workStart, _workEnd, _timeZone, _inviteSend,
-                     _inviteTimeout, _attachDir, _logLevel, _tree, _allowed, _picker })
+                     _inviteTimeout, _attachDir, _logLevel, _updates, _tree, _allowed, _picker })
             _errors.SetError(c, "");
         foreach (var c in AiErrorControls()) _errors.SetError(c, "");
         _errors.SetError(_status, "");

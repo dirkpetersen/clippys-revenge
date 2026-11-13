@@ -3,6 +3,20 @@
 The full list of releases, with downloads, is on
 [GitHub](https://github.com/dirkpetersen/clippys-revenge/releases).
 
+## v0.0.6
+
+2026-11-13
+
+- Auto-update: the installed copy checks GitHub once a week and installs a newer
+  full release at its next start. The download is checked against the release's
+  SHA-256 and rolled back if the new version doesn't start. Set Settings, General,
+  **Updates** to **Install automatically** (default), **Only tell me** or
+  **Don't check**. See [Updates](updates.md).
+- New **About Clippy's Revenge…** window in the tray menu: version, update status,
+  **Check for updates**, **Update now** and links to the documentation and release
+  notes.
+- New balloons for a newer version, a finished update and a rollback.
+
 ## v0.0.5
 
 2026-11-13

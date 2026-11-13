@@ -277,6 +277,17 @@ public sealed class SettingsEditor
 
 public static class SettingsTexts
 {
+    public static readonly IReadOnlyList<UpdateMode> UpdateModes = [UpdateMode.Install, UpdateMode.Notify, UpdateMode.Off];
+
+    /// <summary>"Install automatically" / "Only tell me" / "Don't check".</summary>
+    /// <exception cref="ArgumentOutOfRangeException">mode is not a defined value.</exception>
+    public static string UpdateModeLabel(UpdateMode mode) => mode switch
+    {
+        UpdateMode.Install => "Install automatically",
+        UpdateMode.Notify => "Only tell me",
+        UpdateMode.Off => "Don't check",
+        _ => throw new ArgumentOutOfRangeException(nameof(mode)),
+    };
     public const string RegenerateQuestion =
         "Regenerate the auth token?\n\nThe current token stops working when you press OK or Apply. Claude Code must be set up again with the new \"claude mcp add\" command.";
 

@@ -30,7 +30,8 @@ internal sealed record TrayServices(
     Func<Task<IReadOnlyList<MailboxStore>>>? ListMounted = null,
     SharedMailboxToggler? SharedToggler = null,
     Func<SettingsTab, Form>? CreateSettingsForm = null,
-    AiTrayServices? Ai = null);
+    AiTrayServices? Ai = null,
+    Func<AboutForm>? CreateAboutForm = null);
 
 /// <summary>Tray icon and menu (SPEC 6.1, 6.2). All UI objects are touched on the UI thread only.</summary>
 internal sealed class TrayApp : ApplicationContext
@@ -68,6 +69,8 @@ internal sealed class TrayApp : ApplicationContext
     private int _listing;
     private ActivityForm? _activity;
     private Form? _settingsForm;
+    private AboutForm? _about;
+    private volatile bool _settingsOpen;
     private int _aiBusy;
     private BalloonAction _lastBalloonAction = BalloonAction.None;
     public TrayApp(TrayServices services)
@@ -157,10 +160,59 @@ internal sealed class TrayApp : ApplicationContext
             if (ReferenceEquals(_settingsForm, form))
             {
                 _settingsForm = null;
+                _settingsOpen = false;
+            }
+            form.Dispose();
+        };
+        _settingsOpen = true;
+        form.Show();
+    });
+
+    /// <summary>True while the Settings window is open. Any thread.</summary>
+    public bool IsSettingsOpen => _settingsOpen;
+
+    /// <summary>Any thread; opens (or raises) the single About window; checkNow also starts a check.</summary>
+    public void ShowAbout(bool checkNow = false) => PostToUi(() =>
+    {
+        if (_s.CreateAboutForm is null)
+        {
+            return;
+        }
+        if (_about is { IsDisposed: false } open)
+        {
+            if (open.WindowState == FormWindowState.Minimized)
+            {
+                open.WindowState = FormWindowState.Normal;
+            }
+            open.Activate();
+            if (checkNow)
+            {
+                open.StartCheck();
+            }
+            return;
+        }
+        var form = _s.CreateAboutForm();
+        _about = form;
+        form.FormClosed += (_, _) =>
+        {
+            if (ReferenceEquals(_about, form))
+            {
+                _about = null;
             }
             form.Dispose();
         };
         form.Show();
+        if (checkNow)
+        {
+            form.StartCheck();
+        }
+    });
+
+    /// <summary>Any thread; hides the icon and ends the message loop so Program can hand over (SPEC 20.9).</summary>
+    public void ExitForUpdate() => PostToUi(() =>
+    {
+        _notify.Visible = false;
+        ExitThread();
     });
 
     /// <summary>Any thread; opens (or raises) the single Activity window on the UI thread.</summary>
@@ -299,6 +351,8 @@ internal sealed class TrayApp : ApplicationContext
         var data = new ToolStripMenuItem("Open data folder");
         data.Click += (_, _) => OpenFolder(_s.DataFolder);
 
+        var about = new ToolStripMenuItem("About Clippy's Revenge…") { Enabled = _s.CreateAboutForm is not null };
+        about.Click += (_, _) => ShowAbout();
         _startWithWindows.Enabled = _s.SetStartWithWindows is not null;
         _startWithWindows.Click += (_, _) => _s.SetStartWithWindows?.Invoke(!_s.GetSettings().StartWithWindows);
         var exit = new ToolStripMenuItem("Exit");
@@ -336,7 +390,7 @@ internal sealed class TrayApp : ApplicationContext
             _startOutlook, _syncNow, _pause, _rebuild, _shared, _ai, new ToolStripSeparator(),
             copyCmd, copyToken, regen, new ToolStripSeparator(),
             activity, settings, logs, data, new ToolStripSeparator(),
-            _startWithWindows, exit,
+            _startWithWindows, about, exit,
         ]);
     }
 
@@ -684,6 +738,7 @@ internal sealed class TrayApp : ApplicationContext
             _houseTimer.Stop();
             _houseTimer.Dispose();
             _activity?.Dispose();
+            _about?.Dispose();
             _settingsForm?.Dispose();
             _notify.Visible = false;
             _notify.Dispose();

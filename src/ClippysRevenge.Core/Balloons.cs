@@ -31,6 +31,17 @@ public static class BalloonTexts
             $"It looks like you got mail. I drafted {n} {(n == 1 ? "reply" : "replies")} — they're in your Drafts folder.");
     }
 
+    public static string UpdateAvailable(string v) =>
+        $"It looks like there's a newer me: v{v}. Right-click me and pick About Clippy's Revenge… to update.";
+
+    public static string UpdateReady(string v) =>
+        $"It looks like there's a newer me: v{v}. I'll install it the next time I start. To do it now, pick About Clippy's Revenge… in my menu.";
+
+    public static string Updated(string v) => $"It looks like I got an upgrade. I'm now v{v}.";
+
+    public static string UpdateRolledBack(string failed, string back) =>
+        $"It looks like v{failed} didn't start, so I went back to v{back}. I won't install v{failed} again.";
+
     public static string Error(string reason) =>
         string.IsNullOrWhiteSpace(reason)
             ? "It looks like something went wrong. Right-click me and pick Activity… for details."

@@ -15,7 +15,7 @@ public enum ActivityState
     Error = 9,
 }
 
-public enum ActivityKind { Sync, Backfill, Purge, Tool, Draft, Invite, Blocked, Ai, Error }
+public enum ActivityKind { Sync, Backfill, Purge, Tool, Draft, Invite, Blocked, Ai, Error, Update }
 
 public readonly record struct ActivityProgress(int Done, int Total, string Label)
 {
@@ -113,6 +113,27 @@ public sealed class ActivityHub : IDisposable
                 }
                 return win is null ? ActivityProgress.None : new ActivityProgress(win.Done, win.Total, win.Label);
             }
+        }
+    }
+
+    /// <summary>True while at least one open scope has exactly this state (SPEC 7).</summary>
+    /// <exception cref="ArgumentOutOfRangeException">state is Idle or undefined.</exception>
+    public bool IsActive(ActivityState state)
+    {
+        if (state == ActivityState.Idle || !Enum.IsDefined(state))
+        {
+            throw new ArgumentOutOfRangeException(nameof(state));
+        }
+        lock (_lock)
+        {
+            foreach (var s in _scopes)
+            {
+                if (s.State == state)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 

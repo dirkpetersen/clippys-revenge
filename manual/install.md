@@ -18,6 +18,10 @@ The script downloads the latest release, checks `ClippysRevenge.exe` against the
 release's `SHA256SUMS.txt`, installs it and starts it. Run the same line again to
 update.
 
+Clippy also [updates itself](updates.md) once a week by default, so you only need
+the line above to install, to update at once, or to repair a broken install. To
+change how Clippy updates, see Settings, General, **Updates**.
+
 It installs to `%LOCALAPPDATA%\Programs\ClippysRevenge\`, adds a Start menu
 shortcut called "Clippy's Revenge", and starts the app. A paperclip appears in
 the system tray. The app is set to start with Windows (you can turn that off in

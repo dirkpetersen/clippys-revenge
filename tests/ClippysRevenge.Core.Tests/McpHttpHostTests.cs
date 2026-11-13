@@ -319,10 +319,6 @@ public class McpHttpHostTests
         {
             var busy = ((IPEndPoint)l.LocalEndpoint).Port;
             await using var f = new Fixture();
-            if (busy < 1024)
-            {
-                return;
-            }
             Assert.False(await f.Host.StartAsync(busy, TestContext.Current.CancellationToken));
             Assert.False(f.Host.IsRunning);
             Assert.Null(f.Host.Port);
@@ -330,6 +326,58 @@ public class McpHttpHostTests
             Assert.Equal($"port {busy} is in use", f.Hub.Progress.Label);
             Assert.True(await f.Host.StartAsync(0, TestContext.Current.CancellationToken));
             Assert.Equal(ActivityState.Idle, f.Hub.State);
+        }
+        finally
+        {
+            l.Stop();
+        }
+    }
+
+    [Fact]
+    public async Task BindRetry_waits_for_the_port_to_be_released()
+    {
+        var l = new TcpListener(IPAddress.Loopback, 0);
+        l.Start();
+        var busy = ((IPEndPoint)l.LocalEndpoint).Port;
+        try
+        {
+            await using var f = new Fixture();
+            var release = Task.Run(async () =>
+            {
+                await Task.Delay(1200, TestContext.Current.CancellationToken);
+                l.Stop();
+            }, TestContext.Current.CancellationToken);
+
+            Assert.True(await f.Host.StartAsync(busy, TestContext.Current.CancellationToken,
+                TimeSpan.FromSeconds(60)));
+
+            await release;
+            Assert.True(f.Host.IsRunning);
+            Assert.Equal(busy, f.Host.Port);
+            Assert.Equal(ActivityState.Idle, f.Hub.State);
+        }
+        finally
+        {
+            l.Stop();
+        }
+    }
+
+    [Fact]
+    public async Task BindRetry_gives_up_after_its_window()
+    {
+        var l = new TcpListener(IPAddress.Loopback, 0);
+        l.Start();
+        try
+        {
+            var busy = ((IPEndPoint)l.LocalEndpoint).Port;
+            await using var f = new Fixture();
+
+            Assert.False(await f.Host.StartAsync(busy, TestContext.Current.CancellationToken,
+                TimeSpan.FromMilliseconds(700)));
+
+            Assert.False(f.Host.IsRunning);
+            Assert.Equal(ActivityState.Error, f.Hub.State);
+            Assert.Equal($"port {busy} is in use", f.Hub.Progress.Label);
         }
         finally
         {

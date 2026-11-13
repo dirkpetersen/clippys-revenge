@@ -55,6 +55,12 @@ artwork.
     the keychain/credential store) and never calls any API with them, and
     it **never offers a claude.ai sign-in inside Clippy**. Claude Code signs
     itself in, in the user's own terminal.
+11. **Auto-update (§20)** fetches only from the project's own GitHub
+    releases over HTTPS (pinned hosts), installs only full releases that
+    are newer than the running version and match their `SHA256SUMS.txt`,
+    and only ever starts its own installed exe. It sends no user data.
+    The user asked for installs without a prompt (2026-11-13); the
+    `Updates` setting can turn that off.
 
 ## 2. Tech stack
 
@@ -72,6 +78,7 @@ artwork.
 | Tests | xUnit v3 (`xunit.v3.mtp-off` + `xunit.runner.visualstudio`), run by VSTest `dotnet test`, so `--filter "live!=outlook"` works |
 | Packaging | `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true` |
 | CI / release | GitHub Actions (§16). The version lives in `Directory.Build.props` |
+| Auto-update (§20) | `HttpClient` to the project's GitHub releases (pinned hosts), SHA-256 check, rename-and-restart of the installed exe; no extra package |
 
 ## 3. Solution layout
 
@@ -145,6 +152,16 @@ src/ClippysRevenge.Core/        net10.0: no Windows, no COM, testable on Linux/W
     DraftPrompt.cs          drafting system prompt + thread rendering; IStyleGuideSource, NoStyleGuide (§19.7)
     DraftWorker.cs          drafting loop (BackgroundService): rules, cap, backoff, decisions, manual path;
                             IAiMailbox (the COM seam), DraftTexts (§19.7)
+    SemVersion.cs           SemVersion (SemVer 2.0 parse/compare, release tags), AppVersionInfo (§20.2)
+    UpdateRelease.cs        UpdateEndpoints (the pinned URLs and hosts), ReleaseInfo, ReleaseParser,
+                            Sha256Sums, UpdateHash (§20.3–§20.5)
+    UpdateState.cs          UpdateMode, UpdatePaths, UpdatePolicy, UpdateState + records, UpdateStateStore
+                            (§20.6–§20.8)
+    UpdateTexts.cs          UpdateTexts, UpdateStatus, AboutView (§6.7, §20.10)
+    UpdateClient.cs         GitHub lookup and verified download (HttpClient, redirect allow-list, caps) (§20.3–§20.5)
+    UpdateService.cs        weekly check, notify/stage, start-up-window install, manual check and Update now (§20.8)
+    UpdateInstall.cs        UpdateInstall (swap), UpdateHandover (confirm wait, rollback), UpdateStartup
+                            (pending, cleanup, install-now decision), IUpdateProcess (§20.9)
 src/ClippysRevenge.App/         net10.0-windows (WinExe): COM, tray, host
     Program.cs              single-instance check, wiring, message loop
     OutlookWorker.cs        ComWorker<Outlook.Application> on an STA thread + the GetActiveObject attacher
@@ -161,6 +178,8 @@ src/ClippysRevenge.App/         net10.0-windows (WinExe): COM, tray, host
     DpapiProtector.cs       ISecretProtector over DPAPI (CurrentUser)
     StartupRegistration.cs  HKCU Run key
     OutlookLauncher.cs      Start Outlook: App Paths lookup + Process.Start (the only Outlook launch)
+    UpdateRestarter.cs      starts the installed Clippy exe for an update handover (IUpdateProcess), reads an
+                            exe's ProductVersion (§20.5, §20.11)
     OutlookAiMailbox.cs     COM side of AI drafting (IAiMailbox): candidate facts, Drafts check, identity, selected
                             email, show Drafts (§19.9)
     OutlookReplyDraftWriter.cs  IReplyDraftWriter on OutlookWorker + OutlookMail.CreateReplyDraft, with the plan's
@@ -171,6 +190,7 @@ src/ClippysRevenge.App/         net10.0-windows (WinExe): COM, tray, host
     Tray/ActivityForm.cs    recent activity window
     Tray/InviteConfirmForm.cs  per-invite Send / Save as draft / Cancel dialog
     Tray/SettingsForm.Ai.cs partial: the AI drafts tab and the consent dialog (§19.10)
+    Tray/AboutForm.cs       About Clippy's Revenge window: version info, update status, Update now, links (§6.7)
 tests/ClippysRevenge.Core.Tests/
 ```
 
@@ -300,6 +320,8 @@ worker makes that explicit and prevents cross-thread COM bugs.
 | Anthropic API key (§19.3, optional) | `%APPDATA%\ClippysRevenge\anthropic-key.bin`, DPAPI-encrypted for the current user |
 | Writing-style skill (§19.6) | `%USERPROFILE%\.claude\skills\my-email-style\SKILL.md`, plus a copy `%APPDATA%\ClippysRevenge\my-email-style\SKILL.md` and `%APPDATA%\ClippysRevenge\my-email-style\state.json` |
 | Claude CLI working folder (§19.3) | `%LOCALAPPDATA%\ClippysRevenge\ai\` (per-run system-prompt files, deleted after each run) |
+| Update state (§20.7) | `%LOCALAPPDATA%\ClippysRevenge\update-state.json` (installed copy only) |
+| Staged update downloads (§20.6) | `%LOCALAPPDATA%\Programs\ClippysRevenge\update\` (next to the installed exe) |
 
 The token and the API key are never written to `settings.json` or to any
 log.
@@ -363,6 +385,7 @@ They are protected by the user profile's ACLs and by disk encryption
 | `StartWithWindows` | `true` | Live: writes or removes the HKCU Run key |
 | `NotifyOnErrors` | `true` | Live |
 | `LogLevel` | `Information` (`Trace` / `Debug` / `Information` / `Warning` / `Error` / `Critical` / `None`) | Live: applies at once to the rolling file log (§5.1) |
+| `Updates` | `Install` (`Install` / `Notify` / `Off`, §20) | Live: read before each automatic step. `Install` checks weekly and installs at start-up; `Notify` checks weekly and shows a balloon; `Off` never checks by itself. Manual checks in the About window work in every mode |
 | `AiDrafting` | object, `Enabled = false` (§19.2) | Live: the drafting worker re-reads it before each candidate. `SettingsApplier` calls `SettingsApplyTargets.AiSettingsChanged` (→ `DraftWorker.NotifySettingsChanged()`) after every applied change, so turning `Enabled` on wakes the worker |
 
 Each `SharedMailboxes` entry is:
@@ -490,8 +513,12 @@ Open log folder
 Open data folder
 ────────────────────────────
 Start with Windows                            (checkable)
+About Clippy's Revenge…                       (§6.7)
 Exit
 ```
+
+**About Clippy's Revenge…** opens (or raises) the single About window
+(§6.7).
 
 The first status line equals the tooltip, except that when idle it
 omits "· synced …". The second line is
@@ -626,6 +653,10 @@ kept unless the window changed that same field.
   - Start with Windows.
   - Notify on errors.
   - Log level (applies at once to the rolling file log, §5.1).
+  - Updates (§20): a drop-down with **Install automatically**
+    (`Install`), **Only tell me** (`Notify`) and **Don't check** (`Off`),
+    staged like the other fields, and a **Check now** button that opens
+    the About window (§6.7) and starts a check at once.
 - **AI drafts** (§19.10): enable (with the consent dialog), backend and
   its status, model, effort, daily limit, sender include/exclude lists,
   per-mailbox opt-in, and the writing-style skill buttons.
@@ -656,6 +687,8 @@ configurations, which means changing the port or regenerating the token.
     "AI drafts: 3 drafted, 5 no reply needed, 2 skipped (41 s)". AI drafts
     themselves are `Draft` events ("AI reply draft created: Re:: Budget").
   - `Error`.
+  - `Update`: update checks, downloads and installs (§20.10), e.g.
+    "update check: v0.0.6 available", "updated from v0.0.5 to v0.0.6".
 - Events carry tool names, counts and subjects only. Email bodies, search
   text and attachment contents are never shown.
 
@@ -682,7 +715,11 @@ Balloon notifications are rate-limited to one per minute. They fire on:
   mail. I drafted <n> repl(y|ies) — they're in your Drafts folder."
   Clicking it shows the Drafts folder (§19.9). `BalloonTexts.AiDrafted(n)`
   uses "reply" when `n == 1`, else "replies", and keeps "they're" for
-  both. `BalloonTexts.NoOutlookWindow` holds the §19.9 no-window text.
+  both. `BalloonTexts.NoOutlookWindow` holds the §19.9 no-window text;
+- updates (§20.10): an update is available (`Notify`) or staged for the
+  next start (`Install`), once per version; after the start that
+  installed an update ("It looks like I got an upgrade. I'm now
+  v<v>."); after a rollback.
 
 The limit applies per balloon. A balloon that hits the limit is
 dropped, not queued. The 2-minute balloons fire once per
@@ -733,6 +770,65 @@ sent.
   creates and sends or saves the meeting (COM). `InviteGate` in Core turns
   the mode, the user's choice and the timeout into the action.
 
+### 6.7 About window (`AboutForm`; model `AboutView` in Core)
+
+A small fixed-size window titled `About Clippy's Revenge`, one at a time
+(like Activity). It is opened from the tray menu or from Settings →
+General → **Check now** (which also starts a check). Its lines come from
+`AboutView.Build(UpdateService.Status, …)` and refresh when the
+service's `Changed` event fires:
+
+| Line | Text |
+|---|---|
+| Product | `Clippy's Revenge` (bold, with the paperclip icon) |
+| Version | `Version <v>`, plus ` (commit <first 7 hex>)` when known (§20.2) |
+| Runtime | `<RuntimeInformation.FrameworkDescription> · <RuntimeInformation.OSDescription>` |
+| Location | installed: `Installed in <folder>`; otherwise `Running from <folder>. Only the installed copy updates itself.` |
+| Mode | `Updates: install automatically` / `Updates: only tell me` / `Updates: don't check` |
+| Last check | `Last checked: never`, or `Last checked: <local yyyy-MM-dd HH:mm> (<relative>)` with the §6.1 relative texts |
+| Status | the first that applies, below |
+
+Status line:
+1. While working: `Checking for updates…`, `Downloading v<v>… <n> %`,
+   `Verifying the download…`,
+   `Waiting for Clippy to finish what it's doing…` or
+   `Installing v<v>…`.
+2. The last manual action failed: `✗ Couldn't check for updates: <reason>`,
+   `✗ The update couldn't be downloaded: <reason>`,
+   `✗ The update couldn't be installed: <reason>` or
+   `Clippy is busy. Try again in a minute.`
+3. `LastError` is set (the last automatic lookup, download or install
+   failed, §20.7): `✗ The last update attempt failed: <reason>`.
+   (`✗ Couldn't check for updates: <reason>` is only the message of a
+   failed manual check, item 2.)
+4. No lookup yet: `No update check yet.`
+5. The latest release isn't newer: `You have the latest version.`
+6. The latest is the failed version:
+   `v<v> didn't start on this PC, so Clippy's Revenge went back to v<running>.`
+7. Not installed: `v<v> is available. Download it from the release page.`
+8. Staged: `v<v> is downloaded. It installs the next time Clippy's Revenge starts, or press Update now.`
+9. Otherwise: `v<v> is available (released <yyyy-MM-dd>).`, or
+   `v<v> is available.` without a release date.
+
+Buttons and links:
+- **Update to v<v>** (just **Update now** when no newer version is
+  known): enabled when the copy is installed, a newer full release is
+  known and nothing is running. It runs §20.8 **Update now**. Clippy
+  restarts by itself when it is done.
+- **Check for updates**: enabled when nothing is running.
+- **Close** (Esc).
+- Link **Documentation** → `https://dirkpetersen.github.io/clippys-revenge/`.
+- Link **Release notes** → `https://github.com/dirkpetersen/clippys-revenge/releases/tag/<tag>`
+  for the latest known tag, else
+  `https://github.com/dirkpetersen/clippys-revenge/releases`.
+- Links open through `TrayApp.ShellOpen`. Their URLs are the constants
+  in `UpdateEndpoints` or built from a validated tag, never taken from
+  the network.
+
+The window never waits on the network on the UI thread; checks and
+downloads run in `UpdateService`, and closing the window doesn't cancel
+them.
+
 ## 7. Activity reporting (`ActivityHub`, Core)
 
 - `State` (enum from §6.1) and `Progress` (`done`, `total`, `label`).
@@ -765,6 +861,10 @@ sent.
   final state is always delivered. Subscriber exceptions are swallowed.
 - The hub takes a `TimeProvider` (default `TimeProvider.System`) for
   testability.
+- `bool IsActive(ActivityState state)` is true while at least one open
+  scope has exactly that state, whatever state wins. `Idle` or an
+  undefined state throws `ArgumentOutOfRangeException`. The updater
+  uses it to wait for idle (§20.9) (M12.1).
 - Every MCP tool call is wrapped by a filter that runs
   `using (hub.Begin(Serving, toolName))` and records a `Tool` event with the
   call's duration.
@@ -1623,6 +1723,13 @@ progress.
 
 - Kestrel listens on `IPAddress.Loopback:Port` only. On startup it checks
   that no other binding exists.
+- `McpHttpHost.StartAsync(port, ct, bindRetryFor)`: a bind that fails
+  because the address is in use is retried every 500 ms until
+  `bindRetryFor` has passed (default none: fail at once). `Program`
+  passes 10 s only when the start-up plan has `ConfirmAfterStart` (the
+  first start of a freshly updated exe, while the old process may still
+  be releasing the port, §20.9), and none otherwise. Other bind errors
+  fail at once. The failure label stays `port <n> is in use`.
 - `BearerAuth` middleware runs before `MapMcp`:
   - It reads the expected token from a `TokenHolder` that the tray updates
     directly, so a regenerated token takes effect without a restart.
@@ -1637,6 +1744,14 @@ progress.
     fail the same way.
   - The 401 carries no `WWW-Authenticate` header, so MCP clients don't start
     OAuth discovery.
+- **Outbound connections.** The server only listens. The app itself
+  connects out in exactly two cases: the AI drafting backends when the
+  user turned AI drafts on (§19.3: the user's `claude` CLI, or
+  `api.anthropic.com` with the user's key), and the update check and
+  download (§20.3: `api.github.com`, `github.com`,
+  `release-assets.githubusercontent.com`, `objects.githubusercontent.com`;
+  `Updates = Off` stops the automatic ones). Settings → Test connection
+  talks to `127.0.0.1` only.
 - **WSL networking requirement.** In WSL2's default **NAT** mode, WSL
   cannot reach the Windows host's `127.0.0.1`. Use **mirrored networking**
   (Windows 11 22H2+), set in `%USERPROFILE%\.wslconfig`:
@@ -1674,6 +1789,28 @@ progress.
      creates a Start menu shortcut, and launches it.
   3. `install.ps1 -Uninstall` stops it, removes the Run key and the
      shortcut, and optionally deletes the data and logs.
+- **Updates**: the installed copy updates itself (§20). `install.ps1`
+  still works for a manual update or repair: it stops the app and copies
+  the latest release over the exe. Leftover `update\` files and `.old`
+  are cleaned up at the next start (§20.9); `-Uninstall` removes them
+  with the install folder, and its purge removes `update-state.json`
+  with the data folder.
+- **Shutdown order** (after the message loop ends, each step bounded):
+  1. The update service stops (at most 35 s: it waits up to 30 s for a
+     file swap that is still running, so the process never exits with
+     only `.old` on disk, §20.8).
+  2. The MCP host is disposed first among the services, with its own
+     10 s wait, so no new requests arrive and the port is free for a new
+     version.
+  3. Drafting and sync stop (at most 5 s together); then the Outlook
+     worker, the indexes and the rest are disposed.
+- **Update handover and the single instance**: the handover runs only if
+  the MCP host stopped within its 10 s. Then the old process releases
+  the mutex and the pipe before it starts the new exe, and waits up to
+  60 s for the new instance to confirm (§20.9). If the host didn't stop
+  in time, the port may still be held, so the handover is skipped (a
+  Warning is logged): the swapped exe stays in place with `Pending` set,
+  and it confirms itself at the next start.
 - If the app crashes, there is no automatic restart. Unhandled exceptions
   are logged, and a wrapper around the host restarts the HTTP and sync
   services in-process. If the process itself dies, the user restarts it
@@ -1696,8 +1833,9 @@ progress.
 | `InviteGate` | every mode × choice × timeout combination |
 | `BearerAuth` | missing, wrong or correct token; `Origin` header → 401; live token swap |
 | `Settings` | defaults, validation bounds, shared mailbox entries, `AttachmentDir` always allowed |
-| Safety | A source scan of `src/` finds exactly one `.Send(`, in `OutlookCalendar.CreateMeeting`, and no `new Application(`, `Activator.CreateInstance` or `CoCreateInstance` for Outlook. `Process.Start` appears only in `OutlookLauncher.cs`, `Tray/TrayApp.cs` (Open data folder, once) and `ClaudeCli.cs`. `UseShellExecute = true` appears only in `TrayApp.cs` and `OutlookLauncher.cs`. In the App project, `Delete`/`PermanentDelete`/`EmptyDeletedItems` and `.Move(` calls are allowed only on `File`/`Directory` (plus the one reply-draft `.Move(` into Drafts). AI additions (§19.12): no `.Send(` or `.Display(` in the AI files, and no `.Move(`/`Delete(` calls there except on `File` or `Directory`; Claude credentials never referenced; `--bare` and `login` never passed to the CLI; `UseShellExecute = true` never used for the CLI |
+| Safety | A source scan of `src/` finds exactly one `.Send(`, in `OutlookCalendar.CreateMeeting`, and no `new Application(`, `Activator.CreateInstance` or `CoCreateInstance` for Outlook. `Process.Start` appears only in `OutlookLauncher.cs`, `Tray/TrayApp.cs` (Open data folder, once), `ClaudeCli.cs` and `UpdateRestarter.cs` (once, `UseShellExecute = false`, no arguments, only `UpdatePaths.ExePath`; §20.11). `.Kill(` appears only in `UpdateRestarter.cs`. The update hosts (`api.github.com`, `githubusercontent.com`, `/releases/download/`) appear as literals only in `UpdateRelease.cs`, and `new HttpClient(` only in `ConnectionTester.cs`, `AnthropicApiModel.cs` and `UpdateClient.cs`. `UseShellExecute = true` appears only in `TrayApp.cs` and `OutlookLauncher.cs`. In the App project, `Delete`/`PermanentDelete`/`EmptyDeletedItems` and `.Move(` calls are allowed only on `File`/`Directory` (plus the one reply-draft `.Move(` into Drafts). AI additions (§19.12): no `.Send(` or `.Display(` in the AI files, and no `.Move(`/`Delete(` calls there except on `File` or `Directory`; Claude credentials never referenced; `--bare` and `login` never passed to the CLI; `UseShellExecute = true` never used for the CLI |
 | AI drafting (§19.12) | own-text extraction, redaction, header parsing, HTML sanitizer, sampling, rules, prompt rendering, JSON parsing and validation, CLI args and output parsing (with a fake `claude`), daily limit and backoff with a fake clock, skill edit detection |
+| Auto-update (§20) | SemVer parse and precedence, informational-version parsing, release JSON rules, `SHA256SUMS.txt` parsing, due times with a fake clock, installed-copy check, state file round trip and repair, About texts; the HTTP client with a fake handler (headers, redirect allow-list, caps, hash and size checks, stalls); the swap, handover, rollback and start-up decisions in temp folders with a fake process; renaming a running exe (Windows-only) |
 
 Live tests (`[Trait("live","outlook")]`, opt-in, never in CI) cover: a
 draft round-trip, the reply-draft subject and HTML body, saving an
@@ -1730,6 +1868,15 @@ marker on tool drafts. Live Claude tests carry `[Trait("live","claude")]`
   other release together with its tag.
 - Both workflows skip cleanly while there is no solution file.
 - The exe is not code-signed yet, so SmartScreen warns on first launch.
+- **Contract with the updater (§20).** Installed copies depend on:
+  full releases tagged `v<MAJOR>.<MINOR>.<PATCH>` and marked latest
+  (`--latest`); assets named exactly `ClippysRevenge.exe` and
+  `SHA256SUMS.txt`; `SHA256SUMS.txt` in `sha256sum` format (`<hex> *<name>`
+  or `<hex>  <name>`); and `-p:Version=<version>` on publish, so the
+  exe's `ProductVersion` starts with the release version. Changing any
+  of these breaks auto-update for every installed copy. Pre-releases
+  (`-suffix`) are never auto-installed. The `prune` job may delete old
+  releases; that doesn't matter because only the latest one is used.
 
 ## 17. Performance targets
 
@@ -1899,6 +2046,55 @@ M11.1–M11.7):
   `IStyleGuideSource` seam (§19.6, §19.7); `StyleGuideSource` adapts
   `StyleSkill` to it, and `NoStyleGuide` is the fallback.
 
+Decided (2026-11-13, auto-update, M12; §20, §6.7). The user asked for a
+weekly check and an install at start-up without asking, plus an About
+window. Design choices made by the spec owner:
+
+- Source: only `releases/latest` of `dirkpetersen/clippys-revenge`,
+  unauthenticated, with the pinned hosts of §20.3. Download URLs are
+  built from the validated tag, never taken from the JSON. This is the
+  app's first outbound connection that isn't opt-in (§13); it sends
+  only a `User-Agent` with the version.
+- Integrity: `SHA256SUMS.txt` from the same release, the asset `digest`
+  when GitHub provides it, the exact size, an `MZ` header and the exe's
+  `ProductVersion`. That gives integrity, not independent authenticity
+  (§20.5, open question 12).
+- Update authenticity rests on GitHub (who can publish a release in the
+  repository), HTTPS to the pinned hosts and `SHA256SUMS.txt` from the
+  same release. There is no signature check of our own yet. Open
+  question 12 stays open for the user.
+- Only full releases strictly newer than the running version; never
+  pre-releases, drafts or downgrades.
+- Installs only at start-up (an update staged earlier, or the check in
+  the first 30 minutes of a session) and through **Update now**. A check
+  later in a session stages the update and shows a balloon (open
+  question 13).
+- Only the installed copy (`%LOCALAPPDATA%\Programs\ClippysRevenge\ClippysRevenge.exe`)
+  updates itself. Other copies don't check by themselves and don't
+  touch the state file or the install folder.
+- Swap by renaming the running exe to `.old`. The old process hands
+  over (mutex, pipe and port released first) and waits 60 s for the new
+  instance to confirm. Otherwise it rolls back, remembers the failed
+  version and never installs it automatically again.
+- Idle (no tool call, drafting pass, invite dialog or Settings window)
+  is required for an in-session install, tested again right before the
+  swap. **Update now** ignores the Settings window. Sync and backfill
+  don't block it.
+- Shutdown (M12 review): the update service stops first (it waits up to
+  30 s for a swap in progress), then the MCP host on its own 10 s wait,
+  then drafting and sync. The handover runs only if the host stopped in
+  time; otherwise the swapped exe confirms at the next start. A new
+  exe retries an in-use port for 10 s and confirms only after its MCP
+  server started; if the `Pending` write fails, the swap is undone
+  (§13, §14, §20.9).
+- Update state lives in its own file (`update-state.json`), not in
+  `settings.json`.
+- One setting, `Updates` = `Install` (default, as the user asked) /
+  `Notify` / `Off`. Manual checks work in every mode.
+- `release.yml` needs no change: verified 2026-11-13 that v0.0.4 is
+  marked latest, has the two assets and writes `<hex> *ClippysRevenge.exe`,
+  and that downloads redirect to `release-assets.githubusercontent.com`.
+
 Open:
 
 1. **Read state and `LastModificationTime`**: if marking a message read
@@ -1963,6 +2159,37 @@ Open:
     (`%APPDATA%\ClippysRevenge\my-email-style\SKILL.md`), so nothing
     reaches the interactive sessions. The manual's Security page (M11.11)
     states this risk.
+12. **Authenticity of updates (please confirm).** Auto-install trusts
+    whatever the GitHub repository publishes as its latest full release.
+    The SHA-256 check catches corruption and CDN mix-ups, but not a
+    release published by someone who took over the account, a token or
+    the release workflow. Every installed copy would then install it
+    within a week, without a prompt, because the user asked for that.
+    Proposed default: ship as specified (`Install` is the default), say
+    so on the manual's Security page, and recommend `Updates = Notify`
+    for cautious users. Later options: (a) Authenticode-sign the exe and
+    require the same signer (also removes the SmartScreen warning);
+    (b) publish a detached signature (e.g. an Ed25519 signature of
+    `SHA256SUMS.txt`) made with an offline key, and build the public key
+    into the app; (c) require GitHub's immutable releases or artifact
+    attestations. (b) is the cheapest strong option.
+13. **Installing while running.** The user said "when starting". Proposed
+    default: a weekly check in a long-running session downloads and
+    verifies, shows a balloon, and installs at the next start or on
+    **Update now**. Alternative: install by itself when idle (for
+    example at night), since a PC that is never restarted otherwise
+    stays on the old version.
+14. **Pre-release channel.** Proposed default: never auto-install
+    pre-releases (`-suffix`). Alternative: a "pre-releases too" option,
+    which would need the `/releases` list instead of `/releases/latest`.
+15. **CLAUDE.md wording for the updater (needs the user's approval).**
+    No existing hard rule is weakened: the updater doesn't touch
+    Outlook, mail, credentials or the listening socket. Proposed
+    addition to CLAUDE.md's hard rules: "**Self-update only from our own
+    releases.** The updater downloads only from the pinned GitHub hosts
+    in SPEC §20.3, installs only a newer full release whose SHA-256
+    matches `SHA256SUMS.txt`, and the only program it starts is the
+    installed `ClippysRevenge.exe`. A test scans the source for this."
 
 ## 19. AI drafting
 
@@ -2948,3 +3175,412 @@ Live (opt-in, never in CI):
   is in Drafts, `Sent == false`, subject `Re:: …`, `ClippyDraft = ai`, the
   body has no `<script>`/`<a>`, and the Sent Items and Outbox counts are
   unchanged. It deletes only the items it created.
+
+## 20. Auto-update
+
+Added in M12 at the user's request (2026-11-13): "checks github for the
+latest version once a week and automatically downloads and installs it
+when starting without asking the user", plus an **About Clippy's
+Revenge** window with version info, a manual update and a link to the
+documentation (§6.7).
+
+### 20.1 Overview
+
+- At most once every 7 days, the **installed** copy (§20.6) asks GitHub
+  for the project's latest **full** release. When that release is
+  strictly newer than the running version (§20.2), Clippy downloads
+  `ClippysRevenge.exe` and `SHA256SUMS.txt` from the release, verifies
+  them (§20.5) and installs the new exe **without asking** (§20.9): it
+  renames the running exe to `ClippysRevenge.exe.old`, moves the new exe
+  into place, shuts down, starts the new exe and exits. The new instance
+  confirms that it started and deletes `.old`.
+- If the new version doesn't come up, the old process puts the old exe
+  back, starts it, and never tries that version again (§20.9).
+- Installs happen **at start-up** only: when an update is already
+  downloaded at the next start, or when the check made during the first
+  30 minutes after a start finishes. A check later in a long-running
+  session downloads and verifies the update, then waits for the next
+  start (or for **Update now** in the About window). See §18, open
+  question 13.
+- The setting `Updates` (§5.2) is `Install` (default), `Notify` or
+  `Off`.
+- This is the app's only outbound connection besides the AI drafting
+  backends (§19.3). It sends nothing about the user, the mailbox, the
+  index or the settings: only unauthenticated `GET` requests with the
+  `User-Agent` `ClippysRevenge/<version>` to the pinned hosts in §20.3.
+  There is no telemetry.
+
+### 20.2 Versions (`SemVersion`, `AppVersionInfo`; Core)
+
+- The running version is the entry assembly's
+  `AssemblyInformationalVersionAttribute`, e.g.
+  `0.0.6+ce89762560811e819f6ecb5385df93622cee00e5` (the SDK appends the
+  commit; verified on the installed v0.0.4 exe, 2026-11-13). The part
+  before `+` is the version. The part after it, when it is 7–40 hex
+  characters, is the commit, shown as its first 7 characters. Without
+  the attribute, `AssemblyName.Version` gives `<major>.<minor>.<build>`.
+  Anything unparseable gives `0.0.0` and no commit.
+- `SemVersion` follows SemVer 2.0.0: `MAJOR.MINOR.PATCH`, an optional
+  `-PRERELEASE` (dot-separated identifiers) and optional `+BUILD`, which
+  is dropped. Numeric parts have no leading zeros and fit an `int`.
+  Digits are ASCII `0`–`9` only in both grammars (version and tag);
+  other Unicode digits don't match. A tag whose number doesn't fit an
+  `int` is rejected, never an exception.
+  Precedence is SemVer §11, so `0.0.6-beta.1 < 0.0.6 < 0.0.7`.
+- A release qualifies only when its tag is exactly
+  `v<MAJOR>.<MINOR>.<PATCH>` (no pre-release, no build part). That is
+  the tag `release.yml` creates for a plain `<Version>` (§16).
+- An update is a qualifying release **strictly newer** than the running
+  version and not equal to the remembered failed version (§20.7).
+  Equal or older versions are never installed (no downgrades). A
+  pre-release build (`0.0.6-beta.1`) updates to `0.0.6`.
+
+### 20.3 Endpoints and network rules (`UpdateEndpoints`, `UpdateClient`; Core)
+
+- Release lookup: `GET https://api.github.com/repos/dirkpetersen/clippys-revenge/releases/latest`
+  with exactly these headers: `User-Agent: ClippysRevenge/<running version>`,
+  `Accept: application/vnd.github+json`,
+  `X-GitHub-Api-Version: 2022-11-28`. No `Authorization` header and no
+  cookies. GitHub's `releases/latest` returns only the newest full
+  release, never a draft or a pre-release; the parser checks this again
+  (§20.4). This request follows no redirects. HTTP 404 means "no
+  release".
+- Downloads: Clippy builds the two URLs itself from the validated tag:
+  `https://github.com/dirkpetersen/clippys-revenge/releases/download/<tag>/ClippysRevenge.exe`
+  and `…/<tag>/SHA256SUMS.txt`. URLs in the JSON
+  (`browser_download_url`, `html_url`) are never used. Headers:
+  `User-Agent` as above and `Accept: application/octet-stream`.
+- HTTPS only. Download redirects are followed by hand, at most 5. Each
+  target must be `https`, on the default port, without user info, and
+  its host must be exactly (any case) one of `github.com`,
+  `release-assets.githubusercontent.com` or
+  `objects.githubusercontent.com`. GitHub currently redirects release
+  downloads to `release-assets.githubusercontent.com` (verified
+  2026-11-13). Any other target fails the download.
+- The Windows proxy settings apply (`HttpClient.DefaultProxy`).
+  Certificate validation is the platform default and is never relaxed.
+- Limits: the lookup has 15 s and at most 1 MiB of JSON.
+  `SHA256SUMS.txt` has 60 s and at most 64 KiB. The exe has 10 minutes
+  in total, fails after 60 s without any data, and must be between
+  1 MiB and 400 MiB and exactly the size the release lists. (The v0.0.4
+  exe is 149,542,663 bytes.)
+- The unauthenticated GitHub API allows 60 requests per hour per IP
+  address. HTTP 403 or 429 counts as a failed check.
+
+### 20.4 Release parsing (`ReleaseParser`, Core)
+
+The JSON fields read are `tag_name`, `draft`, `prerelease`,
+`published_at`, and `name`, `size`, `state` and `digest` of each entry
+in `assets`. Everything else is ignored. The release is rejected (with
+the §20.10 reason) when:
+- the JSON isn't an object, or is larger than 1 MiB: "the release
+  information couldn't be read";
+- `draft` or `prerelease` is `true`, or `tag_name` isn't
+  `v<MAJOR>.<MINOR>.<PATCH>`: "the latest release isn't a full release";
+- there is no asset named exactly `ClippysRevenge.exe` or
+  `SHA256SUMS.txt` (ordinal compare), an asset's `state` is present and
+  isn't `uploaded`, the exe's `size` is outside 1 MiB–400 MiB, or the
+  sums file's `size` is over 64 KiB: "the release has no usable
+  ClippysRevenge.exe or SHA256SUMS.txt".
+
+`published_at` is optional (an unparseable value counts as missing).
+The exe asset's `digest`, when it is `sha256:<64 hex>`, is kept as a
+second expected hash. GitHub has filled this field since 2025.
+
+### 20.5 Verification
+
+- `SHA256SUMS.txt` lines match `^\s*([0-9a-fA-F]{64})\s+\*?(.+?)\s*$`,
+  the same rule as `install.ps1`. The entry whose name is exactly
+  `ClippysRevenge.exe` gives the expected hash. No entry, or two entries
+  with different hashes, fails. `release.yml` writes
+  `<hex> *ClippysRevenge.exe` (Git Bash `sha256sum` in binary mode;
+  checked on v0.0.4).
+- The exe is streamed to `<staging>\ClippysRevenge-<version>.exe.partial`
+  and hashed while it is written. It must have exactly the listed size,
+  its SHA-256 must equal the `SHA256SUMS.txt` entry and, when present,
+  the asset `digest`, and it must start with `MZ`. Then it is renamed to
+  `ClippysRevenge-<version>.exe`.
+- The App then reads the file's `FileVersionInfo.ProductVersion`. Cut at
+  `+` and trimmed, it must equal the release version.
+- Any failure deletes the partial or staged file and records the reason
+  (§20.7, §20.10).
+- **Trust model.** HTTPS to GitHub plus a matching SHA-256 from the same
+  release proves the file is the one published in the project's GitHub
+  release and arrived intact. It does **not** prove independent
+  authenticity: someone who can publish a release in the repository
+  (a stolen account or token, a compromised workflow) can publish a
+  matching exe and sums file, and installed copies would install it
+  within a week without asking. The exe isn't Authenticode-signed yet
+  (§16). Files written by `HttpClient` carry no Mark of the Web, so
+  SmartScreen doesn't prompt for an auto-installed exe. Possible later
+  hardening: Authenticode signing with a check of the signer, or a
+  signature asset checked against a public key built into the app (§18,
+  open question 12).
+
+### 20.6 Installed copy and files (`UpdatePaths`, Core)
+
+| What | Where |
+|---|---|
+| Install folder (`install.ps1`) | `%LOCALAPPDATA%\Programs\ClippysRevenge\` |
+| Installed exe | `…\Programs\ClippysRevenge\ClippysRevenge.exe` |
+| Previous exe during an update | `…\Programs\ClippysRevenge\ClippysRevenge.exe.old` |
+| Staged downloads | `…\Programs\ClippysRevenge\update\ClippysRevenge-<version>.exe` (`.partial` while downloading) |
+| Update state | `%LOCALAPPDATA%\ClippysRevenge\update-state.json` |
+
+- Staging sits in the install folder so the final move is a rename on
+  the same volume, and `install.ps1 -Uninstall` removes it with the
+  folder.
+- The running copy is **installed** when `Path.GetFullPath(Environment.ProcessPath)`
+  equals the installed exe path (any case). A dev build in `bin\`, a
+  copy in Downloads or `dotnet run` is not installed. A copy that isn't
+  installed never checks automatically, never downloads or installs,
+  never reads or writes `update-state.json`, and never touches the
+  install folder. Its About window can still check by hand (results
+  kept in memory) and links to the release page.
+
+### 20.7 State file (`UpdateState`, `UpdateStateStore`; Core)
+
+`update-state.json` holds (all optional):
+
+| Field | Meaning |
+|---|---|
+| `LastCheckUtc` | Last successful lookup |
+| `LastAttemptUtc` | Last lookup, successful or not |
+| `LastError` | Reason of the last failed lookup, download or install (§20.10, including an install at start-up), cleared by a successful lookup, download or swap |
+| `LatestTag`, `LatestPublishedUtc` | Newest full release seen |
+| `Staged` | `{Version, Sha256, Size}` of the verified download in the staging folder |
+| `FailedVersion` | A version that didn't start; never installed automatically again |
+| `NotifiedVersion` | The version the last update balloon was shown for |
+| `Pending` | `{FromVersion, ToVersion, StartedUtc, Confirmed}` while a swap is being handed over |
+| `Notice` | `{Kind, FromVersion, ToVersion}`, shown once at the next start. Written for a rollback (`Kind = RolledBack`, `FromVersion` = the version that failed, `ToVersion` = the version running again) |
+
+It is written atomically (temp file, then replace). It is read with
+`FileShare.ReadWrite | FileShare.Delete`, so a reader in one process
+never blocks the other process's replace. A missing, unreadable or
+invalid file loads as an empty state with a Warning log:
+`UpdateStateStore.Load` never throws, whatever the exception. Each invalid field (an unparseable version or tag,
+a hash that isn't 64 hex characters, a size outside the limits) is
+dropped on its own. It is not in `settings.json`, because the Settings
+window copies the whole settings object on Apply (§6.3) and would
+overwrite times written in the background.
+
+### 20.8 When it checks (`UpdateService`, Core)
+
+- Automatic checks need an installed copy and `Updates` other than
+  `Off`. The mode is re-read before each step.
+- The first check runs 60 s after start-up, in the background after the
+  tray and the server are up, so start-up never waits for the network.
+  While running, the service looks again every 6 hours.
+- A check is due when `LastCheckUtc` is unset or at least 7 days old,
+  and `LastAttemptUtc` is unset or at least 24 hours old. A time more
+  than 1 day in the future counts as unset (the clock was wrong).
+- A successful lookup sets `LastCheckUtc` and `LastAttemptUtc`, the
+  latest tag and date, and clears `LastError`. A failed one sets
+  `LastAttemptUtc` and `LastError` and records an `Update` event.
+- When the lookup finds an update (§20.2):
+  - `Notify`: the `UpdateAvailable` balloon, once per version.
+  - `Install`: download and verify it (unless that version is already
+    staged), then record `Staged`. If the process started less than 30
+    minutes ago, install it as soon as Clippy is idle (§20.9), waiting
+    at most 10 minutes. Otherwise, or if Clippy stays busy, it stays
+    staged and the `UpdateReady` balloon is shown, once per version.
+  - "Once per version" means `NotifiedVersion` is set only when the
+    balloon was actually shown (`BalloonCenter.Post` returned true).
+- When the lookup finds no update, a staged file for any other version
+  is deleted and `Staged` is cleared.
+- **Check for updates** in the About window (and **Check now** in
+  Settings) runs one lookup at once, whatever the mode and the due
+  time. It doesn't download. **Update now** runs the lookup if no
+  latest version is known, downloads and verifies unless that version
+  is staged, waits for idle for at most 2 minutes, and installs. Its
+  idle test (`UpdateServiceOptions.IsBusyManual`) ignores an open
+  Settings window, since it is the user's own action and About may have
+  been opened from Settings (§20.9). It is allowed for a version in
+  `FailedVersion` (the About window says it failed before).
+- Only one check, download or install runs at a time. A second request
+  while one runs does nothing.
+- `UpdateService.StopAsync` waits up to 30 s (`InstallStopWait`) for a
+  file swap that is in progress, so the app never exits halfway through
+  a swap (§14).
+
+### 20.9 Installing
+
+**Idle** means no open `Serving`, `Drafting` or `AwaitingConfirmation`
+scope in `ActivityHub` (`IsActive`, §7) and no open Settings window.
+**Update now** uses the same test without the Settings window
+(`IsBusyManual`, §20.8). Sync and backfill may be running: they stop
+with the app and resume after the restart. An automatic install tests
+for idle once more right before it swaps; if Clippy became busy in the
+meantime, it goes back to waiting (within the same 10-minute limit).
+Update now doesn't re-test.
+
+**At start-up, before anything runs.** Right after the settings and the
+log are loaded, and before the Outlook worker, the tray, the server,
+sync or drafting start, `Program` calls `UpdateStartup.Prepare` (below).
+When it returns *install now*, `Program` swaps the files, releases the
+single-instance mutex, hands over and exits. No MCP request or drafting
+pass can be running at that point. *Install now* needs `Updates =
+Install`, an installed copy, and a `Staged` version that is an update
+(§20.2) whose file exists with the recorded size. Any error of this
+start-up install never keeps the app from starting: an
+`UpdateInstallException` is logged with its reason, any other exception
+is logged by type name only (Error) and recorded as
+`the installed program couldn't be replaced (<exception type name>)`;
+both set `LastError` (a failed state write is only logged), and start-up
+continues with the old exe.
+
+**During the session** (the start-up window of §20.8, or **Update now**):
+the staged file is checked again, the files are swapped, and the tray
+exits through the normal shutdown in the order of §14: the update
+service, then the MCP host (10 s), then drafting and sync (5 s). If the
+host stopped in time, the mutex is released and the handover runs. If
+it didn't, the handover is skipped (Warning log), the process exits
+with `Pending` set and the new exe in place, and the new exe confirms
+itself at the next start (`Prepare`, below).
+
+**Swap** (`UpdateInstall.Begin`):
+1. Check the staged file's size and SHA-256 against `Staged`.
+2. Delete a leftover `ClippysRevenge.exe.old`. If that fails, stop with
+   "the previous version is still in use; restart Windows and try
+   again".
+3. Rename `ClippysRevenge.exe` to `ClippysRevenge.exe.old`. Windows
+   allows renaming a running exe, though not deleting it.
+4. Move the staged file to `ClippysRevenge.exe`. If that fails, rename
+   `.old` back and stop.
+5. Write `Pending = {FromVersion, ToVersion, StartedUtc, Confirmed = false}`,
+   clear `Staged` and `LastError`. If that write fails, undo the swap
+   (without `Pending` no later start could roll back): move the new exe
+   back to its staging file, rename `.old` back to
+   `ClippysRevenge.exe` (same retries; if that fails too, log a
+   Critical error that tells the user to run `install.ps1`), and stop
+   with `the installed program couldn't be replaced (<exception type name>)`.
+   `Staged` stays as it was.
+
+File operations retry every 500 ms for up to 10 s on `IOException` or
+`UnauthorizedAccessException`, because antivirus may hold a new file
+for a moment. A failed swap leaves the old exe in place, records
+`LastError` and keeps the app running.
+
+**Handover** (`UpdateHandover`, in the old process after shutdown, only
+when the MCP host stopped in time, §14):
+1. Start the installed exe (§20.11). If that throws, roll back.
+2. Every 250 ms, read the state. A read that fails (the file is being
+   replaced) is ignored until the next poll. `Pending` cleared, or
+   `Confirmed` for this `ToVersion`: done, exit.
+3. If the new process exits first, or 60 s pass (then kill it and wait
+   up to 5 s), roll back.
+
+**Rollback** (old process): for up to 10 s, delete the new
+`ClippysRevenge.exe` and rename `.old` back. Then set `FailedVersion =
+ToVersion`, `Notice = RolledBack`, clear `Pending` and `Staged`, start
+the restored exe the same way, and exit. If the files can't be restored,
+log a Critical error, keep `Pending` and exit; the troubleshooting page
+tells the user to run `install.ps1` again.
+
+**Confirm** (new process): the MCP host starts with the 10 s in-use
+bind retry of §13, because the old process may still be releasing the
+port. When the tray is up and the server start finished (posted to the
+UI thread, so the message loop runs):
+- If the MCP server did **not** start, the process doesn't confirm
+  (Warning log). A version that can't serve isn't a working update, so
+  the old process rolls back after its 60 s.
+- Otherwise `UpdateStartup.ConfirmAsync`: a process whose version
+  equals `Pending.ToVersion` sets `Confirmed = true`, retrying the state
+  write every 250 ms for up to 10 s (the old process may be reading the
+  file at that moment); if it still fails, it logs and doesn't confirm.
+  After a confirmation it shows the `Updated` balloon and records the
+  `updated from …` event. In the background it then deletes `.old`
+  (retrying every second for up to 60 s, since the old process may
+  still be exiting) and clears `Pending`. A leftover `.old` is deleted
+  at the next start.
+
+**`UpdateStartup.Prepare`** (installed copies only, at every start):
+- `Pending` for this version: confirm after start-up (above). This also
+  covers an old process that died during the handover, and a handover
+  that was skipped because the MCP host didn't stop in time.
+- `Pending` for another version: that update didn't take. Set
+  `FailedVersion = ToVersion`, `Notice = RolledBack`, clear `Pending`.
+- Without `Pending`: delete `.old` if `ClippysRevenge.exe` exists (one
+  try; the next start tries again).
+- In the staging folder, delete `*.partial` and every
+  `ClippysRevenge-*.exe` except the file of a `Staged` version that is
+  still an update. Clear `Staged` when its file is missing or has the
+  wrong size, or when it is no longer an update.
+- Return the `Notice` (and clear it). After the tray is up, `Program`
+  shows its balloon and records its `Update` event.
+
+There is no loop: a version that failed is skipped until a newer one is
+released, an install happens at most once per start, and a crash after
+the confirmation is an ordinary crash (§14).
+
+**Known limit.** If the new version migrated an index database to a
+newer schema before it failed, the rolled-back version can't open that
+index and shows `Error` with "Update Clippy's Revenge or rebuild the
+index" (§9.1). **Rebuild index…** fixes it.
+
+### 20.10 Texts (`UpdateTexts`, `BalloonTexts`; Core)
+
+Failure reasons (the `<reason>` in `LastError`, events and the About
+window):
+- `GitHub didn't answer within 15 s`
+- `GitHub answered HTTP <code>`
+- `GitHub's rate limit was reached; try again later` (403 or 429)
+- `network error (<exception type name>)`
+- `no release found` (404)
+- `the release information couldn't be read`
+- `the latest release isn't a full release`
+- `the release has no usable ClippysRevenge.exe or SHA256SUMS.txt`
+- `SHA256SUMS.txt has no entry for ClippysRevenge.exe`
+- `the checksum doesn't match`
+- `the file size doesn't match the release`
+- `the file isn't a Windows program`
+- `the downloaded program has a different version than the release`
+- `a redirect went to <host>, which isn't allowed`
+- `the download took too long`
+- `the previous version is still in use; restart Windows and try again`
+- `the file couldn't be saved (<exception type name>)`
+- `the downloaded update is missing`
+- `the installed program couldn't be replaced (<exception type name>)`
+- `this copy isn't in the install folder`
+
+`Update` events (§6.4):
+- `update check: v<v> available`
+- `update check: up to date (v<running>)`
+- `update check failed: <reason>`
+- `update v<v> downloaded and verified`
+- `update download failed: <reason>`
+- `installing update v<v>`
+- `update failed: <reason>`
+- `updated from v<from> to v<to>`
+- `update v<failed> didn't start; back on v<back>`
+
+Balloons (§6.5, rate-limited):
+- `UpdateAvailable(v)`: `It looks like there's a newer me: v<v>. Right-click me and pick About Clippy's Revenge… to update.`
+- `UpdateReady(v)`: `It looks like there's a newer me: v<v>. I'll install it the next time I start. To do it now, pick About Clippy's Revenge… in my menu.`
+- `Updated(v)`: `It looks like I got an upgrade. I'm now v<v>.`
+- `UpdateRolledBack(failed, back)`: `It looks like v<failed> didn't start, so I went back to v<back>. I won't install v<failed> again.`
+
+The About window's texts are in §6.7.
+
+Logs record versions, tags, hosts, sizes, outcomes, durations and
+exception type names. Full download URLs may be logged (they hold no
+secrets).
+
+### 20.11 Safety rules for this feature
+
+- The updater starts exactly one program: the installed exe at
+  `UpdatePaths.ExePath`, computed from `%LOCALAPPDATA%`. The path never
+  comes from the network, the state file or the settings.
+  `UpdateRestarter.Start` refuses any other path. It uses
+  `UseShellExecute = false`, no arguments and the install folder as the
+  working directory. It is the updater's only `Process.Start`, and its
+  `Kill` only ever targets the process it started. It never starts
+  Outlook, a shell, `install.ps1` or any script, and never asks for
+  elevation.
+- The pinned hosts and URLs appear only in `UpdateRelease.cs`
+  (`UpdateEndpoints`). A new `HttpClient` is created only in
+  `ConnectionTester.cs`, `AnthropicApiModel.cs` and `UpdateClient.cs`.
+- File operations are `File.Move` and `File.Delete` on the app's own
+  exe, `.old` and staging files. The updater never touches mail,
+  Outlook, the index, settings, the token or Claude credentials.
+- The safety scans of §15 enforce this.

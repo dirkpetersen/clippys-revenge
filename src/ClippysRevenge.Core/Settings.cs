@@ -93,6 +93,7 @@ public sealed class Settings
     public bool StartWithWindows { get; set; } = true;
     public bool NotifyOnErrors { get; set; } = true;
     public LogLevel LogLevel { get; set; } = LogLevel.Information;
+    public UpdateMode Updates { get; set; } = UpdateMode.Install;
     public AiDraftingSettings AiDrafting { get; set; } = new();
 
     /// <summary>Empty list = valid. Never throws, never mutates.</summary>
@@ -136,6 +137,8 @@ public sealed class Settings
 
         if (!Enum.IsDefined(LogLevel))
             Add("LogLevel", "Must be one of Trace, Debug, Information, Warning, Error, Critical, None.");
+
+        if (!Enum.IsDefined(Updates)) Add("Updates", "Unknown update mode.");
 
         if (SharedMailboxes is null) Add("SharedMailboxes", "Must not be empty.");
         else
@@ -287,6 +290,7 @@ public sealed class Settings
         StartWithWindows = c.StartWithWindows;
         NotifyOnErrors = c.NotifyOnErrors;
         LogLevel = c.LogLevel;
+        Updates = c.Updates;
         AiDrafting = c.AiDrafting;
     }
 

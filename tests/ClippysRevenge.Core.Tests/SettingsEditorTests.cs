@@ -40,6 +40,7 @@ public class SettingsEditorTests
         src.StartWithWindows = !src.StartWithWindows; handled++;
         src.NotifyOnErrors = !src.NotifyOnErrors; handled++;
         src.LogLevel = LogLevel.Debug; handled++;
+        src.Updates = UpdateMode.Notify; handled++;
         src.AiDrafting = new AiDraftingSettings { DailyCap = 5, ExcludeSenders = ["x.org"] }; handled++;
 
         var count = typeof(Settings).GetProperties(BindingFlags.Public | BindingFlags.Instance)

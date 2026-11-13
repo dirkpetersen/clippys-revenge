@@ -12,6 +12,7 @@ nav = [
   { "Get started" = [
     "install.md",
     "connect.md",
+    "updates.md",
   ] },
   { "Use" = [
     "tools.md",
