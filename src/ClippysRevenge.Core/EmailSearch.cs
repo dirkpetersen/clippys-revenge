@@ -69,6 +69,21 @@ public static class SearchDates
         ArgumentNullException.ThrowIfNull(tz);
         if (string.IsNullOrWhiteSpace(text)) return null;
         var t = text.Trim();
+        try
+        {
+            return ParseCore(t, tz, param, endOfDay);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            throw Invalid(param, t);
+        }
+    }
+
+    private static FormatException Invalid(string param, string t) => new(
+        $"{param} \"{t}\" is not a valid date. Use an ISO date like 2026-03-01 or a date-time like 2026-03-01T14:30 (local time).");
+
+    private static DateTimeOffset? ParseCore(string t, TimeZoneInfo tz, string param, bool endOfDay)
+    {
 
         if (DateTime.TryParseExact(t, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
         {
@@ -88,8 +103,7 @@ public static class SearchDates
             return Local(dt, tz);
         }
 
-        throw new FormatException(
-            $"{param} \"{t}\" is not a valid date. Use an ISO date like 2026-03-01 or a date-time like 2026-03-01T14:30 (local time).");
+        throw Invalid(param, t);
     }
 
     private static DateTimeOffset Local(DateTime dt, TimeZoneInfo tz)
