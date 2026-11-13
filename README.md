@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
   <img src="docs/assets/logo.svg" alt="Clippy's Revenge: a paperclip wrestling an envelope" width="300">
 </p>
 
@@ -207,7 +207,7 @@ unchecking asks whether to delete that index. Tools reach it with
 
 ```bash
 dotnet build -c Release
-dotnet test -c Release --filter "live!=outlook"      # what CI runs
+dotnet test -c Release --filter "live!=outlook&live!=claude"      # what CI runs
 dotnet test tests/ClippysRevenge.Core.Tests          # Core only (also works in WSL)
 dotnet publish src/ClippysRevenge.App -c Release -r win-x64 --self-contained \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish

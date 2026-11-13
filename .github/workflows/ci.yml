@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -45,7 +45,7 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - name: Test Core
-        run: dotnet test tests/ClippysRevenge.Core.Tests -c Release --filter "live!=outlook" --logger trx --results-directory TestResults
+        run: dotnet test tests/ClippysRevenge.Core.Tests -c Release --filter "live!=outlook&live!=claude" --logger trx --results-directory TestResults
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -65,7 +65,7 @@ jobs:
       - name: Build
         run: dotnet build -c Release
       - name: Test (no live Outlook)
-        run: dotnet test -c Release --no-build --filter "live!=outlook"
+        run: dotnet test -c Release --no-build --filter "live!=outlook&live!=claude"
       - name: Publish single-file exe (smoke)
         run: >
           dotnet publish src/ClippysRevenge.App -c Release -r win-x64

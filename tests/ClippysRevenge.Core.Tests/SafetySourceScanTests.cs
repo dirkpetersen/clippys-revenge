@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -388,4 +388,113 @@ public class SafetySourceScanTests
         Assert.DoesNotMatch("ANTHROPIC_", f.WithStrings);
         AssertNone(Find(x => x.Code, "AnthropicCredentials", x => x.Rel == model), "AnthropicCredentials must not be used.");
     }
-}
+
+    // ---- AI drafting (SPEC 19.12) ----
+
+    private static readonly Regex CredentialLiteral = new(@"\.credentials|claudeAiOauth|oauthAccount|sk-ant-oat", RegexOptions.IgnoreCase);
+
+    private static readonly Regex AiForbiddenCall = new(@"\.\s*(Send|Display|Move)\s*\(|\bDelete\s*\(|\bPermanentDelete\s*\(");
+
+    private static bool Hit(Regex re, string s) => re.IsMatch(s);
+
+    internal static bool IsAiFile(string rel)
+    {
+        var name = Path.GetFileName(rel);
+        return name.StartsWith("Draft", StringComparison.Ordinal) || name.StartsWith("Claude", StringComparison.Ordinal)
+            || name.StartsWith("Style", StringComparison.Ordinal) || name.StartsWith("Anthropic", StringComparison.Ordinal)
+            || name.StartsWith("OutlookAiMailbox", StringComparison.Ordinal);
+    }
+
+    /// <summary>Forbidden Outlook-style calls in AI file code; File./Directory. calls (temp files, atomic rename) are exempt.</summary>
+    internal static List<string> AiForbiddenHits(string code)
+    {
+        var hits = new List<string>();
+        foreach (Match m in AiForbiddenCall.Matches(code))
+        {
+            var lineStart = code.LastIndexOf('\n', Math.Max(0, m.Index - 1)) + 1;
+            // For ".Move(" the receiver precedes the match; for "Delete(" the receiver precedes a dot just before it.
+            var prefix = code[lineStart..m.Index];
+            if (!m.Value.StartsWith('.') && prefix.EndsWith('.')) prefix = prefix[..^1];
+            if (Regex.IsMatch(prefix, @"\b(File|Directory)\s*$")) continue;
+            hits.Add($"line {LineOf(code, m.Index)}: {m.Value.Trim()}");
+        }
+        return hits;
+    }
+
+    [Fact]
+    public void AiFiles_SendDisplayMoveDelete_Absent()
+    {
+        var files = Scan.Value.Files.Where(f => IsAiFile(f.Rel)).ToList();
+        Assert.Contains(files, f => f.Rel.EndsWith("/ClaudeCli.cs", StringComparison.Ordinal));
+        Assert.Contains(files, f => f.Rel.EndsWith("/OutlookAiMailbox.cs", StringComparison.Ordinal));
+        var hits = files.SelectMany(f => AiForbiddenHits(f.Code).Select(h => f.Rel + ": " + h)).ToList();
+        AssertNone(hits, "AI files must not call .Send(, .Display(, .Move( or Delete( (File./Directory. calls are exempt).");
+    }
+
+    [Fact]
+    public void AiForbiddenHits_MatcherCatchesPlantedViolations()
+    {
+        Assert.NotEmpty(AiForbiddenHits("item.Send();"));
+        Assert.NotEmpty(AiForbiddenHits("item . Display(false);"));
+        Assert.NotEmpty(AiForbiddenHits("reply.Move(drafts);"));
+        Assert.NotEmpty(AiForbiddenHits("item.Delete();"));
+        Assert.NotEmpty(AiForbiddenHits("Delete(x);"));
+        Assert.NotEmpty(AiForbiddenHits("File.Exists(a); item.Delete();"));
+        Assert.Empty(AiForbiddenHits("File.Delete(tmp); File.Move(a, b, true); Directory.Delete(d, true);"));
+        Assert.Empty(AiForbiddenHits("var x = list.Remove(y);"));
+        Assert.True(IsAiFile("src/A/DraftWorker.cs"));
+        Assert.True(IsAiFile("src/A/OutlookAiMailbox.cs"));
+        Assert.False(IsAiFile("src/A/OutlookMail.cs"));
+    }
+
+    [Fact]
+    public void NoClaudeCredentialReferences_InStringLiterals()
+    {
+        var hits = new List<string>();
+        foreach (var f in Scan.Value.Files)
+        {
+            hits.AddRange(f.Literals.Where(l => CredentialLiteral.IsMatch(l[(l.IndexOf('|') + 1)..])).Select(l => $"{f.Rel}:{l}"));
+        }
+        AssertNone(hits, "No literal may reference Claude credential stores (.credentials, claudeAiOauth, oauthAccount, sk-ant-oat).");
+        Assert.True(Hit(CredentialLiteral, ".credentials.json"));
+        Assert.True(Hit(CredentialLiteral, "sk-ant-oat01-abc"));
+        Assert.True(Hit(CredentialLiteral, "claudeAiOauth"));
+        Assert.True(Hit(CredentialLiteral, "oauthAccount"));
+        Assert.False(Hit(CredentialLiteral, "sk-ant-api03-abc"));
+    }
+
+    [Fact]
+    public void NoLiteralBareOrLogin_MatcherCatchesPlantedViolations()
+    {
+        var lits = new List<string>();
+        Strip("var a = \"--bare\"; var b = \"login\"; var c = \"--json-schema\";", blankStrings: false, lits);
+        var texts = lits.Select(l => l[(l.IndexOf('|') + 1)..]).ToList();
+        Assert.Contains("--bare", texts);
+        Assert.Contains("login", texts);
+        Assert.Contains("--json-schema", texts);
+    }
+
+    [Fact]
+    public void ModelGetsNoTools_ClaudeCliArgsAndApiCall()
+    {
+        var cli = Scan.Value.Files.Single(f => f.Rel == ClaudeCliFile);
+        var lits = cli.Literals.Select(l => l[(l.IndexOf('|') + 1)..]).ToList();
+        Assert.Contains("--tools", lits);
+        Assert.DoesNotContain(lits, l => l is "--mcp-config" or "--allowedTools" or "--dangerously-skip-permissions");
+        var api = Scan.Value.Files.Single(f => f.Rel == "src/ClippysRevenge.Core/AnthropicApiModel.cs");
+        Assert.DoesNotMatch(@"\bTools\s*=|\bToolChoice\s*=|\bMcpServers\b", api.Code);
+        Assert.Matches(@"\bTools\s*=", "Tools = x");
+    }
+
+    [Fact]
+    public void AiOutput_ReachesOutlookOnlyThroughReplyDraftWriter()
+    {
+        // The model classes never touch COM; only OutlookAiMailbox (App) calls the reply-draft path.
+        var comTypes = new Regex(@"\bOutlook\.|\bMarshal\b|\bMailItem\b|CreateReplyDraft");
+        var core = Scan.Value.Files.Where(f => f.Rel.StartsWith("src/ClippysRevenge.Core/", StringComparison.Ordinal) && IsAiFile(f.Rel));
+        var hits = core.Where(f => comTypes.IsMatch(f.Code)).Select(f => f.Rel).ToList();
+        AssertNone(hits, "AI files in Core must not reference COM types or CreateReplyDraft.");
+        Assert.True(Hit(comTypes, "x.CreateReplyDraft()"));
+    }}
+
+

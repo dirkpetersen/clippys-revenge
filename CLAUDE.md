@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 Guidance for Claude Code in this repository.
 
@@ -67,7 +67,7 @@ docs/briefs/                architect briefs, one per task
 
 ```bash
 dotnet build -c Release
-dotnet test -c Release --filter "live!=outlook"      # what CI runs
+dotnet test -c Release --filter "live!=outlook&live!=claude"      # what CI runs
 dotnet test tests/ClippysRevenge.Core.Tests          # Core only (also works in WSL)
 dotnet publish src/ClippysRevenge.App -c Release -r win-x64 --self-contained \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
