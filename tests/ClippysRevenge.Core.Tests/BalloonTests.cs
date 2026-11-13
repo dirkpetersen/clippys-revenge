@@ -19,6 +19,14 @@ public class BalloonTests
     }
 
     [Fact]
+    public void AiDrafted_texts()
+    {
+        Assert.Equal("It looks like you got mail. I drafted 1 reply — they're in your Drafts folder.", BalloonTexts.AiDrafted(1));
+        Assert.Equal("It looks like you got mail. I drafted 3 replies — they're in your Drafts folder.", BalloonTexts.AiDrafted(3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => BalloonTexts.AiDrafted(0));
+    }
+
+    [Fact]
     public void FirstPost()
     {
         var (c, _, seen) = Make();

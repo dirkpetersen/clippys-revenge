@@ -17,6 +17,17 @@ public static class BalloonTexts
         string.Create(System.Globalization.CultureInfo.InvariantCulture,
             $"It looks like you're trying to find an email. I finished indexing {what}: {count:N0} emails.");
 
+    public const string NoOutlookWindow = "It looks like Outlook has no open window. Open Outlook and look in Drafts.";
+
+    /// <summary>It looks like you got mail. I drafted 1 reply — they're in your Drafts folder. / … I drafted n replies — …</summary>
+    /// <exception cref="ArgumentOutOfRangeException">n is less than 1.</exception>
+    public static string AiDrafted(int n)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(n, 1);
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"It looks like you got mail. I drafted {n} {(n == 1 ? "reply" : "replies")} — they're in your Drafts folder.");
+    }
+
     public static string Error(string reason) =>
         string.IsNullOrWhiteSpace(reason)
             ? "It looks like something went wrong. Right-click me and pick Activity… for details."

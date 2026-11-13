@@ -13,7 +13,8 @@ public sealed record SettingsApplyTargets(
     Action<bool> SetStartWithWindows,
     MailboxIndexes? Indexes,
     Action? RetentionChanged,
-    Action? SyncNow);
+    Action? SyncNow,
+    Action? AiSettingsChanged = null);
 
 /// <summary>Errors: nothing was applied. Warnings: applied, but a side effect failed.</summary>
 public sealed record SettingsApplyResult(IReadOnlyList<SettingsError> Errors, IReadOnlyList<string> Warnings)
@@ -139,6 +140,15 @@ public sealed class SettingsApplier
 
         if (changes.RetentionChanged) _t.RetentionChanged?.Invoke();
         else if (changes.SyncPlanChanged) _t.SyncNow?.Invoke();
+
+        if (_t.AiSettingsChanged is { } notify)
+        {
+            try { notify(); }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning("Couldn't notify AI drafting of the change ({Type}).", ex.GetType().Name);
+            }
+        }
 
         _logger?.LogInformation("Settings applied: {Fields}", string.Join(", ", changedFields));
         foreach (var w in warnings) _logger?.LogWarning("Settings warning: {Warning}", w);

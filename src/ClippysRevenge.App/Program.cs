@@ -90,6 +90,12 @@ internal static class Program
         OutlookMail? mail = null;
         SyncService? sync = null;
         IDisposable? indexErrorScope = null;
+        var signatures = new Signatures(SignatureRegistry.Name, Signatures.DefaultDirectory());
+        OutlookReplyDraftWriter? replyWriter = null;
+        DraftWorker? drafts = null;
+        IDraftModel? draftModel = null;
+        OutlookAiMailbox? aiMailbox = null;
+        IDraftModel? apiModel = null;
         try
         {
             indexes = new MailboxIndexes(localDir, settings.SharedMailboxes.Where(m => m?.Enabled == true).Select(m => m.Smtp));
@@ -97,6 +103,26 @@ internal static class Program
             var mailSource = new OutlookMailSource(worker, stores, mail);
             sync = new SyncService(mailSource, indexes, () => settings, hub, balloons,
                 logger: loggerFactory.CreateLogger<SyncService>(), reconcile: mailSource);
+
+            // AI drafting (SPEC 19). Needs the index, so there is no worker when the index failed to open.
+            var cliRunner = new ClaudeCliRunner(Path.Combine(localDir, ClaudeCliRunner.WorkDirName),
+                logger: loggerFactory.CreateLogger<ClaudeCliRunner>());
+            cliRunner.CleanupStaleFiles();   // SPEC 19.3 start-up cleanup
+            var cliModel = new ClaudeCliModel(() => settings.AiDrafting, ClaudeCliLocator.Default, cliRunner,
+                logger: loggerFactory.CreateLogger<ClaudeCliModel>());
+            apiModel = new AnthropicApiModel(() => settings.AiDrafting, store.LoadApiKey,
+                logger: loggerFactory.CreateLogger<AnthropicApiModel>());
+            draftModel = new DraftModelSwitch(() => settings.AiDrafting, cliModel, apiModel);
+            replyWriter = new OutlookReplyDraftWriter(worker, mail, stores, loggerFactory.CreateLogger<OutlookReplyDraftWriter>());
+            aiMailbox = new OutlookAiMailbox(worker, mail, stores, loggerFactory.CreateLogger<OutlookAiMailbox>());
+            var syncRef = sync;
+            drafts = new DraftWorker(new DraftWorkerServices(() => settings, indexes, aiMailbox, replyWriter, draftModel,
+                NoStyleGuide.Instance, // M11.6: the orchestrator swaps in the StyleSkill adapter after both are merged.
+                () => signatures.Default(SignatureKind.Reply), hub, balloons,
+                () => worker.State == OutlookConnectionState.Available, () => syncRef.IsPaused, TimeZoneInfo.Local,
+                Logger: loggerFactory.CreateLogger<DraftWorker>()));
+            var draftsRef = drafts;
+            sync.CycleCompleted += _ => draftsRef.Wake();
         }
         catch (Exception ex)
         {
@@ -197,13 +223,13 @@ internal static class Program
                 s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(stores).AddSingleton(invites)
                     .AddSingleton<IFreeBusySource>(new OutlookFreeBusySource(worker))
                     .AddSingleton(sp => new FreeTimeFinder(sp.GetRequiredService<IFreeBusySource>(), TimeProvider.System, TimeZoneInfo.Local));
-                s.AddSingleton(new Signatures(SignatureRegistry.Name, Signatures.DefaultDirectory()))
+                s.AddSingleton(signatures)
                     .AddSingleton<IDraftWriter>(new OutlookDraftWriter(worker, stores, loggerFactory.CreateLogger<OutlookDraftWriter>()))
                     .AddSingleton<CreateDraftTool>();
                 if (indexes is not null && mail is not null && sync is not null)
                 {
                     s.AddSingleton(indexes).AddSingleton(mail).AddSingleton(sync);
-                    s.AddSingleton<IReplyDraftWriter>(new OutlookReplyDraftWriter(worker, mail, stores, loggerFactory.CreateLogger<OutlookReplyDraftWriter>()))
+                    s.AddSingleton<IReplyDraftWriter>(replyWriter!)
                         .AddSingleton<ReplyDraftTool>();
                     s.AddSingleton<IAttachmentSaver, OutlookAttachmentSaver>()
                         .AddSingleton(sp => new AttachmentExport(sp.GetRequiredService<IAttachmentSaver>(),
@@ -227,9 +253,11 @@ internal static class Program
         hostRef = host;
         applier = new SettingsApplier(new SettingsApplyTargets(settings, store, tokens, p => host.RestartAsync(p), () => host.Port,
             e => StartupRegistration.Apply(e), indexes,
-            sync is null ? null : sync.NotifySettingsChanged, sync is null ? null : sync.SyncNow), logger);
+            sync is null ? null : sync.NotifySettingsChanged, sync is null ? null : sync.SyncNow,
+            drafts is null ? null : drafts.NotifySettingsChanged), logger);
         _ = StartHostAsync(host, settings.Port, logger);
         _ = sync?.StartAsync(CancellationToken.None);
+        _ = drafts?.StartAsync(CancellationToken.None);
 
         if (loaded.FirstRun)
         {
@@ -243,12 +271,17 @@ internal static class Program
         // Task.Run avoids the WinForms SynchronizationContext.
         Task.Run(async () =>
         {
+            if (drafts is not null)
+            {
+                await drafts.StopAsync(CancellationToken.None);
+            }
             if (sync is not null)
             {
                 await sync.StopAsync(CancellationToken.None);
             }
             await host.DisposeAsync();
         }).Wait(TimeSpan.FromSeconds(5));
+        (apiModel as IDisposable)?.Dispose();
         worker.Dispose();
         indexes?.Dispose();
         indexErrorScope?.Dispose();

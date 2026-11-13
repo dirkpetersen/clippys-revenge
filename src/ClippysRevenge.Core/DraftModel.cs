@@ -99,3 +99,42 @@ public sealed record DraftReply(bool NeedsReply, double Confidence, bool? ReplyA
         }
     }
 }
+
+/// <summary>Picks the backend from AiDraftingSettings.Backend on every call (SPEC 19.2, 19.3).</summary>
+public sealed class DraftModelSwitch : IDraftModel
+{
+    public const string ApiKeyUnavailableText = "✗ The API key backend isn't available in this version.";
+
+    private readonly Func<AiDraftingSettings> _settings;
+    private readonly IDraftModel _claudeCode;
+    private readonly IDraftModel? _apiKey;
+
+    /// <exception cref="ArgumentNullException">settings or claudeCode is null.</exception>
+    public DraftModelSwitch(Func<AiDraftingSettings> settings, IDraftModel claudeCode, IDraftModel? apiKey)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(claudeCode);
+        _settings = settings;
+        _claudeCode = claudeCode;
+        _apiKey = apiKey;
+    }
+
+    public Task<ModelStatus> CheckAsync(CancellationToken ct)
+    {
+        if (_settings().Backend == AiBackend.ApiKey)
+            return _apiKey is null
+                ? Task.FromResult(new ModelStatus(false, ApiKeyUnavailableText))
+                : _apiKey.CheckAsync(ct);
+        return _claudeCode.CheckAsync(ct);
+    }
+
+    public Task<ModelResult> RunAsync(ModelRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (_settings().Backend == AiBackend.ApiKey)
+            return _apiKey is null
+                ? Task.FromResult<ModelResult>(new ModelResult.Failed(ModelFailure.NotInstalled, null))
+                : _apiKey.RunAsync(request, ct);
+        return _claudeCode.RunAsync(request, ct);
+    }
+}

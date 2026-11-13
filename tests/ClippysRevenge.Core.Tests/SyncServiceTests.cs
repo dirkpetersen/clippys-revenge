@@ -491,4 +491,81 @@ public class SyncServiceTests : IDisposable
         Assert.Equal("3", _indexes.For("").GetMeta("retention_months"));
         Assert.Equal(0, _indexes.For("").Status().TotalEmails);
     }
+
+    // ---- CycleCompleted (M11.7) ----
+
+    private readonly List<SyncCycleResult> _completed = [];
+    private readonly SemaphoreSlim _completedSem = new(0);
+
+    private SyncService MakeWithCompleted(Action<SyncCycleResult>? first = null)
+    {
+        var s = Make();
+        if (first is not null) s.CycleCompleted += first;
+        s.CycleCompleted += r =>
+        {
+            lock (_completed) _completed.Add(r);
+            _completedSem.Release();
+        };
+        return s;
+    }
+
+    private int CompletedCount()
+    {
+        lock (_completed) return _completed.Count;
+    }
+
+    [Fact]
+    public async Task CycleCompleted_RaisedOncePerNormalCycle()
+    {
+        AddMails(2);
+        await MakeWithCompleted().StartAsync(CancellationToken.None);
+        await WaitCycle();
+        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        await Settle();
+        Assert.Equal(1, CompletedCount());
+        lock (_completed) Assert.False(_completed[0].Aborted);
+    }
+
+    [Fact]
+    public async Task CycleCompleted_NotRaisedWhenAborted()
+    {
+        var svc = MakeWithCompleted();
+        await svc.StartAsync(CancellationToken.None);
+        await WaitCycle();
+        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        _time.Advance(TimeSpan.FromSeconds(10));
+        _src.ThrowOn("OpenMailboxAsync", 2, new MailSourceUnavailableException("gone"));
+        svc.SyncNow();
+        var r = await WaitCycle();
+        Assert.True(r.Aborted);
+        await Settle();
+        Assert.Equal(1, CompletedCount());
+    }
+
+    [Fact]
+    public async Task CycleCompleted_ThrowingHandlerDoesNotStopOthersOrTheLoop()
+    {
+        var svc = MakeWithCompleted(_ => throw new InvalidOperationException("boom"));
+        await svc.StartAsync(CancellationToken.None);
+        await WaitCycle();
+        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        svc.SyncNow();
+        await WaitCycle();
+        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.Equal(2, CompletedCount());
+    }
+
+    [Fact]
+    public async Task CycleCompleted_NotRaisedWhilePaused()
+    {
+        var svc = MakeWithCompleted();
+        await svc.StartAsync(CancellationToken.None);
+        await WaitCycle();
+        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        svc.Pause();
+        svc.SyncNow();
+        _time.Advance(TimeSpan.FromHours(1));
+        await Settle();
+        Assert.Equal(1, CompletedCount());
+    }
 }

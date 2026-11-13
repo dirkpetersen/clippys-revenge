@@ -27,6 +27,8 @@ public static class MailTable
     public const string MessageClassProp = "http://schemas.microsoft.com/mapi/proptag/0x001A001F";      // PR_MESSAGE_CLASS
     public const string InReplyToProp = "http://schemas.microsoft.com/mapi/proptag/0x1042001F";         // PR_IN_REPLY_TO_ID
     public const string ConversationTopicProp = "http://schemas.microsoft.com/mapi/proptag/0x0070001F"; // PR_CONVERSATION_TOPIC
+    public const string TransportHeadersProp = "http://schemas.microsoft.com/mapi/proptag/0x007D001F"; // PR_TRANSPORT_MESSAGE_HEADERS
+    public const string LastVerbProp = "http://schemas.microsoft.com/mapi/proptag/0x10810003";         // PR_LAST_VERB_EXECUTED
     public const string SortLastModified = "[LastModificationTime]";
     public const string SortReceived = "[ReceivedTime]";
     public const string SortSentOn = "[SentOn]";
@@ -110,6 +112,18 @@ public static class DaslFilter
         t.ToUniversalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
     private static string P(string prop) => "\"" + prop + "\"";
+
+    /// <summary>Drafts that answer the source: ("irt" = 'imid') OR ("topic" = 'topic'), with a half left out when its
+    /// value is null/blank (trimmed). Null when both are blank. ' is doubled.</summary>
+    public static string? DraftMatch(string? internetMessageId, string? conversationTopic)
+    {
+        var halves = new List<string>();
+        var imid = internetMessageId?.Trim();
+        var topic = conversationTopic?.Trim();
+        if (!string.IsNullOrEmpty(imid)) halves.Add($"({P(MailTable.InReplyToProp)} = '{imid.Replace("'", "''")}')");
+        if (!string.IsNullOrEmpty(topic)) halves.Add($"({P(MailTable.ConversationTopicProp)} = '{topic.Replace("'", "''")}')");
+        return halves.Count == 0 ? null : "@SQL=" + string.Join(" OR ", halves);
+    }
 
     public static string Changed(EventTimeField field, DateTimeOffset modifiedFrom, DateTimeOffset cutoff) =>
         $"@SQL=({P(MailTable.LastModifiedProp)} >= '{Literal(modifiedFrom - Margin)}') AND " +
