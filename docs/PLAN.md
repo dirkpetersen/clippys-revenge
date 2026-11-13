@@ -111,7 +111,7 @@ v0.0.1 release.
 - [x] M11.7 Drafting pipeline: `DraftRules`, `DraftPrompt`, `DraftWorker` (candidates, COM facts, daily limit, backoff, decisions, events, `Drafting` state, manual path) (§19.7); `SyncService.CycleCompleted` (§10); `OutlookAiMailbox` (§19.9); wiring in `Program` `{arch:brief}` (deps: M11.2, M11.3, M11.4; uses M11.6 for the style block, falls back to "No style guide yet" if it isn't merged yet)
 - [x] M11.8 Tray and Settings UI: AI drafts submenu, consent dialog, drafts balloon with click → `ShowDrafts`, AI drafts tab (status + Check, key save/remove, model/effort/limits/lists, per-mailbox opt-in, style View/Regenerate/Open in editor, today's count), manual draft action (§6.2, §6.3, §6.5, §19.10) `{arch:brief}` (deps: M11.5, M11.6, M11.7)
 - [x] M11.9 Safety scan additions (§19.12, §15) and the test filter `live!=outlook&live!=claude` in `ci.yml`, `release.yml`, `CLAUDE.md` and the README (§16) `{arch:skip}` (deps: M11.4, M11.7)
-- [~] M11.10 Live tests: `[Trait("live","claude")]` CLI status + one tiny structured call; Outlook + Claude manual-draft round trip (draft in Drafts, `Re:: `, marker `ai`, sanitized body, Sent/Outbox unchanged) (§19.12). Run once by the user with `CLIPPY_LIVE=1` and `CLIPPY_LIVE_CLAUDE=1` `{arch:brief}` (deps: M11.8)
+- [x] M11.10 Live tests: `[Trait("live","claude")]` CLI status + one tiny structured call; Outlook + Claude manual-draft round trip (draft in Drafts, `Re:: `, marker `ai`, sanitized body, Sent/Outbox unchanged) (§19.12). Run once by the user with `CLIPPY_LIVE=1` and `CLIPPY_LIVE_CLAUDE=1` `{arch:brief}` (deps: M11.8)
 - [x] M11.11 User docs: `manual/ai-drafts.md` (setup, consent, what is sent, rules, style skill, limits, troubleshooting), data flow in `manual/security.md`, `tray.md`, `faq.md`, `changelog.md`, `zensical.toml` nav, README; `zensical build --clean --strict` passes (§19, CLAUDE.md docs rule) `{arch:skip}` (deps: M11.8)
 
 ## Carry-forward notes from reviews
@@ -169,3 +169,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-13 M11.7 fix: manual draft never throws; style generation outside the pass gate (0e98b40, found by spec sync); 2606 tests
 2026-11-13 M11.8 AI drafts tray submenu, consent dialog, settings tab, manual draft, balloon action (a1bbaf5); UI not click-tested yet; 2676 tests
 2026-11-13 M11.11 user docs: ai-drafts page, security data flow, tray, FAQ, changelog v0.0.5, README (8bdb69c); zensical strict build passes
+2026-11-13 M11.10 live Claude tests + AI manual-draft round trip, run-live-tests.ps1 -Claude (5f1df1e); not run yet (user runs once); 2706 tests
