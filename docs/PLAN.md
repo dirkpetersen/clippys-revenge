@@ -112,7 +112,7 @@ v0.0.1 release.
 - [x] M11.8 Tray and Settings UI: AI drafts submenu, consent dialog, drafts balloon with click → `ShowDrafts`, AI drafts tab (status + Check, key save/remove, model/effort/limits/lists, per-mailbox opt-in, style View/Regenerate/Open in editor, today's count), manual draft action (§6.2, §6.3, §6.5, §19.10) `{arch:brief}` (deps: M11.5, M11.6, M11.7)
 - [x] M11.9 Safety scan additions (§19.12, §15) and the test filter `live!=outlook&live!=claude` in `ci.yml`, `release.yml`, `CLAUDE.md` and the README (§16) `{arch:skip}` (deps: M11.4, M11.7)
 - [~] M11.10 Live tests: `[Trait("live","claude")]` CLI status + one tiny structured call; Outlook + Claude manual-draft round trip (draft in Drafts, `Re:: `, marker `ai`, sanitized body, Sent/Outbox unchanged) (§19.12). Run once by the user with `CLIPPY_LIVE=1` and `CLIPPY_LIVE_CLAUDE=1` `{arch:brief}` (deps: M11.8)
-- [~] M11.11 User docs: `manual/ai-drafts.md` (setup, consent, what is sent, rules, style skill, limits, troubleshooting), data flow in `manual/security.md`, `tray.md`, `faq.md`, `changelog.md`, `zensical.toml` nav, README; `zensical build --clean --strict` passes (§19, CLAUDE.md docs rule) `{arch:skip}` (deps: M11.8)
+- [x] M11.11 User docs: `manual/ai-drafts.md` (setup, consent, what is sent, rules, style skill, limits, troubleshooting), data flow in `manual/security.md`, `tray.md`, `faq.md`, `changelog.md`, `zensical.toml` nav, README; `zensical build --clean --strict` passes (§19, CLAUDE.md docs rule) `{arch:skip}` (deps: M11.8)
 
 ## Carry-forward notes from reviews
 
@@ -168,3 +168,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-13 M11.9 AI safety scans + live!=claude test filter in CI, release, CLAUDE.md, README, agent files (dd317d8); 2599 tests
 2026-11-13 M11.7 fix: manual draft never throws; style generation outside the pass gate (0e98b40, found by spec sync); 2606 tests
 2026-11-13 M11.8 AI drafts tray submenu, consent dialog, settings tab, manual draft, balloon action (a1bbaf5); UI not click-tested yet; 2676 tests
+2026-11-13 M11.11 user docs: ai-drafts page, security data flow, tray, FAQ, changelog v0.0.5, README (8bdb69c); zensical strict build passes

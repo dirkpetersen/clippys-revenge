@@ -25,7 +25,7 @@ sent to Claude, and how to set it up and fix it.
   instead of inventing one.
 
 When a pass creates drafts, the tray shows a balloon: "It looks like you got mail. I
-drafted 2 replies, they're in your Drafts folder." Click it to open Drafts.
+drafted 2 replies — they're in your Drafts folder." Click it to open Drafts.
 
 ## Set up
 
