@@ -14,6 +14,7 @@ internal sealed partial class OutlookMail
     public const int MaxReadBatch = ComWorker<Outlook.Application>.MaxBackgroundChunk;
 
     private const string PrSenderSmtp = "http://schemas.microsoft.com/mapi/proptag/0x5D01001F";
+    private const string PrSentRepresentingSmtp = "http://schemas.microsoft.com/mapi/proptag/0x5D02001F";
     private const string PrSmtpAddress = "http://schemas.microsoft.com/mapi/proptag/0x39FE001F";
     private const string PrAttachHidden = "http://schemas.microsoft.com/mapi/proptag/0x7FFE000B";
     private const string PrAttachContentId = "http://schemas.microsoft.com/mapi/proptag/0x3712001F";
@@ -286,7 +287,8 @@ internal sealed partial class OutlookMail
             var senderEmail = MailAddresses.ChooseSenderSmtp(
                 item.SenderEmailType, item.SenderEmailAddress,
                 () => ComSafe.Try(() => SenderExchangeSmtp(item)),
-                () => ComSafe.Try(() => pa.GetProperty(PrSenderSmtp) as string));
+                () => ComSafe.Try(() => pa.GetProperty(PrSenderSmtp) as string),
+                () => ComSafe.Try(() => pa.GetProperty(PrSentRepresentingSmtp) as string));
 
             var (to, cc) = ReadRecipients(item);
 

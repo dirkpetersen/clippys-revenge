@@ -87,12 +87,19 @@ public static class MailAddresses
 {
     public const int MaxRecipientsPerField = 500;
 
+    /// <summary>
+    /// Offline-safe sender choice (SPEC §8). For "EX" the local MAPI properties win
+    /// (PR_SENDER_SMTP_ADDRESS, then PR_SENT_REPRESENTING_SMTP_ADDRESS); the GAL lookup
+    /// <paramref name="exchangeSmtp"/> runs only when neither is an SMTP address.
+    /// Other types use the raw address first, then the properties.
+    /// </summary>
     public static string? ChooseSenderSmtp(string? emailType, string? senderEmailAddress,
-        Func<string?> exchangeSmtp, Func<string?> senderSmtpProp)
+        Func<string?> exchangeSmtp, Func<string?> senderSmtpProp, Func<string?>? sentRepresentingSmtpProp = null)
     {
+        var representing = sentRepresentingSmtpProp ?? (() => null);
         if (string.Equals(emailType, "EX", StringComparison.OrdinalIgnoreCase))
-            return First(exchangeSmtp, senderSmtpProp);
-        return First(() => senderEmailAddress, senderSmtpProp);
+            return First(senderSmtpProp, representing, exchangeSmtp);
+        return First(() => senderEmailAddress, senderSmtpProp, representing);
     }
 
     public static string? ChooseRecipientSmtp(Func<string?> smtpProp, string? address, Func<string?> exchangeSmtp) =>

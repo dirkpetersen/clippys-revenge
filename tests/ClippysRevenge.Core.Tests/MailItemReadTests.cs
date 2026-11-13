@@ -106,8 +106,11 @@ public class MailItemReadTests
     [Fact]
     public void ChooseSenderSmtp_cases()
     {
-        Assert.Equal("a@x.org", MailAddresses.ChooseSenderSmtp("EX", "/o=x", () => "a@x.org", Boom));
-        Assert.Equal("b@x.org", MailAddresses.ChooseSenderSmtp("ex", "/o=x", () => null, () => "b@x.org"));
+        Assert.Equal("a@x.org", MailAddresses.ChooseSenderSmtp("EX", "/o=x", Boom, () => "a@x.org"));
+        Assert.Equal("a@x.org", MailAddresses.ChooseSenderSmtp("EX", "/o=x", () => "gal@x.org", () => "a@x.org", Boom));
+        Assert.Equal("r@x.org", MailAddresses.ChooseSenderSmtp("EX", "/o=x", Boom, () => "/o=bad", () => "r@x.org"));
+        Assert.Equal("g@x.org", MailAddresses.ChooseSenderSmtp("EX", "/o=x", () => "g@x.org", () => null, () => ""));
+        Assert.Equal("b@x.org", MailAddresses.ChooseSenderSmtp("ex", "/o=x", () => "b@x.org", () => null));
         Assert.Null(MailAddresses.ChooseSenderSmtp("EX", null, () => "", () => null));
         Assert.Equal("c@x.org", MailAddresses.ChooseSenderSmtp("SMTP", " c@x.org ", Boom, Boom));
         Assert.Equal("d@x.org", MailAddresses.ChooseSenderSmtp("SMTP", "/o=ExchangeLabs/ou=x/cn=y", Boom, () => "d@x.org"));
