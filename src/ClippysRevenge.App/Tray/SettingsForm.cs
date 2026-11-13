@@ -15,13 +15,14 @@ internal sealed record SettingsFormServices(
     MailboxIndexes? Indexes,
     Func<string, Task>? Rebuild,
     Func<bool> IsOutlookUnavailable,
-    TimeZoneInfo TimeZone);
+    TimeZoneInfo TimeZone,
+    AiSettingsServices Ai);
 
 /// <summary>
 /// Settings window (SPEC 6.3). Edits a staged <see cref="SettingsEditor"/>; nothing reaches the live settings
 /// before OK or Apply. Nothing here waits for COM on the UI thread: Outlook-backed lists load in the background.
 /// </summary>
-internal sealed class SettingsForm : Form
+internal sealed partial class SettingsForm : Form
 {
     private static readonly TimeSpan ComLimit = TimeSpan.FromSeconds(15);
 
@@ -108,6 +109,7 @@ internal sealed class SettingsForm : Form
         BuildIndex();
         BuildScheduling();
         BuildGeneral();
+        BuildAi();
 
         _ok.SetBounds(440, 522, 76, 28);
         _cancel.SetBounds(522, 522, 76, 28);
@@ -120,10 +122,12 @@ internal sealed class SettingsForm : Form
         _statsTimer.Tick += (_, _) =>
         {
             if (_tabs.SelectedIndex == (int)SettingsTab.Index) RefreshStats();
+            if (_tabs.SelectedIndex == (int)SettingsTab.AiDrafts) RefreshAiToday();
         };
         _tabs.SelectedIndexChanged += (_, _) =>
         {
             if (_tabs.SelectedIndex == (int)SettingsTab.Index) RefreshStats();
+            if (_tabs.SelectedIndex == (int)SettingsTab.AiDrafts) OnAiTabSelected();
         };
         _statsTimer.Start();
 
@@ -403,6 +407,7 @@ internal sealed class SettingsForm : Form
             _logLevel.SelectedIndex = Math.Max(0, SettingsTexts.LogLevels.ToList().IndexOf(d.LogLevel));
             _wsl.Text = SettingsTexts.WslHelp(_s.GetSettings().Port);
             FillPicker(keepKey ?? _key);
+            BindAi();
         }
         finally
         {
@@ -785,6 +790,7 @@ internal sealed class SettingsForm : Form
     private Control ControlFor(SettingsError e)
     {
         var f = e.Field;
+        if (AiControlFor(f) is { } aiControl) return aiControl;
         var shared = SettingsEditor.SharedMailboxIndexFor(f);
         if (shared is { } i)
         {
@@ -819,10 +825,11 @@ internal sealed class SettingsForm : Form
         foreach (var c in new Control[] { _port, _retention, _sync, _workStart, _workEnd, _timeZone, _inviteSend,
                      _inviteTimeout, _attachDir, _logLevel, _tree, _allowed, _picker })
             _errors.SetError(c, "");
+        foreach (var c in AiErrorControls()) _errors.SetError(c, "");
         _errors.SetError(_status, "");
         foreach (var g in errors.GroupBy(ControlFor))
         {
-            var msg = string.Join("\n", g.Select(e => e.Message));
+            var msg = string.Join("\n", g.Select(e => AiTabTexts.ErrorText(e, _editor.Draft.AiDrafting)));
             if (g.Key == _status) _status.Text = msg;
             else _errors.SetError(g.Key, msg);
         }

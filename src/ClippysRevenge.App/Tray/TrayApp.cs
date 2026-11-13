@@ -6,6 +6,12 @@ using Timer = System.Windows.Forms.Timer;
 
 namespace ClippysRevenge.App.Tray;
 
+internal sealed record AiTrayServices(
+    Func<CancellationToken, Task<ManualDraftResult>> DraftSelected,   // drafts.DraftSelectedAsync
+    Func<CancellationToken, Task<bool>> ShowDrafts,                  // aiMailbox.ShowDraftsAsync
+    AiDraftingToggler Toggler,
+    AiStatusChecker Checker);
+
 internal sealed record TrayServices(
     ActivityHub Hub,
     BalloonCenter Balloons,
@@ -23,7 +29,8 @@ internal sealed record TrayServices(
     Func<string, Task>? Rebuild = null,
     Func<Task<IReadOnlyList<MailboxStore>>>? ListMounted = null,
     SharedMailboxToggler? SharedToggler = null,
-    Func<SettingsTab, Form>? CreateSettingsForm = null);
+    Func<SettingsTab, Form>? CreateSettingsForm = null,
+    AiTrayServices? Ai = null);
 
 /// <summary>Tray icon and menu (SPEC 6.1, 6.2). All UI objects are touched on the UI thread only.</summary>
 internal sealed class TrayApp : ApplicationContext
@@ -45,6 +52,11 @@ internal sealed class TrayApp : ApplicationContext
     private readonly ToolStripMenuItem _pause = new("Pause indexing") { Enabled = false };
     private readonly ToolStripMenuItem _rebuild = new("Rebuild index…") { Enabled = false };
     private readonly ToolStripMenuItem _shared = new("Shared mailboxes");
+    private readonly ToolStripMenuItem _ai = new(AiMenuTexts.Submenu);
+    private readonly ToolStripMenuItem _aiAuto = new(AiMenuTexts.Auto) { CheckOnClick = false };
+    private readonly ToolStripMenuItem _aiDraftSelected = new(AiMenuTexts.DraftSelected);
+    private readonly ToolStripMenuItem _aiShowDrafts = new(AiMenuTexts.ShowDrafts);
+    private readonly ToolStripMenuItem _aiSettings = new(AiMenuTexts.Settings);
     private readonly ToolStripMenuItem _startWithWindows = new("Start with Windows") { CheckOnClick = false };
 
     private TrayIconKey _shownKey = TrayIconKey.Idle;
@@ -56,7 +68,8 @@ internal sealed class TrayApp : ApplicationContext
     private int _listing;
     private ActivityForm? _activity;
     private Form? _settingsForm;
-
+    private int _aiBusy;
+    private BalloonAction _lastBalloonAction = BalloonAction.None;
     public TrayApp(TrayServices services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -90,6 +103,16 @@ internal sealed class TrayApp : ApplicationContext
             Visible = true,
         };
         _notify.DoubleClick += (_, _) => ShowActivity();
+        _notify.BalloonTipClicked += (_, _) =>
+        {
+            var action = _lastBalloonAction;
+            _lastBalloonAction = BalloonAction.None;
+            if (action == BalloonAction.ShowDrafts && _s.Ai is not null)
+            {
+                ShowDraftsInOutlook();
+            }
+        };
+        _notify.BalloonTipClosed += (_, _) => _lastBalloonAction = BalloonAction.None;
 
         _animTimer.Tick += (_, _) =>
         {
@@ -193,6 +216,7 @@ internal sealed class TrayApp : ApplicationContext
             BalloonKind.Error => ToolTipIcon.Error,
             _ => ToolTipIcon.Info,
         };
+        _lastBalloonAction = b.Action;
         _notify.ShowBalloonTip(5000, BalloonTexts.Title, b.Text, icon);
     });
 
@@ -299,19 +323,151 @@ internal sealed class TrayApp : ApplicationContext
         _rebuild.Click += (_, _) => AskRebuild();
         _shared.DropDownOpening += (_, _) => RebuildShared();
         _shared.DropDownItems.Add(new ToolStripMenuItem("Manage in Settings…", null, (_, _) => ShowSettings(SettingsTab.Index)));
+        BuildAiMenu();
         _menu.Opening += (_, _) =>
         {
             _startWithWindows.Checked = _s.GetSettings().StartWithWindows;
             _syncNow.Enabled = _s.SyncNow is not null && !_s.GetStats().Paused;
+            ApplyAiMenu();
         };
 
         _menu.Items.AddRange([
             _status1, _status2, new ToolStripSeparator(),
-            _startOutlook, _syncNow, _pause, _rebuild, _shared, new ToolStripSeparator(),
+            _startOutlook, _syncNow, _pause, _rebuild, _shared, _ai, new ToolStripSeparator(),
             copyCmd, copyToken, regen, new ToolStripSeparator(),
             activity, settings, logs, data, new ToolStripSeparator(),
             _startWithWindows, exit,
         ]);
+    }
+
+    private void BuildAiMenu()
+    {
+        _aiAuto.Click += (_, _) => ToggleAi();
+        _aiDraftSelected.Click += (_, _) => DraftSelected();
+        _aiShowDrafts.Click += (_, _) => ShowDraftsInOutlook();
+        _aiSettings.Enabled = _s.CreateSettingsForm is not null;
+        _aiSettings.Click += (_, _) => ShowSettings(SettingsTab.AiDrafts);
+        _ai.DropDownOpening += (_, _) => ApplyAiMenu();
+        _ai.DropDownItems.AddRange([_aiAuto, _aiDraftSelected, _aiShowDrafts, new ToolStripSeparator(), _aiSettings]);
+    }
+
+    private void ApplyAiMenu()
+    {
+        var m = AiDraftsMenu.Build(_s.GetSettings().AiDrafting, _s.Ai is not null, _s.IsOutlookUnavailable(),
+            Volatile.Read(ref _aiBusy) == 1);
+        _aiAuto.Checked = m.AutoChecked;
+        _aiAuto.Enabled = m.AutoEnabled;
+        _aiDraftSelected.Enabled = m.DraftSelectedEnabled;
+        _aiShowDrafts.Visible = m.ShowDraftsVisible;
+        _aiShowDrafts.Enabled = m.ShowDraftsEnabled;
+    }
+
+    /// <summary>Draft replies automatically: consent first, then a backend check, then Enabled (SPEC 19.10).</summary>
+    private async void ToggleAi()
+    {
+        var ai = _s.Ai;
+        if (ai is null || Interlocked.Exchange(ref _aiBusy, 1) == 1)
+        {
+            return;
+        }
+        try
+        {
+            var step = AiToggle.Next(_s.GetSettings().AiDrafting);
+            if (step == AiToggleStep.TurnOff)
+            {
+                ai.Toggler.SetEnabled(false);
+                return;
+            }
+            if (step == AiToggleStep.AskConsent)
+            {
+                if (!AiConsentDialog.Ask(null))
+                {
+                    return;
+                }
+                ai.Toggler.RecordConsent();
+            }
+            var status = await ai.Checker.CheckAsync(refresh: false, CancellationToken.None);
+            if (AiToggle.AfterCheck(status) == AiToggleOutcome.OpenSettings)
+            {
+                ShowSettings(SettingsTab.AiDrafts);
+                return;
+            }
+            ai.Toggler.SetEnabled(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _s.Balloons.PostUserFeedback(AiMenuTexts.ToggleFailed(ex.Message));
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            // Type only: the message could carry paths or other text we don't want in a balloon.
+            _s.Balloons.PostUserFeedback(AiMenuTexts.ToggleFailed("something went wrong (" + ex.GetType().Name + ")"));
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _aiBusy, 0);
+        }
+    }
+
+    /// <summary>Draft a reply to the selected email (manual path, SPEC 19.7). Two clicks queue; no busy guard.</summary>
+    private async void DraftSelected()
+    {
+        var ai = _s.Ai;
+        if (ai is null)
+        {
+            return;
+        }
+        try
+        {
+            if (!_s.GetSettings().AiDrafting.HasConsent)
+            {
+                if (!AiConsentDialog.Ask(null))
+                {
+                    return;
+                }
+                ai.Toggler.RecordConsent();
+            }
+            var r = await ai.DraftSelected(CancellationToken.None);
+            _s.Balloons.PostUserFeedback(r.Message);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _s.Balloons.PostUserFeedback(AiMenuTexts.ToggleFailed(ex.Message));
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _s.Balloons.PostUserFeedback(DraftTexts.ManualFailed("something went wrong (" + ex.GetType().Name + ")"));
+        }
+    }
+
+    /// <summary>Show Drafts in Outlook, also for a click on the "I drafted n replies" balloon.</summary>
+    private async void ShowDraftsInOutlook()
+    {
+        var ai = _s.Ai;
+        if (ai is null)
+        {
+            return;
+        }
+        try
+        {
+            if (!await ai.ShowDrafts(CancellationToken.None))
+            {
+                _s.Balloons.PostUserFeedback(BalloonTexts.NoOutlookWindow);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception)
+        {
+            _s.Balloons.PostUserFeedback(BalloonTexts.NoOutlookWindow);
+        }
     }
 
     private void AskRebuild()
@@ -503,10 +659,17 @@ internal sealed class TrayApp : ApplicationContext
         }
     }
 
+    /// <summary>Hands a folder, a file or an https URL to the Windows shell (Explorer, the user's default editor or
+    /// browser). Never a command line, never arguments. The one Process.Start in TrayApp.</summary>
+    internal static void ShellOpen(string target)
+    {
+        Process.Start(new ProcessStartInfo(target) { UseShellExecute = true })?.Dispose();
+    }
+
     private static void OpenFolder(string path)
     {
         Directory.CreateDirectory(path);
-        Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
+        ShellOpen(path);
     }
 
     protected override void Dispose(bool disposing)

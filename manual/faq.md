@@ -23,11 +23,42 @@ No. It never deletes or moves email.
 
 It is intentional. Reply drafts always start with `Re:: ` (double colon).
 
+## Can it write replies for me?
+
+Yes, if you turn on [AI drafts](ai-drafts.md). Clippy then asks Claude to draft
+replies to new mail in your style and saves them in Drafts. It never sends them. It
+is off by default and asks for your consent first.
+
+## Does AI drafting send my mail to Anthropic?
+
+Yes, while it is on: the email being answered, thread excerpts, attachment names and
+your style guide go to Claude through your own Claude Code (or your API key).
+Attachment contents never do. See
+[what is sent](ai-drafts.md#consent-and-what-is-sent).
+
+## Does Clippy sign in to Claude or read my Claude login?
+
+No. You sign in to Claude Code yourself in a terminal, and Clippy only asks it
+whether you are signed in. It never reads Claude Code's stored credentials.
+
+## Why didn't a mail get a draft?
+
+It may have arrived before you turned AI drafts on, be older than the age limit, be a
+newsletter or automatic mail, match a never-draft rule, or not need a reply. See
+[Rules](ai-drafts.md#rules).
+
+## Is the writing-style file safe?
+
+It is a Claude Code skill in %USERPROFILE%\.claude\skills\my-email-style, so your
+interactive Claude Code sessions can load it. Review, edit or delete it any time. See
+the [security note](ai-drafts.md#your-writing-style).
+
 ## Does my mail go to the cloud?
 
 Clippy has no cloud component. It runs on your PC and listens on `127.0.0.1`.
 What Claude Code then sends to its model is the text of the mail it reads, so
-treat that as you would any use of an AI assistant with your mail.
+treat that as you would any use of an AI assistant with your mail. The optional
+[AI drafts](ai-drafts.md) feature also sends mail to Claude, with your consent.
 
 ## Do I need an app registration or admin consent?
 

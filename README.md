@@ -37,6 +37,10 @@ No Microsoft Graph, no Entra app registration, no OAuth. If Outlook can open
 it, Clippy can use it. `SPEC.md` is the source of truth for behavior.
 User documentation: <https://dirkpetersen.github.io/clippys-revenge/>.
 
+## AI drafts (optional)
+
+Turn on [AI drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/) and Clippy writes reply drafts to new mail in your own style, using your signed-in Claude Code or an Anthropic API key. Off by default, asks for consent, saves drafts only (never sends), and the model gets no tools.
+
 ## Install
 
 Requirements: Windows 11 with classic Outlook (not the new Outlook), signed in.
@@ -207,7 +211,7 @@ unchecking asks whether to delete that index. Tools reach it with
 
 ```bash
 dotnet build -c Release
-dotnet test -c Release --filter "live!=outlook"      # what CI runs
+dotnet test -c Release --filter "live!=outlook&live!=claude"      # what CI runs
 dotnet test tests/ClippysRevenge.Core.Tests          # Core only (also works in WSL)
 dotnet publish src/ClippysRevenge.App -c Release -r win-x64 --self-contained \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish

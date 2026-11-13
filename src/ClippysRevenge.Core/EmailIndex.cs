@@ -5,9 +5,13 @@ using Microsoft.Data.Sqlite;
 namespace ClippysRevenge.Core;
 
 /// <summary>SQLite + FTS5 index for one mailbox (SPEC §9).</summary>
-public sealed class EmailIndex
+public sealed partial class EmailIndex
 {
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = 2;
+    public const string ThreadMetaCompleteKey = "thread_meta_complete";
+    public static readonly TimeSpan DecisionRetention = TimeSpan.FromDays(30);
+    public const int MaxDecisionAttempts = 3;
+    public const int MaxThreadBodyChars = 20_000;   // Thread / SentForStyle bodies are substr(body, 1, 20000)
 
     private const string Step1Ddl = """
         CREATE TABLE emails (
@@ -57,14 +61,52 @@ public sealed class EmailIndex
         CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
         """;
 
+    private const string Step2Ddl = """
+        CREATE INDEX IF NOT EXISTS ix_emails_irt ON emails(in_reply_to);
+        CREATE INDEX IF NOT EXISTS ix_emails_topic ON emails(conversation_topic COLLATE NOCASE, event_time);
+
+        CREATE TABLE IF NOT EXISTS ai_decisions (
+          source_entry_id TEXT PRIMARY KEY,
+          source_imid TEXT,
+          conversation_topic TEXT,
+          decided INTEGER NOT NULL,
+          outcome TEXT NOT NULL,
+          rule TEXT,
+          model_calls INTEGER NOT NULL DEFAULT 0,
+          attempts INTEGER NOT NULL DEFAULT 0,
+          confidence REAL,
+          draft_entry_id TEXT,
+          draft_created INTEGER);
+        CREATE INDEX IF NOT EXISTS ix_ai_decided ON ai_decisions(decided);
+        CREATE INDEX IF NOT EXISTS ix_ai_imid ON ai_decisions(source_imid);
+        """;
+
+    private static void Step1(SqliteConnection conn, SqliteTransaction tx) =>
+        conn.Execute(Step1Ddl, transaction: tx);
+
+    private static void Step2(SqliteConnection conn, SqliteTransaction tx)
+    {
+        // Column names and types are constants, never input.
+        foreach (var (name, type) in new[] { ("in_reply_to", "TEXT"), ("conversation_topic", "TEXT"), ("clippy_marker", "TEXT") })
+        {
+            var exists = conn.ExecuteScalar<long>(
+                "SELECT COUNT(*) FROM pragma_table_info('emails') WHERE name = @name", new { name }, tx);
+            if (exists == 0)
+                conn.Execute("ALTER TABLE emails ADD COLUMN " + name + " " + type, transaction: tx);
+        }
+        conn.Execute(Step2Ddl, transaction: tx);
+    }
+
     // Step n upgrades n-1 -> n.
-    private static readonly string[] Migrations = [Step1Ddl];
+    private static readonly Action<SqliteConnection, SqliteTransaction>[] Migrations = [Step1, Step2];
 
     private const string UpsertSql = """
         INSERT INTO emails (entry_id, store_id, internet_message_id, folder, subject, sender_name, sender_email,
-                            to_addrs, cc_addrs, event_time, last_modified, unread, has_attachments, attachment_names, body)
+                            to_addrs, cc_addrs, event_time, last_modified, unread, has_attachments, attachment_names, body,
+                            in_reply_to, conversation_topic, clippy_marker)
         VALUES (@EntryId, @StoreId, @InternetMessageId, @Folder, @Subject, @SenderName, @SenderEmail,
-                @To, @Cc, @EventTime, @LastModified, @Unread, @HasAttachments, @AttachmentNames, @Body)
+                @To, @Cc, @EventTime, @LastModified, @Unread, @HasAttachments, @AttachmentNames, @Body,
+                @InReplyTo, @ConversationTopic, @ClippyMarker)
         ON CONFLICT(entry_id) DO UPDATE SET
           store_id = excluded.store_id,
           internet_message_id = excluded.internet_message_id,
@@ -79,11 +121,17 @@ public sealed class EmailIndex
           unread = excluded.unread,
           has_attachments = excluded.has_attachments,
           attachment_names = excluded.attachment_names,
-          body = excluded.body
+          body = excluded.body,
+          in_reply_to = COALESCE(excluded.in_reply_to, emails.in_reply_to),
+          conversation_topic = COALESCE(excluded.conversation_topic, emails.conversation_topic),
+          clippy_marker = COALESCE(excluded.clippy_marker, emails.clippy_marker)
         RETURNING id
         """;
 
-    public EmailIndex(string dbPath)
+    public EmailIndex(string dbPath) : this(dbPath, null) { }
+
+    /// <summary>Test seam: afterStep(n) runs inside the migration transaction after step n. Throwing rolls everything back.</summary>
+    internal EmailIndex(string dbPath, Action<int>? afterMigrationStep)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dbPath);
         DbPath = Path.GetFullPath(dbPath);
@@ -101,10 +149,18 @@ public sealed class EmailIndex
         if (current < SchemaVersion)
         {
             for (var n = current + 1; n <= SchemaVersion; n++)
-                conn.Execute(Migrations[n - 1], transaction: tx);
+            {
+                Migrations[n - 1](conn, tx);
+                afterMigrationStep?.Invoke(n);
+            }
             conn.Execute(
                 "INSERT INTO meta(key, value) VALUES ('schema_version', @v) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 new { v = SchemaVersion.ToString(CultureInfo.InvariantCulture) }, tx);
+            // A new file has no pre-v2 rows, so it needs no thread-metadata refresh.
+            if (current == 0)
+                conn.Execute(
+                    "INSERT INTO meta(key, value) VALUES (@k, '1') ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    new { k = ThreadMetaCompleteKey }, tx);
         }
         tx.Commit();
     }
@@ -157,8 +213,12 @@ public sealed class EmailIndex
         {
             var atts = e.Attachments.OrderBy(a => a.Position).ToList();
             var names = string.Join("\n", atts.Select(a => a.FileName).Where(n => n.Length > 0));
+            var meta = MailThreadMeta.FromValues(e.InReplyTo, e.ConversationTopic, e.ClippyMarker);
             var id = conn.ExecuteScalar<long>(UpsertSql, new
             {
+                meta.InReplyTo,
+                meta.ConversationTopic,
+                meta.ClippyMarker,
                 e.EntryId,
                 e.StoreId,
                 e.InternetMessageId,
@@ -243,7 +303,8 @@ public sealed class EmailIndex
             SELECT id AS Id, entry_id AS EntryId, store_id AS StoreId, internet_message_id AS InternetMessageId,
                    folder AS Folder, subject AS Subject, sender_name AS SenderName, sender_email AS SenderEmail,
                    to_addrs AS ToAddrs, cc_addrs AS CcAddrs, event_time AS EventTime, last_modified AS LastModified,
-                   unread AS Unread, has_attachments AS HasAttachments, body AS Body
+                   unread AS Unread, has_attachments AS HasAttachments, body AS Body,
+                   in_reply_to AS InReplyTo, conversation_topic AS ConversationTopic, clippy_marker AS ClippyMarker
             FROM emails WHERE entry_id = @entryId
             """, new { entryId });
         if (row is null) return null;
@@ -270,6 +331,9 @@ public sealed class EmailIndex
             HasAttachments = (row.HasAttachments ?? 0) != 0,
             Attachments = atts,
             Body = row.Body,
+            InReplyTo = row.InReplyTo,
+            ConversationTopic = row.ConversationTopic,
+            ClippyMarker = row.ClippyMarker,
         };
     }
 
@@ -285,6 +349,8 @@ public sealed class EmailIndex
         {
             before = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM emails", transaction: tx);
             removed = conn.Execute("DELETE FROM emails WHERE event_time < @c", new { c = cutoff.ToUnixTimeSeconds() }, tx);
+            conn.Execute("DELETE FROM ai_decisions WHERE decided < @t",
+                new { t = (DateTimeOffset.UtcNow - DecisionRetention).ToUnixTimeSeconds() }, tx);
             tx.Commit();
         }
         if (removed > 0 && removed * 10L > before)
@@ -727,6 +793,9 @@ public sealed class EmailIndex
         public long? Unread { get; set; }
         public long? HasAttachments { get; set; }
         public string? Body { get; set; }
+        public string? InReplyTo { get; set; }
+        public string? ConversationTopic { get; set; }
+        public string? ClippyMarker { get; set; }
     }
 
     private sealed class AttRow

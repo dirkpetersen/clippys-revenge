@@ -47,6 +47,20 @@ public class MailTableTests
     }
 
     [Fact]
+    public void DraftMatch_both_halves_and_quote_doubling() =>
+        Assert.Equal(
+            "@SQL=(\"http://schemas.microsoft.com/mapi/proptag/0x1042001F\" = '<a''b@x>') OR (\"http://schemas.microsoft.com/mapi/proptag/0x0070001F\" = 'Budget')",
+            DaslFilter.DraftMatch("<a'b@x>", "Budget"));
+
+    [Fact]
+    public void DraftMatch_single_halves_and_blank()
+    {
+        Assert.Equal("@SQL=(\"http://schemas.microsoft.com/mapi/proptag/0x1042001F\" = '<a@x>')", DaslFilter.DraftMatch(" <a@x> ", " "));
+        Assert.Equal("@SQL=(\"http://schemas.microsoft.com/mapi/proptag/0x0070001F\" = 'T')", DaslFilter.DraftMatch(null, "T"));
+        Assert.Null(DaslFilter.DraftMatch("  ", null));
+    }
+
+    [Fact]
     public void Changed_exact_string() =>
         Assert.Equal(
             "@SQL=(\"http://schemas.microsoft.com/mapi/proptag/0x30080040\" >= '2026-03-09 12:00') AND (\"http://schemas.microsoft.com/mapi/proptag/0x0E060040\" >= '2025-03-09 00:00') AND (\"http://schemas.microsoft.com/mapi/proptag/0x001A001F\" LIKE 'IPM.Note%')",
@@ -390,5 +404,69 @@ public class MailTableTests
         }
         Assert.Equal(7, seen.Count);
         Assert.Equal(7, seen.Distinct().Count());
+    }
+
+    // ---- thread columns (schema 2) ----
+
+    private static object?[] Raw10(object? irt, object? topic, object? marker, string? id = "ID") =>
+        [id, DBNull.Value, Utc("2026-03-01T10:00:00"), true, null, "IPM.Note", null, irt, topic, marker];
+
+    [Fact]
+    public void ThreadColumns_extend_Columns()
+    {
+        var cols = MailTable.ThreadColumns(EventTimeField.Received);
+        Assert.Equal(10, cols.Count);
+        Assert.Equal(MailTable.Columns(EventTimeField.Received), cols.Take(7).ToArray());
+        Assert.Equal(MailTable.LongTermEntryIdProp, cols[6]);
+        Assert.Equal("http://schemas.microsoft.com/mapi/proptag/0x1042001F", cols[7]);
+        Assert.Equal("http://schemas.microsoft.com/mapi/proptag/0x0070001F", cols[8]);
+        Assert.Equal(DraftMarker.PropertyName, cols[9]);
+        Assert.Equal(cols.Skip(7).ToArray(), MailTable.ThreadPropertyNames);
+    }
+
+    [Fact]
+    public void ToRow_with_ten_values_carries_thread_meta()
+    {
+        var values = Raw10("<a>", " Topic ", "TOOL");
+        values[6] = new byte[] { 0xAB, 0xCD };
+        var row = MailTable.ToRow(values)!;
+        Assert.Equal("ABCD", row.EntryId);
+        Assert.Equal(new MailThreadMeta("<a>", "Topic", "tool"), row.Thread);
+    }
+
+    [Fact]
+    public void ToRow_seven_values_has_no_thread_and_eight_throws()
+    {
+        var seven = new object?[] { "id", DBNull.Value, Utc("2026-03-01T10:00:00"), false, null, "IPM.Note", null };
+        Assert.Null(MailTable.ToRow(seven)!.Thread);
+        var ex = Assert.Throws<ArgumentException>(() => MailTable.ToRow([.. seven, null]));
+        Assert.Contains("10 with the thread columns", ex.Message);
+    }
+
+    [Fact]
+    public void ToRow_ten_values_with_error_values_gives_Empty()
+    {
+        var row = MailTable.ToRow(Raw10((int)-2147221233, DBNull.Value, new byte[] { 1 }))!;
+        Assert.Equal(MailThreadMeta.Empty, row.Thread);
+    }
+
+    [Fact]
+    public void FromValues_normalizes()
+    {
+        Assert.Equal(MailThreadMeta.Empty, MailThreadMeta.FromValues("  ", "", null));
+        Assert.Equal(new MailThreadMeta("<x>", "T", "ai"), MailThreadMeta.FromValues("<x>", "T", "ai"));
+        Assert.Equal(MailThreadMeta.Empty, MailThreadMeta.FromValues(1, 2, 3));
+    }
+
+    [Fact]
+    public void Range_keeps_thread_meta_on_ten_value_rows()
+    {
+        var from = U("2026-03-01T00:00:00Z");
+        var to = U("2026-03-10T00:00:00Z");
+        var raw = new[] { Raw10("<a>", "T1", "ai", "one"), Raw10(null, "T2", null, "two") };
+        var page = MailTableQueries.Range(raw, from, to);
+        Assert.Equal(2, page.Rows.Count);
+        Assert.All(page.Rows, r => Assert.NotNull(r.Thread));
+        Assert.Equal("<a>", page.Rows[0].Thread!.InReplyTo);
     }
 }

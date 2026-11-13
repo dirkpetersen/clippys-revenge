@@ -25,6 +25,115 @@ public sealed class SettingsStoreTests : IDisposable
         try { Directory.Delete(_root, true); } catch (IOException) { }
     }
 
+    // ---- API key ----
+
+    private const string Key = "sk-ant-api03-Abc_DEF-123456";
+
+    [Fact]
+    public void ApiKey_MissingFile()
+    {
+        var s = Store();
+        Assert.Null(s.LoadApiKey());
+        Assert.Null(s.CachedApiKey);
+        Assert.False(File.Exists(s.ApiKeyPath));
+        Assert.Equal(Path.Combine(Dir, "anthropic-key.bin"), s.ApiKeyPath);
+    }
+
+    [Fact]
+    public void ApiKey_SaveThenLoadInNewStore()
+    {
+        var a = Store();
+        a.SaveApiKey(Key);
+        Assert.True(File.Exists(a.ApiKeyPath));
+        Assert.DoesNotContain(Key, Encoding.UTF8.GetString(File.ReadAllBytes(a.ApiKeyPath)));
+        var b = Store();
+        Assert.Equal(Key, b.LoadApiKey());
+        Assert.Equal(Key, a.CachedApiKey);
+        Assert.Equal(Key, b.CachedApiKey);
+    }
+
+    [Fact]
+    public void ApiKey_Trims()
+    {
+        var s = Store();
+        s.SaveApiKey("  abcdefgh12 \n");
+        Assert.Equal("abcdefgh12", Store().LoadApiKey());
+    }
+
+    [Theory]
+    [InlineData("", "The API key is empty.")]
+    [InlineData("   ", "The API key is empty.")]
+    [InlineData("abc def", "The API key must be a single line without spaces.")]
+    [InlineData("abc\tdef", "The API key must be a single line without spaces.")]
+    [InlineData("abc\u0001def", "The API key must be a single line without spaces.")]
+    public void ApiKey_RejectsInvalid(string input, string message)
+    {
+        var s = Store();
+        s.SaveApiKey(Key);
+        var before = File.ReadAllBytes(s.ApiKeyPath);
+        var ex = Assert.Throws<ArgumentException>(() => s.SaveApiKey(input));
+        Assert.Equal(message, ex.Message);
+        Assert.Equal(before, File.ReadAllBytes(s.ApiKeyPath));
+    }
+
+    [Fact]
+    public void ApiKey_RejectsTooLong()
+    {
+        var s = Store();
+        var input = new string('a', 513);
+        var ex = Assert.Throws<ArgumentException>(() => s.SaveApiKey(input));
+        Assert.StartsWith("The API key must be a single line without spaces.", ex.Message);
+        Assert.DoesNotContain(input, ex.Message);
+        Assert.False(File.Exists(s.ApiKeyPath));
+        s.SaveApiKey(new string('a', 512));
+    }
+
+    [Fact]
+    public void ApiKey_Remove()
+    {
+        var s = Store();
+        s.SaveApiKey(Key);
+        s.SaveApiKey(null);
+        Assert.False(File.Exists(s.ApiKeyPath));
+        Assert.Null(s.LoadApiKey());
+        Assert.Null(s.CachedApiKey);
+        s.SaveApiKey(null);
+    }
+
+    [Fact]
+    public void ApiKey_UndecryptableOrBlankIsNull()
+    {
+        var s = Store();
+        Directory.CreateDirectory(Dir);
+        File.WriteAllBytes(s.ApiKeyPath, [1, 2, 3]);
+        Assert.Null(s.LoadApiKey());
+        Assert.True(File.Exists(s.ApiKeyPath));
+        File.WriteAllBytes(s.ApiKeyPath, new XorProtector().Protect(Encoding.UTF8.GetBytes("   ")));
+        Assert.Null(s.LoadApiKey());
+    }
+
+    [Fact]
+    public void ApiKey_NotInSettingsAndNotCreatedByLoad()
+    {
+        var s = Store();
+        var r = s.Load();
+        Assert.False(File.Exists(s.ApiKeyPath));
+        s.SaveApiKey(Key);
+        Assert.DoesNotContain(Key, File.ReadAllText(s.SettingsPath));
+        s.Save(r.Settings);
+        Assert.DoesNotContain(Key, File.ReadAllText(s.SettingsPath));
+    }
+
+    [Fact]
+    public void ApiKey_OverwriteLeavesNoTmp()
+    {
+        var s = Store();
+        s.SaveApiKey("key-one-12345");
+        s.SaveApiKey("key-two-12345");
+        Assert.Equal("key-two-12345", Store().LoadApiKey());
+        Assert.False(File.Exists(s.ApiKeyPath + ".tmp"));
+    }
+
     [Fact]
     public void FirstRun_CreatesFolderSettingsAndToken()
     {
@@ -131,5 +240,23 @@ public sealed class SettingsStoreTests : IDisposable
     {
         var r = Store().Load();
         Assert.DoesNotContain(r.Token, r.ToString());
+    }
+
+    [Theory]
+    [InlineData("sk-ant-api03-abc", true)]
+    [InlineData("", false)]
+    [InlineData("a b", false)]
+    [InlineData("a\tb", false)]
+    [InlineData("a\nb", false)]
+    [InlineData("a\u0001b", false)]
+    public void IsValidApiKeyFormat_Cases(string key, bool expected) =>
+        Assert.Equal(expected, SettingsStore.IsValidApiKeyFormat(key));
+
+    [Fact]
+    public void IsValidApiKeyFormat_Length_And_Null()
+    {
+        Assert.True(SettingsStore.IsValidApiKeyFormat(new string('a', 512)));
+        Assert.False(SettingsStore.IsValidApiKeyFormat(new string('a', 513)));
+        Assert.Throws<ArgumentNullException>(() => SettingsStore.IsValidApiKeyFormat(null!));
     }
 }

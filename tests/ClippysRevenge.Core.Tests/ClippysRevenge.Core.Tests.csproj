@@ -43,6 +43,7 @@
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookCalendar.Invites.cs"  Link="AppLinked\OutlookCalendar.Invites.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookFreeBusySource.cs"    Link="AppLinked\OutlookFreeBusySource.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\SignatureRegistry.cs"        Link="AppLinked\SignatureRegistry.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookAiMailbox.cs"         Link="AppLinked\OutlookAiMailbox.cs" />
   </ItemGroup>
 
   <!-- Same embed target as the App csproj. -->

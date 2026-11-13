@@ -19,6 +19,25 @@ public class BalloonTests
     }
 
     [Fact]
+    public void AiDrafted_texts()
+    {
+        Assert.Equal("It looks like you got mail. I drafted 1 reply — they're in your Drafts folder.", BalloonTexts.AiDrafted(1));
+        Assert.Equal("It looks like you got mail. I drafted 3 replies — they're in your Drafts folder.", BalloonTexts.AiDrafted(3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => BalloonTexts.AiDrafted(0));
+    }
+
+    [Fact]
+    public void Post_carries_its_action_and_feedback_has_none()
+    {
+        var (c, _, seen) = Make();
+        Assert.True(c.Post("x", BalloonKind.Info, BalloonAction.ShowDrafts));
+        c.PostUserFeedback("y");
+        Assert.Equal(new Balloon("x", BalloonKind.Info, BalloonAction.ShowDrafts), seen[0]);
+        Assert.Equal(BalloonAction.None, seen[1].Action);
+        Assert.Equal(new Balloon("y", BalloonKind.Info), seen[1]);
+    }
+
+    [Fact]
     public void FirstPost()
     {
         var (c, _, seen) = Make();

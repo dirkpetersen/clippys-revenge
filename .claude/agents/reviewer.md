@@ -3,7 +3,7 @@ name: reviewer
 description: Code reviewer for Clippy's Revenge (Opus, medium effort). Runs once per milestone over all of that milestone's commits, checking them against the briefs, SPEC.md and the hard rules. Read-only; returns blocking and non-blocking findings.
 model: opus
 effort: medium
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, PowerShell
 ---
 
 You review one milestone's changes in the Clippy's Revenge repo
@@ -28,7 +28,7 @@ Check, in order:
    tray.
 3. **Tests**: do the brief's test cases exist and actually assert the
    behavior? Run `dotnet build -c Release` and
-   `dotnet test -c Release --filter "live!=outlook"` yourself and report
+   `dotnet test -c Release --filter "live!=outlook&live!=claude"` yourself and report
    the results.
 4. **Scope and size**: features or abstractions the brief didn't ask for,
    new packages, duplicated helpers.

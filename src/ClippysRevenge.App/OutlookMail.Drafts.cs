@@ -14,9 +14,12 @@ internal sealed partial class OutlookMail
     {
         ArgumentNullException.ThrowIfNull(app);
         ArgumentNullException.ThrowIfNull(plan);
+        if (DraftMarker.Normalize(plan.Marker) != plan.Marker)
+            throw new ArgumentException("Unknown draft marker.", nameof(plan));
 
         Outlook.MailItem? item = null;
         var saved = false;
+        var markerSet = false;
         var stage = 0; // 1 = creating, 2 = attaching
         string? attachName = null;
         try
@@ -44,6 +47,8 @@ internal sealed partial class OutlookMail
                 item.SentOnBehalfOfName = plan.Mailbox;
             }
             stage = 0;
+
+            markerSet = TrySetDraftMarker(item, plan.Marker);
 
             item.Subject = plan.Subject;
 
@@ -90,7 +95,7 @@ internal sealed partial class OutlookMail
             saved = true;
             try
             {
-                return new CreatedDraft(item.EntryID, item.Subject ?? "");
+                return new CreatedDraft(item.EntryID, item.Subject ?? "", markerSet);
             }
             catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
             {
@@ -114,6 +119,26 @@ internal sealed partial class OutlookMail
         finally
         {
             Release(item);
+        }
+    }
+
+    /// <summary>SetProperty(DraftMarker.PropertyName, marker). False on a COMException that isn't "Outlook gone" (which propagates).</summary>
+    private static bool TrySetDraftMarker(Outlook.MailItem item, string marker)
+    {
+        Outlook.PropertyAccessor? pa = null;
+        try
+        {
+            pa = item.PropertyAccessor;
+            pa.SetProperty(DraftMarker.PropertyName, marker);
+            return true;
+        }
+        catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
+        {
+            return false;
+        }
+        finally
+        {
+            Release(pa);
         }
     }
 

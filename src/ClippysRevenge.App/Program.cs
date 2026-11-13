@@ -36,6 +36,16 @@ internal static class Program
         }
         var settings = loaded.Settings;
         var tokens = new TokenHolder(loaded.Token);
+        // Load the saved API key once so log redaction knows it (SPEC 5.1). It is never used here.
+        var apiKeyUnreadable = false;
+        try
+        {
+            store.LoadApiKey();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            apiKeyUnreadable = true;
+        }
 
         // Rolling file log (SPEC 5.1); level is live from the LogLevel setting, the token is masked.
         var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClippysRevenge", "logs");
@@ -43,11 +53,12 @@ internal static class Program
         {
             Directory = logDir,
             MinLevel = () => settings.LogLevel,
-            Secrets = () => [tokens.Current],
+            Secrets = () => [tokens.Current, store.CachedApiKey],
         });
         var loggerFactory = LoggerFactory.Create(b => b.AddDebug().AddProvider(fileLog));
         var logger = loggerFactory.CreateLogger("ClippysRevenge");
         logger.LogInformation("Clippy's Revenge starting.");
+        if (apiKeyUnreadable) logger.LogWarning("anthropic-key.bin could not be read.");
         var hub = new ActivityHub();
         var worker = new OutlookWorker(hub, loggerFactory.CreateLogger("OutlookWorker"));
         worker.Start();
@@ -79,6 +90,14 @@ internal static class Program
         OutlookMail? mail = null;
         SyncService? sync = null;
         IDisposable? indexErrorScope = null;
+        var signatures = new Signatures(SignatureRegistry.Name, Signatures.DefaultDirectory());
+        OutlookReplyDraftWriter? replyWriter = null;
+        DraftWorker? drafts = null;
+        IDraftModel? draftModel = null;
+        OutlookAiMailbox? aiMailbox = null;
+        IDraftModel? apiModel = null;
+        ClaudeCliModel? cliModel = null;
+        StyleSkill? styleSkill = null;
         try
         {
             indexes = new MailboxIndexes(localDir, settings.SharedMailboxes.Where(m => m?.Enabled == true).Select(m => m.Smtp));
@@ -86,11 +105,58 @@ internal static class Program
             var mailSource = new OutlookMailSource(worker, stores, mail);
             sync = new SyncService(mailSource, indexes, () => settings, hub, balloons,
                 logger: loggerFactory.CreateLogger<SyncService>(), reconcile: mailSource);
+
+            replyWriter = new OutlookReplyDraftWriter(worker, mail, stores, loggerFactory.CreateLogger<OutlookReplyDraftWriter>());
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "The email index could not be opened.");
             indexErrorScope = hub.Begin(ActivityState.Error, "index can't be opened");
+        }
+
+        // AI drafting (SPEC 19). Needs the index, so there is no worker when the index failed to open.
+        // A failure here is not an index failure: AI stays off and the rest of the app runs.
+        if (indexes is not null && mail is not null && sync is not null && replyWriter is not null)
+        {
+            try
+            {
+            var cliRunner = new ClaudeCliRunner(Path.Combine(localDir, ClaudeCliRunner.WorkDirName),
+                logger: loggerFactory.CreateLogger<ClaudeCliRunner>());
+            cliRunner.CleanupStaleFiles();   // SPEC 19.3 start-up cleanup
+            cliModel = new ClaudeCliModel(() => settings.AiDrafting, ClaudeCliLocator.Default, cliRunner,
+                logger: loggerFactory.CreateLogger<ClaudeCliModel>());
+            apiModel = new AnthropicApiModel(() => settings.AiDrafting, store.LoadApiKey,
+                logger: loggerFactory.CreateLogger<AnthropicApiModel>());
+            draftModel = new DraftModelSwitch(() => settings.AiDrafting, cliModel, apiModel);
+            aiMailbox = new OutlookAiMailbox(worker, mail, stores, loggerFactory.CreateLogger<OutlookAiMailbox>());
+            var syncRef = sync;
+            var indexesRef = indexes;
+            var draftModelRef = draftModel;
+            var aiMailboxRef = aiMailbox;
+            // Writing-style skill (SPEC 19.6): own mailbox only; shared mailboxes use the same skill (SPEC 18 Q7).
+            styleSkill = new StyleSkill(
+                new StyleSkillFiles(StylePaths.Default(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), dataDir)),
+                () => indexesRef.For(null), () => draftModelRef, () => settings.AiDrafting,
+                () => StyleCorpus.SignatureTexts(kind => signatures.Default(kind)), hub,
+                logger: loggerFactory.CreateLogger<StyleSkill>());
+            var styleGuide = new StyleGuideSource(styleSkill,
+                ct => AiOwner.ResolveAsync(aiMailboxRef, indexesRef, WorkPriority.Background, ct));
+            drafts = new DraftWorker(new DraftWorkerServices(() => settings, indexes, aiMailbox, replyWriter, draftModel,
+                styleGuide,
+                () => signatures.Default(SignatureKind.Reply), hub, balloons,
+                () => worker.State == OutlookConnectionState.Available, () => syncRef.IsPaused, TimeZoneInfo.Local,
+                Logger: loggerFactory.CreateLogger<DraftWorker>()));
+            var draftsRef = drafts;
+            sync.CycleCompleted += _ => draftsRef.Wake();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError("AI drafting could not be set up ({ExceptionType}).", ex.GetType().Name);
+                drafts = null;
+                aiMailbox = null;
+                draftModel = null;
+                styleSkill = null;
+            }
         }
 
         // After Outlook stops hanging, resume sync at once instead of waiting for the next interval (SPEC 4).
@@ -107,6 +173,21 @@ internal static class Program
             if (resumed) sync?.SyncNow();
         };
 
+
+        // AI drafts UI (SPEC 19.10). The key is saved and removed through the one SettingsStore above.
+        var aiToggler = new AiDraftingToggler(settings, store.Save, () => drafts?.NotifySettingsChanged());
+        AiStatusChecker? aiChecker = draftModel is null ? null
+            : new AiStatusChecker(draftModel, () => cliModel?.InvalidateStatus(), s => drafts?.ReportStatus(s),
+                loggerFactory.CreateLogger<AiStatusChecker>());
+        AiTrayServices? aiTray = drafts is null || aiMailbox is null || aiChecker is null ? null
+            : new AiTrayServices(drafts.DraftSelectedAsync, aiMailbox.ShowDraftsAsync, aiToggler, aiChecker);
+        var aiMailboxForUi = aiMailbox;
+        var indexesForUi = indexes;
+        var aiSettings = new AiSettingsServices(aiToggler, () => store.LoadApiKey() is { } k && SettingsStore.IsValidApiKeyFormat(k), store.SaveApiKey,
+            TrayApp.ShellOpen, aiChecker, styleSkill,
+            aiMailboxForUi is null || indexesForUi is null ? null
+                : ct => AiOwner.ResolveAsync(aiMailboxForUi, indexesForUi, WorkPriority.Interactive, ct),
+            drafts is null ? null : drafts.Today);
 
         SettingsApplier? applier = null;
         McpHttpHost? hostRef = null;
@@ -163,7 +244,8 @@ internal static class Program
                 applier ?? throw new InvalidOperationException("Settings applier is not ready."),
                 () => hostRef?.Port, worker, stores, indexes,
                 sync is null ? null : m => sync.RebuildAsync(m),
-                () => worker.State == OutlookConnectionState.Unavailable, TimeZoneInfo.Local), tab)));
+                () => worker.State == OutlookConnectionState.Unavailable, TimeZoneInfo.Local, aiSettings), tab),
+            aiTray));
 
         var inviteQueue = new InviteConfirmQueue(new InviteConfirmPresenter(SynchronizationContext.Current!), hub);
 
@@ -186,13 +268,13 @@ internal static class Program
                 s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(stores).AddSingleton(invites)
                     .AddSingleton<IFreeBusySource>(new OutlookFreeBusySource(worker))
                     .AddSingleton(sp => new FreeTimeFinder(sp.GetRequiredService<IFreeBusySource>(), TimeProvider.System, TimeZoneInfo.Local));
-                s.AddSingleton(new Signatures(SignatureRegistry.Name, Signatures.DefaultDirectory()))
-                    .AddSingleton<IDraftWriter>(new OutlookDraftWriter(worker, stores))
+                s.AddSingleton(signatures)
+                    .AddSingleton<IDraftWriter>(new OutlookDraftWriter(worker, stores, loggerFactory.CreateLogger<OutlookDraftWriter>()))
                     .AddSingleton<CreateDraftTool>();
                 if (indexes is not null && mail is not null && sync is not null)
                 {
                     s.AddSingleton(indexes).AddSingleton(mail).AddSingleton(sync);
-                    s.AddSingleton<IReplyDraftWriter>(new OutlookReplyDraftWriter(worker, mail, stores))
+                    s.AddSingleton<IReplyDraftWriter>(replyWriter!)
                         .AddSingleton<ReplyDraftTool>();
                     s.AddSingleton<IAttachmentSaver, OutlookAttachmentSaver>()
                         .AddSingleton(sp => new AttachmentExport(sp.GetRequiredService<IAttachmentSaver>(),
@@ -216,9 +298,11 @@ internal static class Program
         hostRef = host;
         applier = new SettingsApplier(new SettingsApplyTargets(settings, store, tokens, p => host.RestartAsync(p), () => host.Port,
             e => StartupRegistration.Apply(e), indexes,
-            sync is null ? null : sync.NotifySettingsChanged, sync is null ? null : sync.SyncNow), logger);
+            sync is null ? null : sync.NotifySettingsChanged, sync is null ? null : sync.SyncNow,
+            drafts is null ? null : drafts.NotifySettingsChanged), logger);
         _ = StartHostAsync(host, settings.Port, logger);
         _ = sync?.StartAsync(CancellationToken.None);
+        _ = drafts?.StartAsync(CancellationToken.None);
 
         if (loaded.FirstRun)
         {
@@ -232,12 +316,17 @@ internal static class Program
         // Task.Run avoids the WinForms SynchronizationContext.
         Task.Run(async () =>
         {
+            if (drafts is not null)
+            {
+                await drafts.StopAsync(CancellationToken.None);
+            }
             if (sync is not null)
             {
                 await sync.StopAsync(CancellationToken.None);
             }
             await host.DisposeAsync();
         }).Wait(TimeSpan.FromSeconds(5));
+        (apiModel as IDisposable)?.Dispose();
         worker.Dispose();
         indexes?.Dispose();
         indexErrorScope?.Dispose();

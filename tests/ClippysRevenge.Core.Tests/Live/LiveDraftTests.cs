@@ -13,9 +13,6 @@ namespace ClippysRevenge.Core.Tests.Live;
 [Trait("os", "windows")]
 public sealed class LiveDraftTests(LiveOutlook fx)
 {
-    private sealed record DraftFacts(string Subject, bool Sent, string ParentId, string ParentStoreId, string DraftsId,
-        int RecipientCount, string Html, IReadOnlyList<string> AttachmentNames, string OnBehalf);
-
     private Signatures Sigs() => new(SignatureRegistry.Name, Signatures.DefaultDirectory());
 
     private CreateDraftTool CreateTool() =>
@@ -23,57 +20,6 @@ public sealed class LiveDraftTests(LiveOutlook fx)
 
     private ReplyDraftTool ReplyTool() =>
         new(fx.Settings, Sigs(), new OutlookReplyDraftWriter(fx.Worker, fx.Mail, fx.Stores), fx.Hub);
-
-    private static void Rel(object? o)
-    {
-        if (o is not null && Marshal.IsComObject(o)) Marshal.ReleaseComObject(o);
-    }
-
-    /// <summary>
-    /// Reads the draft. With <paramref name="tag"/>, then prefixes its subject with "[RunToken] " and saves the draft,
-    /// so that cleanup (which only deletes token-subject items) can find a reply draft, whose subject is the original's.
-    /// The returned facts are those from BEFORE tagging.
-    /// </summary>
-    private DraftFacts ReadDraft(Outlook.Application app, string mailbox, string id, bool tag = false)
-    {
-        Outlook.NameSpace? session = null;
-        Outlook.MailItem? item = null;
-        Outlook.MAPIFolder? parent = null;
-        Outlook.Recipients? recips = null;
-        Outlook.Attachments? atts = null;
-        try
-        {
-            session = app.Session;
-            item = (Outlook.MailItem)session.GetItemFromID(id, fx.StoreIdOf(app, mailbox));
-            parent = (Outlook.MAPIFolder)item.Parent;
-            recips = item.Recipients;
-            atts = item.Attachments;
-            var names = new List<string>();
-            for (var i = 1; i <= atts.Count; i++)
-            {
-                Outlook.Attachment? a = null;
-                try { a = atts[i]; names.Add(a.FileName); }
-                finally { Rel(a); }
-            }
-            var facts = new DraftFacts(item.Subject ?? "", item.Sent, parent.EntryID, parent.StoreID,
-                fx.DefaultFolderId(app, mailbox, Outlook.OlDefaultFolders.olFolderDrafts),
-                recips.Count, item.HTMLBody ?? "", names, item.SentOnBehalfOfName ?? "");
-            if (tag && !facts.Sent)
-            {
-                item.Subject = $"[{fx.RunToken}] {facts.Subject}";
-                item.Save();
-            }
-            return facts;
-        }
-        finally
-        {
-            Rel(atts);
-            Rel(recips);
-            Rel(parent);
-            Rel(item);
-            Rel(session);
-        }
-    }
 
     private static (bool Unread, DateTime Modified) OriginalState(Outlook.Application app, string id)
     {
@@ -87,8 +33,8 @@ public sealed class LiveDraftTests(LiveOutlook fx)
         }
         finally
         {
-            Rel(item);
-            Rel(session);
+            LiveDrafts.Rel(item);
+            LiveDrafts.Rel(session);
         }
     }
 
@@ -109,7 +55,7 @@ public sealed class LiveDraftTests(LiveOutlook fx)
             var storeId = await fx.RunAsync("reading the store id", app => fx.StoreIdOf(app, ""));
             scope.Track(new TrackedItem(TrackedKind.Draft, "", created.Id, storeId, subject));
 
-            var f = await fx.RunAsync("reading the draft", app => ReadDraft(app, "", created.Id));
+            var f = await fx.RunAsync("reading the draft", app => LiveDrafts.ReadDraft(fx, app, "", created.Id));
             Assert.Equal(subject, f.Subject);
             Assert.False(f.Sent);
             Assert.Equal(f.DraftsId, f.ParentId);
@@ -117,6 +63,7 @@ public sealed class LiveDraftTests(LiveOutlook fx)
             Assert.Contains("Line &lt;two&gt; &amp; three", f.Html);
             Assert.Equal(["clippy-live.txt"], f.AttachmentNames);
             Assert.Equal("", f.OnBehalf);
+            Assert.Equal(DraftMarker.Tool, f.ClippyDraft);
             fx.Result("signature-added", $"new={created.SignatureAdded}");
         });
     }
@@ -151,24 +98,29 @@ public sealed class LiveDraftTests(LiveOutlook fx)
         if (hit is null) Assert.Skip(SkipTexts.NoData("synced Inbox mail in the last month"));
         var originalId = hit.Email.Id;
         var originalSubject = hit.Email.Subject;
-        var marker = $"[{fx.RunToken}] reply text";
+        var replyText = $"[{fx.RunToken}] reply text";
         var ct = TestContext.Current.CancellationToken;
 
         await fx.WithCleanupAsync([""], Outlook.OlDefaultFolders.olFolderDrafts, async scope =>
         {
             var before = await fx.RunAsync("reading the original", app => OriginalState(app, originalId));
-            var reply = await ReplyTool().RunAsync(originalId, marker, false, false, null, ct);
+            var reply = await ReplyTool().RunAsync(originalId, replyText, false, false, null, ct);
             var storeId = await fx.RunAsync("reading the store id", app => fx.StoreIdOf(app, ""));
             // A reply's subject is the original's, so it has no token: the draft is tagged right after it is read.
             scope.Track(new TrackedItem(TrackedKind.Draft, "", reply.Id, storeId, Tagged(reply.Subject)));
 
-            var f = await fx.RunAsync("reading the reply draft", app => ReadDraft(app, "", reply.Id, tag: true));
+            var f = await fx.RunAsync("reading the reply draft", app => LiveDrafts.ReadDraft(fx, app, "", reply.Id, tag: true));
             Assert.Equal(ReplySubject.Normalize(originalSubject), f.Subject);
             Assert.StartsWith("Re:: ", f.Subject, StringComparison.Ordinal);
             Assert.False(f.Sent);
             Assert.Equal(f.DraftsId, f.ParentId);
+            Assert.Equal(DraftMarker.Tool, f.ClippyDraft);
 
-            var at = f.Html.IndexOf(marker, StringComparison.Ordinal);
+            var indexed = await fx.RunAsync("reading the reply for the index", app => ReadIndexed(app, reply.Id));
+            Assert.Equal(DraftMarker.Tool, indexed.ClippyMarker);
+            fx.Result("reply-thread-props", $"irt={indexed.InReplyTo is not null}, topic={indexed.ConversationTopic is not null}");
+
+            var at = f.Html.IndexOf(replyText, StringComparison.Ordinal);
             Assert.True(at >= 0, "The reply text is not in the HTML body.");
             var quoted = string.IsNullOrEmpty(originalSubject) ? -1 : f.Html.LastIndexOf(WebUtility.HtmlEncode(originalSubject), StringComparison.Ordinal);
             if (quoted >= 0) Assert.True(at < quoted, "The reply text must come before the quoted original.");
@@ -181,7 +133,57 @@ public sealed class LiveDraftTests(LiveOutlook fx)
         });
     }
 
+    private IndexedEmail ReadIndexed(Outlook.Application app, string id)
+    {
+        Outlook.NameSpace? session = null;
+        Outlook.MailItem? item = null;
+        try
+        {
+            session = app.Session;
+            item = (Outlook.MailItem)session.GetItemFromID(id, fx.StoreIdOf(app, ""));
+            return fx.Mail.ReadForIndex(item);
+        }
+        finally
+        {
+            LiveDrafts.Rel(item);
+            LiveDrafts.Rel(session);
+        }
+    }
+
     private string Tagged(string subject) => $"[{fx.RunToken}] {subject}";
+
+    [Fact(Timeout = 180_000)]
+    public async Task Reply_draft_with_ai_marker_at_background_priority()
+    {
+        await fx.RequireReadyAsync(TestContext.Current.CancellationToken);
+        await fx.EnsureSyncedAsync();
+        var hit = fx.Indexes.Search(new SearchFilter { Limit = 1 }, "").FirstOrDefault();
+        if (hit is null) Assert.Skip(SkipTexts.NoData("synced Inbox mail in the last month"));
+        var originalId = hit.Email.Id;
+        var originalSubject = hit.Email.Subject;
+        var ct = TestContext.Current.CancellationToken;
+
+        await fx.WithCleanupAsync([""], Outlook.OlDefaultFolders.olFolderDrafts, async scope =>
+        {
+            var before = await fx.RunAsync("reading the original", app => OriginalState(app, originalId));
+            var plan = new ReplyPlan(originalId, null, false, $"<p>[{fx.RunToken}] ai text</p>", false,
+                DraftMarker.Ai, WorkPriority.Background);
+            var reply = await new OutlookReplyDraftWriter(fx.Worker, fx.Mail, fx.Stores).ReplyAsync(plan, ct);
+            var storeId = await fx.RunAsync("reading the store id", app => fx.StoreIdOf(app, ""));
+            scope.Track(new TrackedItem(TrackedKind.Draft, "", reply.EntryId, storeId, Tagged(reply.Subject)));
+
+            var f = await fx.RunAsync("reading the reply draft", app => LiveDrafts.ReadDraft(fx, app, "", reply.EntryId, tag: true));
+            Assert.Equal(DraftMarker.Ai, f.ClippyDraft);
+            Assert.StartsWith("Re:: ", f.Subject, StringComparison.Ordinal);
+            Assert.Equal(ReplySubject.Normalize(originalSubject), f.Subject);
+            Assert.False(f.Sent);
+            Assert.Equal(f.DraftsId, f.ParentId);
+
+            var after = await fx.RunAsync("reading the original", app => OriginalState(app, originalId));
+            Assert.Equal(before.Unread, after.Unread);
+            Assert.Equal(before.Modified, after.Modified);
+        });
+    }
 
     [Fact(Timeout = 180_000)]
     public async Task Create_draft_in_shared_mailbox()
@@ -200,11 +202,12 @@ public sealed class LiveDraftTests(LiveOutlook fx)
             var sharedStore = await fx.RunAsync("reading the shared store id", app => fx.StoreIdOf(app, shared));
             scope.Track(new TrackedItem(TrackedKind.Draft, shared, created.Id, sharedStore, subject));
 
-            var f = await fx.RunAsync("reading the shared draft", app => ReadDraft(app, shared, created.Id));
+            var f = await fx.RunAsync("reading the shared draft", app => LiveDrafts.ReadDraft(fx, app, shared, created.Id));
             Assert.Equal(sharedStore, f.ParentStoreId);
             Assert.Equal(f.DraftsId, f.ParentId);
             Assert.Equal(shared, f.OnBehalf.Trim(), ignoreCase: true);
             Assert.False(f.Sent);
+            Assert.Equal(DraftMarker.Tool, f.ClippyDraft);
         });
     }
 
@@ -228,22 +231,23 @@ public sealed class LiveDraftTests(LiveOutlook fx)
             originalId = fx.Indexes.Search(new SearchFilter { Limit = 1 }, "").FirstOrDefault()?.Email.Id;
         }
         if (originalId is null) Assert.Skip(SkipTexts.NoData("mail to reply to"));
-        var marker = $"[{fx.RunToken}] reply text";
+        var replyText = $"[{fx.RunToken}] reply text";
 
         await fx.WithCleanupAsync(["", shared], Outlook.OlDefaultFolders.olFolderDrafts, async scope =>
         {
-            var reply = await ReplyTool().RunAsync(originalId, marker, false, false, shared, ct);
+            var reply = await ReplyTool().RunAsync(originalId, replyText, false, false, shared, ct);
             var sharedStore = await fx.RunAsync("reading the shared store id", app => fx.StoreIdOf(app, shared));
             scope.Track(new TrackedItem(TrackedKind.Draft, shared, reply.Id, sharedStore, Tagged(reply.Subject)));
 
             Assert.Equal(shared, reply.Mailbox);
-            var f = await fx.RunAsync("reading the shared reply", app => ReadDraft(app, shared, reply.Id, tag: true));
+            var f = await fx.RunAsync("reading the shared reply", app => LiveDrafts.ReadDraft(fx, app, shared, reply.Id, tag: true));
             Assert.Equal(f.DraftsId, f.ParentId);
             Assert.Equal(sharedStore, f.ParentStoreId);
             Assert.Equal(shared, f.OnBehalf.Trim(), ignoreCase: true);
             Assert.StartsWith("Re:: ", f.Subject, StringComparison.Ordinal);
             Assert.False(f.Sent);
-            Assert.Contains(marker, f.Html, StringComparison.Ordinal);
+            Assert.Contains(replyText, f.Html, StringComparison.Ordinal);
+            Assert.Equal(DraftMarker.Tool, f.ClippyDraft);
 
             // A Move that left a copy behind would show in the own Drafts folder.
             var own = await fx.RunAsync("searching own Drafts", app =>

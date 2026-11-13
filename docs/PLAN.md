@@ -99,6 +99,21 @@ v0.0.1 release.
 - [x] M10.3 `install.ps1` (install, Start menu shortcut, `-Uninstall`) and README (install, WSL mirrored networking, security model, index at rest) `{arch:skip}`
 - [x] M10.4 Final review of the whole branch by `reviewer`, CI green on the PR, then hand to the user to merge (→ v0.0.1 release) `{arch:skip}`
 
+## M11 AI drafting (SPEC §19, §1.10; user-approved 2026-11-13) — deps: M10
+- Review: [x] done (ef4d7e8; 3 parallel reviewers, all APPROVED, non-blocking fixes applied)
+- Parallel tracks: **A** M11.1 → M11.2 · **B** M11.3 (no deps, start any time) · **C** M11.1 → M11.4 → M11.5. M11.6 and M11.7 start when A, B and M11.4 are done (M11.5 can run beside them). M11.8 joins everything; M11.9–M11.11 come last.
+- [x] M11.1 Settings and plumbing: `AiDraftingSettings` in `Settings` with defaults, `Validate()` (incl. the consent rule) and JSON (§19.2, §5.2); `SharedMailbox.AiDrafts`; `SettingsStore.LoadApiKey`/`SaveApiKey` over `ISecretProtector` (`anthropic-key.bin`, §5.1); log redaction of the API key and `sk-ant-…` (§5.1); `DraftMarker` constants (§19.4); `ActivityState.Drafting` (rank, tooltip, `Report`) and `ActivityKind.Ai` (§6.1, §6.4, §7) `{arch:brief}` (deps: none)
+- [x] M11.2 Index schema 2 and the draft marker: migration 1→2, `ai_decisions`, new `EmailIndex` members and 30-day decision purge (§9.1, §9.2); `ReadForIndex` thread properties + marker (§8); Table-only thread-metadata refresh (§10); `ClippyDraft = tool` on `create_draft`/`reply_draft`, marker and work priority on `ReplyPlan`/`OutlookReplyDraftWriter` (§8, §19.9); live draft tests assert the marker `{arch:brief}` (deps: M11.1)
+- [x] M11.3 `MailText` (own-text extraction, redaction, header parsing) and `DraftHtml` (allow-list sanitizer, placeholder highlight) + tests (§19.6, §19.8) `{arch:brief}` (deps: none; parallel with M11.1, M11.2, M11.4)
+- [x] M11.4 `IDraftModel` and `DraftModel` (request/result types, reply schema, `DraftReply.Parse`), Claude Code CLI backend: `ClaudeCliLocator`, status probe, `ClaudeCliArgs`, `ClaudeCliRunner`, `ClaudeCliOutput` + fake-`claude` tests (§19.3) `{arch:brief}` (deps: M11.1)
+- [x] M11.5 API-key backend `AnthropicApiModel` (official SDK, pinned; `output_config` effort + json_schema, no `thinking`, no tools; `CheckAsync` via the models endpoint) + tests with a fake HTTP handler (§19.3) `{arch:brief}` (deps: M11.4; parallel with M11.6, M11.7)
+- [x] M11.6 Writing-style skill: `StyleCorpus` sampling, style system prompt, generation, `SKILL.md` + copy + `state.json` writer with edit detection, automatic weekly trigger, skill reading for prompts (§19.6) `{arch:brief}` (deps: M11.2, M11.3, M11.4)
+- [x] M11.7 Drafting pipeline: `DraftRules`, `DraftPrompt`, `DraftWorker` (candidates, COM facts, daily limit, backoff, decisions, events, `Drafting` state, manual path) (§19.7); `SyncService.CycleCompleted` (§10); `OutlookAiMailbox` (§19.9); wiring in `Program` `{arch:brief}` (deps: M11.2, M11.3, M11.4; uses M11.6 for the style block, falls back to "No style guide yet" if it isn't merged yet)
+- [x] M11.8 Tray and Settings UI: AI drafts submenu, consent dialog, drafts balloon with click → `ShowDrafts`, AI drafts tab (status + Check, key save/remove, model/effort/limits/lists, per-mailbox opt-in, style View/Regenerate/Open in editor, today's count), manual draft action (§6.2, §6.3, §6.5, §19.10) `{arch:brief}` (deps: M11.5, M11.6, M11.7)
+- [x] M11.9 Safety scan additions (§19.12, §15) and the test filter `live!=outlook&live!=claude` in `ci.yml`, `release.yml`, `CLAUDE.md` and the README (§16) `{arch:skip}` (deps: M11.4, M11.7)
+- [x] M11.10 Live tests: `[Trait("live","claude")]` CLI status + one tiny structured call; Outlook + Claude manual-draft round trip (draft in Drafts, `Re:: `, marker `ai`, sanitized body, Sent/Outbox unchanged) (§19.12). Run once by the user with `CLIPPY_LIVE=1` and `CLIPPY_LIVE_CLAUDE=1` `{arch:brief}` (deps: M11.8)
+- [x] M11.11 User docs: `manual/ai-drafts.md` (setup, consent, what is sent, rules, style skill, limits, troubleshooting), data flow in `manual/security.md`, `tray.md`, `faq.md`, `changelog.md`, `zensical.toml` nav, README; `zensical build --clean --strict` passes (§19, CLAUDE.md docs rule) `{arch:skip}` (deps: M11.8)
+
 ## Carry-forward notes from reviews
 
 - M4.3: `ActivityHub.Changed` can fire on the caller's thread and on the timer thread at the same time, so the tray handler must only `BeginInvoke` to the UI thread. (M1/M3 review)
@@ -144,3 +159,15 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-13 Live run 1: 23 passed, 4 failed -> fixed calendar DASL in UTC + free/busy code 5 (8ac84bc), long-term table EntryIDs (a264667), attachment test folder clash (89706dd); 1788 tests
 2026-11-13 Live run 2: 27 passed, 3 skipped (shared mailbox), 0 failed; PR dev -> main opened
 2026-11-13 CI fixed (.slnx detection, 4b4a956); PR #1 green: build-windows, core-tests-linux; handed to the user to merge
+2026-11-13 M11.1 AI settings, API key store, redaction, DraftMarker, Drafting state (e8a7377); M11.3 MailText + DraftHtml sanitizer (995e0e7); built in parallel, 2081 tests
+2026-11-13 M11.4 IDraftModel + Claude Code CLI backend, fake-claude tests (ede2804); 2208 tests
+2026-11-13 M11.2 index schema 2 + migration, ai_decisions, thread metadata, ClippyDraft marker (ee4e861); 2284 tests
+2026-11-13 M11.5 Anthropic API-key backend on SDK 13.3.0, wire-schema reduction, fake-handler tests (dfac1a3); 2371 tests
+2026-11-13 M11.6 writing-style skill: corpus, generation, SKILL.md + copy + state.json, weekly trigger (6e5551d); 2446 tests
+2026-11-13 M11.7 drafting pipeline: DraftRules, DraftPrompt, DraftWorker, DraftModelSwitch, OutlookAiMailbox, wiring (5225e76); StyleGuideSource adapter wires M11.6 into M11.7; 2593 tests
+2026-11-13 M11.9 AI safety scans + live!=claude test filter in CI, release, CLAUDE.md, README, agent files (dd317d8); 2599 tests
+2026-11-13 M11.7 fix: manual draft never throws; style generation outside the pass gate (0e98b40, found by spec sync); 2606 tests
+2026-11-13 M11.8 AI drafts tray submenu, consent dialog, settings tab, manual draft, balloon action (a1bbaf5); UI not click-tested yet; 2676 tests
+2026-11-13 M11.11 user docs: ai-drafts page, security data flow, tray, FAQ, changelog v0.0.5, README (8bdb69c); zensical strict build passes
+2026-11-13 M11.10 live Claude tests + AI manual-draft round trip, run-live-tests.ps1 -Claude (5f1df1e); not run yet (user runs once); 2706 tests
+2026-11-13 M11 review: 3 reviewers (safety/App, Core drafting, backends/settings/docs) APPROVED; 12 non-blocking fixes (ef4d7e8); 2719 tests; release v0.0.5

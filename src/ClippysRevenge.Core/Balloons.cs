@@ -2,7 +2,10 @@ namespace ClippysRevenge.Core;
 
 public enum BalloonKind { Info, Warning, Error }
 
-public sealed record Balloon(string Text, BalloonKind Kind);
+/// <summary>What a click on the balloon does (SPEC 19.10). Only the AI drafts balloon has one.</summary>
+public enum BalloonAction { None, ShowDrafts }
+
+public sealed record Balloon(string Text, BalloonKind Kind, BalloonAction Action = BalloonAction.None);
 
 public static class BalloonTexts
 {
@@ -16,6 +19,17 @@ public static class BalloonTexts
     public static string BackfillDone(string what, long count) =>
         string.Create(System.Globalization.CultureInfo.InvariantCulture,
             $"It looks like you're trying to find an email. I finished indexing {what}: {count:N0} emails.");
+
+    public const string NoOutlookWindow = "It looks like Outlook has no open window. Open Outlook and look in Drafts.";
+
+    /// <summary>It looks like you got mail. I drafted 1 reply — they're in your Drafts folder. / … I drafted n replies — …</summary>
+    /// <exception cref="ArgumentOutOfRangeException">n is less than 1.</exception>
+    public static string AiDrafted(int n)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(n, 1);
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"It looks like you got mail. I drafted {n} {(n == 1 ? "reply" : "replies")} — they're in your Drafts folder.");
+    }
 
     public static string Error(string reason) =>
         string.IsNullOrWhiteSpace(reason)
@@ -39,7 +53,7 @@ public sealed class BalloonCenter
 
     public event Action<Balloon>? Shown;
 
-    public bool Post(string text, BalloonKind kind = BalloonKind.Info)
+    public bool Post(string text, BalloonKind kind = BalloonKind.Info, BalloonAction action = BalloonAction.None)
     {
         var clean = Clean(text);
         lock (_lock)
@@ -51,7 +65,7 @@ public sealed class BalloonCenter
             }
             _lastAccepted = now;
         }
-        Raise(new Balloon(clean, kind));
+        Raise(new Balloon(clean, kind, action));
         return true;
     }
 

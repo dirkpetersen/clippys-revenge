@@ -50,6 +50,24 @@ public class ActivityViewTests
         Assert.False(ActivityView.Row(Ev(2, ActivityKind.Tool), TimeZoneInfo.Utc).Bold);
     }
 
+    [Fact]
+    public void Drafting_StateNameAndHeader()
+    {
+        Assert.Equal("Drafting replies", ActivityView.StateName(ActivityState.Drafting));
+        Assert.Equal(new ActivityHeader("Drafting replies (2 / 5)", false, 0, ""),
+            ActivityView.Header(ActivityState.Drafting, new ActivityProgress(2, 5, "drafting replies")));
+        Assert.Equal(new ActivityHeader("Drafting replies", false, 0, ""),
+            ActivityView.Header(ActivityState.Drafting, new ActivityProgress(0, 0, "drafting replies")));
+    }
+
+    [Fact]
+    public void Row_AiEventIsNotBold()
+    {
+        var r = ActivityView.Row(Ev(1, ActivityKind.Ai), TimeZoneInfo.Utc);
+        Assert.Equal("Ai", r.Kind);
+        Assert.False(r.Bold);
+    }
+
     [Theory]
     [InlineData(null, "")]
     [InlineData(0, "0 ms")]

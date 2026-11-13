@@ -36,9 +36,10 @@ public sealed class SyncEngine
         return _retention.Apply(plan.Mailbox, index, Math.Clamp(plan.RetentionMonths, 1, 120));
     }
 
-    private sealed class FolderRun(string path)
+    private sealed class FolderRun(string path, SourceFolder folder)
     {
         public string Path { get; } = path;
+        public SourceFolder Folder { get; } = folder;
         public int Upserted { get; set; }
         public int UnreadUpdated { get; set; }
         public bool Complete { get; set; }
@@ -60,6 +61,7 @@ public sealed class SyncEngine
         var started = _time.GetTimestamp();
 
         ApplyRetention(plan, index);
+        index.PurgeDecisions(now);
 
         var mb = await _source.OpenMailboxAsync(plan.Mailbox, ct).ConfigureAwait(false);
         if (mb is null)
@@ -80,7 +82,7 @@ public sealed class SyncEngine
             }
 
             var state = index.GetSyncState(f.FolderKey);
-            var run = new FolderRun(path);
+            var run = new FolderRun(path, f);
             if (state is null)
             {
                 state = new SyncState(f.FolderKey, path, now, now, null, false);
@@ -103,6 +105,8 @@ public sealed class SyncEngine
             runs.Add(run);
             results.Add(new FolderSyncResult(path, false, run.Upserted, run.UnreadUpdated, run.Complete));
         }
+
+        await RefreshThreadMetaAsync(plan, prefix, index, cutoff, now, runs, ct).ConfigureAwait(false);
 
         var purged = 0;
         var cutoffLocal = TimeZoneInfo.ConvertTime(cutoff, _time.LocalTimeZone);
@@ -149,6 +153,53 @@ public sealed class SyncEngine
             _log?.LogWarning(ex, "Reconcile of folder {Folder} failed.", path);
             _hub.Event(ActivityKind.Error, $"reconcile of \"{path}\" failed: " + (ex.Message.Length <= 200 ? ex.Message : ex.Message[..200]),
                 mailbox: plan.Mailbox.Length == 0 ? null : plan.Mailbox);
+        }
+    }
+
+    /// <summary>
+    /// SPEC 10: one Table-only pass per migrated index that fills in_reply_to, conversation_topic and clippy_marker
+    /// of rows indexed before schema 2. A per-folder failure is logged and leaves the key unset.
+    /// </summary>
+    private async Task RefreshThreadMetaAsync(MailboxPlan plan, string prefix, EmailIndex index, DateTimeOffset cutoff,
+        DateTimeOffset now, List<FolderRun> runs, CancellationToken ct)
+    {
+        if (index.GetMeta(EmailIndex.ThreadMetaCompleteKey) == "1") return;
+
+        var allDone = runs.Count > 0 && runs.All(r => r.Complete);
+        var matched = 0;
+        foreach (var run in runs.Where(r => r.Complete))
+        {
+            var done = false;
+            try
+            {
+                using var scope = _hub.Begin(ActivityState.Syncing,
+                    (prefix.Length == 0 ? "" : prefix + " ") + "Updating thread data " + run.Path);
+                var to = now.AddSeconds(1);
+                for (var pageNo = 0; pageNo < 10_000; pageNo++)
+                {
+                    var page = await _source.ListThreadMetaAsync(run.Folder, cutoff, to, ct).ConfigureAwait(false);
+                    matched += index.SetThreadMeta(page.Rows.Select(r => (r.EntryId, r.InReplyTo, r.ConversationTopic, r.ClippyMarker)));
+                    ct.ThrowIfCancellationRequested();
+                    if (!page.HasMore || page.Rows.Count == 0) { done = true; break; }
+                    var next = page.Rows[^1].EventTime;
+                    if (next >= to) break;   // the source misbehaved: not done
+                    to = next;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException and not MailSourceUnavailableException)
+            {
+                _log?.LogWarning("Thread data refresh of folder {Folder} failed ({Type}, HResult {HResult}).",
+                    run.Path, ex.GetType().Name, ex is System.Runtime.InteropServices.COMException ? ex.HResult : 0);
+                done = false;
+            }
+            if (!done) allDone = false;
+        }
+
+        if (allDone)
+        {
+            index.SetMeta(EmailIndex.ThreadMetaCompleteKey, "1");
+            _log?.LogInformation("Thread data refresh complete for mailbox {Mailbox}: {Rows} rows.",
+                plan.Mailbox.Length == 0 ? "(own)" : plan.Mailbox, matched);
         }
     }
 

@@ -137,6 +137,35 @@ public sealed class RollingFileLoggerTests : IDisposable
     }
 
     [Fact]
+    public void Redact_AnthropicKeys()
+    {
+        Assert.Equal("key [redacted] end", LogRedactor.Redact("key sk-ant-api03-AbC_d-9 end", []));
+        Assert.Equal("[redacted] and [redacted]", LogRedactor.Redact("sk-ant-a1 and sk-ant-b2", []));
+        Assert.Equal("sk-ant-", LogRedactor.Redact("sk-ant-", []));
+        Assert.Equal("x[redacted]", LogRedactor.Redact("xsk-ant-abc", []));
+        Assert.Equal("x [redacted] y", LogRedactor.Redact("x MYSECRETKEY123 y", ["tok-not-here", null, "MYSECRETKEY123"]));
+    }
+
+    [Fact]
+    public void ApiKeySecret_IsMaskedInMessageAndException()
+    {
+        const string apiKey = "plainapikey-98765";
+        using (var p = new RollingFileLoggerProvider(new RollingFileLogOptions
+        {
+            Directory = _dir,
+            Secrets = () => [Token, apiKey],
+            Time = _time,
+        }))
+        {
+            p.CreateLogger("Cat").LogError(new InvalidOperationException("bad sk-ant-api03-zzz"), "k={0}", apiKey);
+        }
+        var text = File.ReadAllText(Path.Combine(_dir, Today));
+        Assert.DoesNotContain(apiKey, text);
+        Assert.DoesNotContain("sk-ant-api03-zzz", text);
+        Assert.True(text.Split("[redacted]").Length - 1 >= 2);
+    }
+
+    [Fact]
     public void RejectsZeroRetention() =>
         Assert.Throws<ArgumentOutOfRangeException>(() => Make(0));
 }

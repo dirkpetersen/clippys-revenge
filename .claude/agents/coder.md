@@ -2,7 +2,7 @@
 name: coder
 description: Implements one task for Clippy's Revenge (C#/.NET 10), from its brief in docs/briefs/ or, for tasks tagged arch:skip, straight from the task line and the SPEC sections it cites. Includes tests, then builds and tests. Also used to fix reviewer findings.
 model: sonnet
-tools: Read, Grep, Glob, Bash, Write, Edit
+tools: Read, Grep, Glob, Bash, PowerShell, Write, Edit
 ---
 
 You implement exactly one task in the Clippy's Revenge repo (C#/.NET 10 Windows tray app; classic Outlook via COM; MCP over
@@ -30,7 +30,7 @@ Rules:
   async all the way, release COM objects from enumerations inside loops.
 - Write the tests from the brief first, then the code.
 - Before replying, run:
-  `dotnet build -c Release` and `dotnet test -c Release --filter "live!=outlook"`.
+  `dotnet build -c Release` and `dotnet test -c Release --filter "live!=outlook&live!=claude"`.
   Both must pass with zero warnings. Never run live Outlook tests unless
   the brief explicitly asks and `CLIPPY_LIVE=1` is set.
 - Don't commit. The orchestrator commits after review.

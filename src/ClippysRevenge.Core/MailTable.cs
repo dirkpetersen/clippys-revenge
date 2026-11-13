@@ -8,7 +8,7 @@ public enum EventTimeField { Received, Sent }
 /// <summary>One Table row. All times UTC, whole seconds.</summary>
 public sealed record MailTableRow(
     string EntryId, DateTimeOffset LastModified, DateTimeOffset EventTime,
-    bool Unread, string? InternetMessageId);
+    bool Unread, string? InternetMessageId, MailThreadMeta? Thread = null);   // Thread set only for 10-value rows
 
 public sealed record MailEntryState(string EntryId, bool Unread);
 
@@ -25,6 +25,10 @@ public static class MailTable
     public const string SentOnProp = "http://schemas.microsoft.com/mapi/proptag/0x00390040";            // PR_CLIENT_SUBMIT_TIME
     public const string InternetMessageIdProp = "http://schemas.microsoft.com/mapi/proptag/0x1035001F"; // PR_INTERNET_MESSAGE_ID
     public const string MessageClassProp = "http://schemas.microsoft.com/mapi/proptag/0x001A001F";      // PR_MESSAGE_CLASS
+    public const string InReplyToProp = "http://schemas.microsoft.com/mapi/proptag/0x1042001F";         // PR_IN_REPLY_TO_ID
+    public const string ConversationTopicProp = "http://schemas.microsoft.com/mapi/proptag/0x0070001F"; // PR_CONVERSATION_TOPIC
+    public const string TransportHeadersProp = "http://schemas.microsoft.com/mapi/proptag/0x007D001F"; // PR_TRANSPORT_MESSAGE_HEADERS
+    public const string LastVerbProp = "http://schemas.microsoft.com/mapi/proptag/0x10810003";         // PR_LAST_VERB_EXECUTED
     public const string SortLastModified = "[LastModificationTime]";
     public const string SortReceived = "[ReceivedTime]";
     public const string SortSentOn = "[SentOn]";
@@ -46,6 +50,12 @@ public static class MailTable
     /// <summary>EntryID, LastModified, event time, UnRead, InternetMessageId, MessageClass.</summary>
     public static IReadOnlyList<string> Columns(EventTimeField field) =>
         [EntryIdColumn, LastModifiedProp, EventTimeProp(field), UnreadColumn, InternetMessageIdProp, MessageClassProp, LongTermEntryIdProp];
+
+    /// <summary>[InReplyToProp, ConversationTopicProp, DraftMarker.PropertyName], in this order (ReadForIndex's GetProperties).</summary>
+    public static IReadOnlyList<string> ThreadPropertyNames { get; } = [InReplyToProp, ConversationTopicProp, DraftMarker.PropertyName];
+
+    /// <summary>Columns(field) followed by ThreadPropertyNames: 10 columns.</summary>
+    public static IReadOnlyList<string> ThreadColumns(EventTimeField field) => [.. Columns(field), .. ThreadPropertyNames];
 
     /// <summary>True for "IPM.Note" or "IPM.Note.&lt;anything&gt;".</summary>
     public static bool IsIndexedClass(string? messageClass) =>
@@ -74,9 +84,10 @@ public static class MailTable
     public static MailTableRow? ToRow(IReadOnlyList<object?> values)
     {
         ArgumentNullException.ThrowIfNull(values);
-        if (values.Count is not (6 or 7)) throw new ArgumentException("A Table row has 7 values (6 without the long-term id).", nameof(values));
+        if (values.Count is not (6 or 7 or 10))
+            throw new ArgumentException("A Table row has 7 values (6 without the long-term id, 10 with the thread columns).", nameof(values));
 
-        var id = ParseEntryId(values.Count == 7 ? values[6] : null, values[0]);
+        var id = ParseEntryId(values.Count >= 7 ? values[6] : null, values[0]);
         if (string.IsNullOrEmpty(id)) return null;
         if (!IsIndexedClass(values[5] as string)) return null;
         var evt = OutlookDates.FromTableValue(values[2]);
@@ -84,7 +95,8 @@ public static class MailTable
         var lm = OutlookDates.FromTableValue(values[1]) ?? evt.Value;
         var imid = (values[4] as string)?.Trim();
         if (string.IsNullOrEmpty(imid)) imid = null;
-        return new MailTableRow(id, lm, evt.Value, values[3] is bool b && b, imid);
+        var thread = values.Count == 10 ? MailThreadMeta.FromValues(values[7], values[8], values[9]) : null;
+        return new MailTableRow(id, lm, evt.Value, values[3] is bool b && b, imid, thread);
     }
 }
 
@@ -100,6 +112,18 @@ public static class DaslFilter
         t.ToUniversalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
     private static string P(string prop) => "\"" + prop + "\"";
+
+    /// <summary>Drafts that answer the source: ("irt" = 'imid') OR ("topic" = 'topic'), with a half left out when its
+    /// value is null/blank (trimmed). Null when both are blank. ' is doubled.</summary>
+    public static string? DraftMatch(string? internetMessageId, string? conversationTopic)
+    {
+        var halves = new List<string>();
+        var imid = internetMessageId?.Trim();
+        var topic = conversationTopic?.Trim();
+        if (!string.IsNullOrEmpty(imid)) halves.Add($"({P(MailTable.InReplyToProp)} = '{imid.Replace("'", "''")}')");
+        if (!string.IsNullOrEmpty(topic)) halves.Add($"({P(MailTable.ConversationTopicProp)} = '{topic.Replace("'", "''")}')");
+        return halves.Count == 0 ? null : "@SQL=" + string.Join(" OR ", halves);
+    }
 
     public static string Changed(EventTimeField field, DateTimeOffset modifiedFrom, DateTimeOffset cutoff) =>
         $"@SQL=({P(MailTable.LastModifiedProp)} >= '{Literal(modifiedFrom - Margin)}') AND " +

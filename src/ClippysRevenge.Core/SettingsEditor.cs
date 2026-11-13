@@ -3,10 +3,13 @@ using Microsoft.Extensions.Logging;
 
 namespace ClippysRevenge.Core;
 
-public enum SettingsTab { Connection, Index, Scheduling, General }
+public enum SettingsTab { Connection, Index, Scheduling, General, AiDrafts }
 
 /// <summary>One entry of the Index tab's mailbox picker. Key "" = own mailbox.</summary>
 public sealed record SettingsMailboxChoice(string Key, string Label);
+
+/// <summary>One enabled shared mailbox in the AI tab's opt-in list. Key = normalized SMTP.</summary>
+public sealed record AiMailboxChoice(string Key, string Label, bool AiDrafts);
 
 public sealed record SettingsChanges(
     bool Any,
@@ -27,6 +30,7 @@ public sealed class SettingsEditor
 {
     public const string OwnMailboxLabel = "My mailbox";
     public const string WholeNumberMessage = "Must be a whole number.";
+    public const string NumberMessage = "Must be a number like 0.6.";
 
     private readonly Dictionary<string, string> _parseErrors = new(StringComparer.Ordinal);
     private readonly List<string> _parseOrder = [];
@@ -62,6 +66,7 @@ public sealed class SettingsEditor
                     {
                         Smtp = lm.Smtp, DisplayName = lm.DisplayName, Enabled = lm.Enabled,
                         RetentionMonths = lm.RetentionMonths, IndexedFolders = [.. lm.IndexedFolders ?? []],
+                        AiDrafts = lm.AiDrafts,
                     });
                 continue;
             }
@@ -69,6 +74,12 @@ public sealed class SettingsEditor
             if (lm.Enabled != bm.Enabled && dm.Enabled == bm.Enabled) dm.Enabled = lm.Enabled;
             if (lm.DisplayName != bm.DisplayName && dm.DisplayName == bm.DisplayName) dm.DisplayName = lm.DisplayName;
         }
+        var b = _base.AiDrafting;
+        var l = live.AiDrafting;
+        var d = Draft.AiDrafting;
+        if (l.ConsentedAtUtc is { } c) d.ConsentedAtUtc = c;
+        if (l.Enabled != b.Enabled && d.Enabled == b.Enabled) d.Enabled = l.Enabled;
+        if (l.EnabledAtUtc != b.EnabledAtUtc && d.EnabledAtUtc == b.EnabledAtUtc) d.EnabledAtUtc = l.EnabledAtUtc;
         _base = live.Clone();
     }
 
@@ -101,6 +112,55 @@ public sealed class SettingsEditor
         if (!_parseErrors.ContainsKey(field)) _parseOrder.Add(field);
         _parseErrors[field] = WholeNumberMessage;
         return false;
+    }
+
+    /// <summary>
+    /// Trims. When the text has no '.', a single ',' becomes '.'. Then double.TryParse(NumberStyles.Float,
+    /// InvariantCulture), which must be finite. Success: assign(value), clears the parse error, true.
+    /// Failure: records (field, NumberMessage), Draft unchanged, false.
+    /// </summary>
+    public bool TrySetDouble(string field, string? text, Action<double> assign)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        ArgumentNullException.ThrowIfNull(assign);
+        var t = text?.Trim() ?? "";
+        if (!t.Contains('.') && t.IndexOf(',') >= 0 && t.IndexOf(',') == t.LastIndexOf(',')) t = t.Replace(',', '.');
+        if (double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && double.IsFinite(v))
+        {
+            assign(v);
+            if (_parseErrors.Remove(field)) _parseOrder.Remove(field);
+            return true;
+        }
+        if (!_parseErrors.ContainsKey(field)) _parseOrder.Add(field);
+        _parseErrors[field] = NumberMessage;
+        return false;
+    }
+
+    /// <summary>Draft.AiDrafting.ConsentedAtUtc ??= consentedAtUtc. Used after the form's consent dialog.</summary>
+    public void AdoptConsent(DateTimeOffset consentedAtUtc) => Draft.AiDrafting.ConsentedAtUtc ??= consentedAtUtc;
+
+    /// <summary>Every Enabled shared mailbox of Draft, in list order. Label = MenuLabel. No duplicates (by key).</summary>
+    public IReadOnlyList<AiMailboxChoice> AiMailboxChoices()
+    {
+        var list = new List<AiMailboxChoice>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var sm in Draft.SharedMailboxes ?? [])
+        {
+            if (sm is not { Enabled: true }) continue;
+            var key = EmailAddress.Normalize(sm.Smtp);
+            if (key.Length == 0 || !seen.Add(key)) continue;
+            list.Add(new AiMailboxChoice(key, sm.MenuLabel, sm.AiDrafts));
+        }
+        return list;
+    }
+
+    /// <summary>Sets AiDrafts on the Draft entry. False (no change) when key isn't an enabled shared mailbox of Draft.</summary>
+    public bool SetAiDrafts(string key, bool on)
+    {
+        var sm = Draft.FindSharedMailbox(key);
+        if (sm is not { Enabled: true }) return false;
+        sm.AiDrafts = on;
+        return true;
     }
 
     /// <summary>Draft.AddOrEnableSharedMailbox; also removes the key from PendingIndexDeletes.</summary>
@@ -193,6 +253,7 @@ public sealed class SettingsEditor
     public static SettingsTab TabFor(string field)
     {
         field ??= "";
+        if (field.StartsWith("AiDrafting", StringComparison.Ordinal)) return SettingsTab.AiDrafts;
         if (field.StartsWith("Port", StringComparison.Ordinal)) return SettingsTab.Connection;
         string[] index = ["RetentionMonths", "SyncIntervalSeconds", "IndexedFolders", "SharedMailboxes"];
         string[] sched = ["WorkStartHour", "WorkEndHour", "BusinessDaysOnly", "TimeZoneLabel", "TentativeIsBusy",

@@ -57,12 +57,104 @@ public sealed class SettingsApplierTests : IDisposable
         try { Directory.Delete(_root, true); } catch (IOException) { }
     }
 
+    private Action? _aiChanged;
+
+    [Fact]
+    public async Task Apply_after_a_tray_enable_keeps_consent_and_enabled_and_applies_the_window_edit()
+    {
+        var editor = new SettingsEditor(_live);   // opened before consent
+        var toggler = new AiDraftingToggler(_live, _store.Save, () => { });
+        var consent = toggler.RecordConsent();
+        toggler.SetEnabled(true);
+        var enabledAt = _live.AiDrafting.EnabledAtUtc;
+        editor.Draft.AiDrafting.DailyCap = 40;
+
+        var r = await Applier().ApplyAsync(editor, TestContext.Current.CancellationToken);
+
+        Assert.True(r.Ok);
+        Assert.Equal(consent, _live.AiDrafting.ConsentedAtUtc);
+        Assert.True(_live.AiDrafting.Enabled);
+        Assert.Equal(enabledAt, _live.AiDrafting.EnabledAtUtc);
+        Assert.Equal(40, _live.AiDrafting.DailyCap);
+        var saved = _store.Load().Settings.AiDrafting;
+        Assert.Equal(consent, saved.ConsentedAtUtc);
+        Assert.True(saved.Enabled);
+        Assert.Equal(40, saved.DailyCap);
+    }
+
+    [Fact]
+    public async Task Apply_never_clears_live_consent()
+    {
+        _live.AiDrafting.RecordConsent(DateTimeOffset.Parse("2026-11-13T10:00:00Z"));
+        var consent = _live.AiDrafting.ConsentedAtUtc;
+        var editor = new SettingsEditor(_live);
+        editor.Draft.AiDrafting.ConsentedAtUtc = null;
+        editor.Draft.AiDrafting.DailyCap = 41;
+
+        var r = await Applier().ApplyAsync(editor, TestContext.Current.CancellationToken);
+
+        Assert.True(r.Ok);
+        Assert.Equal(consent, _live.AiDrafting.ConsentedAtUtc);
+        Assert.Equal(41, _live.AiDrafting.DailyCap);
+    }
+
+    [Fact]
+    public async Task Apply_after_the_form_enables_notifies_once()
+    {
+        var calls = 0;
+        _aiChanged = () => calls++;
+        var editor = new SettingsEditor(_live);
+        editor.AdoptConsent(DateTimeOffset.Parse("2026-11-13T10:00:00Z"));
+        editor.Draft.AiDrafting.SetEnabled(true, DateTimeOffset.Parse("2026-11-13T10:01:00Z"));
+
+        var r = await Applier().ApplyAsync(editor, TestContext.Current.CancellationToken);
+
+        Assert.True(r.Ok);
+        Assert.True(_live.AiDrafting.Enabled);
+        Assert.Equal(1, calls);
+    }
+
     private SettingsApplier Applier(bool withIndexes = false)
     {
         if (withIndexes)
             _indexes = new MailboxIndexes(Path.Combine(_root, "idx"), _live.SharedMailboxes.Where(m => m.Enabled).Select(m => m.Smtp));
         return new SettingsApplier(new SettingsApplyTargets(_live, _store, _tokens, p => _restart(p), () => _serverPort,
-            e => _startup(e), _indexes, () => _retention++, () => _syncNow++), _log);
+            e => _startup(e), _indexes, () => _retention++, () => _syncNow++, _aiChanged), _log);
+    }
+
+    [Fact]
+    public async Task AiSettingsChanged_CalledOncePerChangingApply_NotForNoChangeOrErrors()
+    {
+        var calls = 0;
+        _aiChanged = () => calls++;
+        var applier = Applier();
+
+        var none = await applier.ApplyAsync(new SettingsEditor(_live), TestContext.Current.CancellationToken);
+        Assert.True(none.Ok);
+        Assert.Equal(0, calls);
+
+        var bad = new SettingsEditor(_live);
+        bad.Draft.Port = 80;
+        Assert.False((await applier.ApplyAsync(bad, TestContext.Current.CancellationToken)).Ok);
+        Assert.Equal(0, calls);
+
+        var good = new SettingsEditor(_live);
+        good.Draft.AiDrafting.DailyCap = 31;
+        Assert.True((await applier.ApplyAsync(good, TestContext.Current.CancellationToken)).Ok);
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public async Task AiSettingsChanged_Throwing_DoesNotFailTheApply()
+    {
+        _aiChanged = () => throw new InvalidOperationException("secret-detail");
+        var e = new SettingsEditor(_live);
+        e.Draft.AiDrafting.DailyCap = 32;
+        var r = await Applier().ApplyAsync(e, TestContext.Current.CancellationToken);
+        Assert.True(r.Ok);
+        Assert.Empty(r.Warnings);
+        Assert.Equal(32, _live.AiDrafting.DailyCap);
+        Assert.DoesNotContain(_log.Lines, l => l.Contains("secret-detail", StringComparison.Ordinal));
     }
 
     private string FileJson => File.ReadAllText(_store.SettingsPath);

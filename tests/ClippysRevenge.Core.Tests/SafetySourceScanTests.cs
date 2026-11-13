@@ -162,6 +162,7 @@ public class SafetySourceScanTests
 
     private const string TrayFile = "src/ClippysRevenge.App/Tray/TrayApp.cs";
     private const string Launcher = "src/ClippysRevenge.App/OutlookLauncher.cs";
+    private const string ClaudeCliFile = "src/ClippysRevenge.Core/ClaudeCli.cs";
 
     // ---- Send ----
 
@@ -212,17 +213,75 @@ public class SafetySourceScanTests
     [Fact]
     public void ProcessStart_OnlyInOutlookLauncher_AndLauncherUsesNoCom()
     {
-        AssertNone(Find(f => f.Code, @"\bProcess\s*\.\s*Start\b|\bShellExecute\w*\s*\(", f => f.Rel == Launcher || f.Rel == TrayFile),
-            "Only OutlookLauncher.cs may start a process.");
-        // TrayApp.OpenFolder opens a folder in Explorer (not Outlook); it is the only other Process.Start.
+        AssertNone(Find(f => f.Code, @"\bProcess\s*\.\s*Start\b|\bShellExecute\w*\s*\(", f => f.Rel == Launcher || f.Rel == TrayFile || f.Rel == ClaudeCliFile),
+            "Only OutlookLauncher.cs, TrayApp.cs (ShellOpen: folders, the skill file, the manual link) and ClaudeCli.cs may start a process.");
+        // TrayApp.ShellOpen hands one path or URL to the shell (not Outlook); it is the only other Process.Start.
         var tray = Scan.Value.Files.Single(f => f.Rel == TrayFile);
         Assert.Single(Regex.Matches(tray.Code, @"\bProcess\s*\.\s*Start\b"));
-        Assert.Matches(@"void\s+OpenFolder\s*\(string path\)\s*\{[^}]*Process\.Start\(new ProcessStartInfo\(path\)", tray.Code);
+        Assert.Matches(@"void\s+ShellOpen\s*\(string target\)\s*\{\s*Process\.Start\(new ProcessStartInfo\(target\)\s*\{\s*UseShellExecute\s*=\s*true\s*\}\)", tray.Code);
+        Assert.DoesNotMatch(@"\bArgumentList\b|\.Arguments\b|\bVerb\s*=", tray.Code);
 
         var l = Scan.Value.Files.SingleOrDefault(f => f.Rel == Launcher);
         Assert.NotNull(l);
         Assert.Matches(@"Process\s*\.\s*Start\s*\(", l!.Code);
         Assert.DoesNotMatch(@"Marshal\b|Outlook\.|GetActiveObject|Activator|ProgID", l.Code);
+    }
+
+    [Fact]
+    public void AiUi_NeverSignsInAndNeverShowsTheKey()
+    {
+        const string TrayDir = "src/ClippysRevenge.App/Tray/";
+        var ui = Scan.Value.Files.Where(f => f.Rel.StartsWith(TrayDir, StringComparison.Ordinal)
+            || f.Rel == "src/ClippysRevenge.Core/AiDraftsUi.cs").ToList();
+        Assert.NotEmpty(ui);
+        Assert.Contains(ui, f => f.Rel.EndsWith("AiDraftsUi.cs", StringComparison.Ordinal));
+
+        var bad = new List<string>();
+        foreach (var f in ui)
+            foreach (var lit in f.Literals)
+            {
+                var text = lit[(lit.IndexOf('|') + 1)..];
+                if (Regex.IsMatch(text, @"(?i)claude\.ai|\blogin\b|/login|setup-token|oauth")) bad.Add($"{f.Rel}: \"{text}\"");
+            }
+        AssertNone(bad, "AI UI strings must never mention a sign-in (claude.ai, login, setup-token, oauth).");
+
+        var trayFiles = ui.Where(f => f.Rel.StartsWith(TrayDir, StringComparison.Ordinal)).ToList();
+        AssertNone(trayFiles.Where(f => Regex.IsMatch(f.Code, @"\bLoadApiKey\b|\bCachedApiKey\b")).Select(f => f.Rel).ToList(),
+            "Tray code never reads the API key: only Program calls LoadApiKey.");
+
+        var form = trayFiles.Where(f => f.Rel.StartsWith(TrayDir + "SettingsForm", StringComparison.Ordinal)).ToList();
+        Assert.NotEmpty(form);
+        foreach (var f in form)
+            foreach (Match m in Regex.Matches(f.Code, @"_apiKeyBox\s*\.\s*Text\s*=(?!=)"))
+                Assert.Matches(@"\G\s*""""\s*;", f.Code[(m.Index + m.Length)..]);
+        Assert.Contains(form, f => Regex.IsMatch(f.Code, @"_apiKeyBox\s*\.\s*Text\s*=(?!=)"));
+
+        AssertNone(trayFiles.Where(f => Regex.IsMatch(f.Code, @"_status\.Text\s*=[^;]*_apiKeyBox|Log\w*\([^;]*_apiKeyBox"))
+            .Select(f => f.Rel).ToList(), "The API key box is never logged or shown in the status line.");
+    }
+
+    [Fact]
+    public void ClaudeCli_StartsProcessesSafely()
+    {
+        var cli = Scan.Value.Files.Single(f => f.Rel == ClaudeCliFile);
+        Assert.Matches(@"UseShellExecute\s*=\s*false", cli.Code);
+        AssertNone(Find(f => f.Code, @"UseShellExecute\s*=\s*true", f => f.Rel == TrayFile || f.Rel == Launcher),
+            "UseShellExecute = true is only allowed in TrayApp.cs and OutlookLauncher.cs.");
+
+        var bad = new List<string>();
+        var schemaFiles = new List<string>();
+        foreach (var f in Scan.Value.Files)
+        {
+            foreach (var lit in f.Literals)
+            {
+                var text = lit[(lit.IndexOf('|') + 1)..];
+                if (text is "--bare" or "login") bad.Add($"{f.Rel}: \"{text}\"");
+                if (text == "--json-schema") schemaFiles.Add(f.Rel);
+            }
+        }
+        AssertNone(bad, "No literal may equal --bare or login (Clippy never uses --bare and never signs in).");
+        Assert.NotEmpty(schemaFiles);
+        Assert.All(schemaFiles, r => Assert.Equal(ClaudeCliFile, r));
     }
 
     // ---- Mail items ----
@@ -341,4 +400,135 @@ public class SafetySourceScanTests
         Assert.DoesNotContain("y.Send", kept);
         Assert.Contains(lits, l => l == "2|x.Send()");
     }
-}
+
+    [Fact]
+    public void AnthropicApi_UsesOnlyTheSavedKey()
+    {
+        const string model = "src/ClippysRevenge.Core/AnthropicApiModel.cs";
+        var f = Scan.Value.Files.Single(x => x.Rel == model);
+        var ctor = @"new\s+AnthropicClient\s*\(";
+        Assert.Matches(ctor, f.Code);
+        AssertNone(Find(x => x.Code, ctor, x => x.Rel == model), "AnthropicClient may only be built in AnthropicApiModel.cs.");
+        foreach (var required in new[] { @"ApiKey\s*=", @"MaxRetries\s*=\s*0", @"BaseUrl\s*=\s*ApiBaseUrl", @"OpenTelemetry\s*=\s*false" })
+            Assert.Matches(required, f.Code);
+        foreach (var forbidden in new[]
+        {
+            @"\bAuthToken\s*=", @"\bCredentials\s*=", "AnthropicCredentials", @"\bThinking\s*=", @"\bTools\s*=",
+            @"\bToolChoice\s*=", @"\bContainer\s*=", @"\.\s*Beta\b", "ANTHROPIC_",
+        })
+        {
+            Assert.DoesNotMatch(forbidden, f.Code);
+        }
+        Assert.DoesNotMatch("ANTHROPIC_", f.WithStrings);
+        AssertNone(Find(x => x.Code, "AnthropicCredentials", x => x.Rel == model), "AnthropicCredentials must not be used.");
+    }
+
+    // ---- AI drafting (SPEC 19.12) ----
+
+    private static readonly Regex CredentialLiteral = new(@"\.credentials|claudeAiOauth|oauthAccount|sk-ant-oat", RegexOptions.IgnoreCase);
+
+    private static readonly Regex AiForbiddenCall = new(@"\.\s*(Send|Display|Move)\s*\(|\bDelete\s*\(|\bPermanentDelete\s*\(");
+
+    private static bool Hit(Regex re, string s) => re.IsMatch(s);
+
+    internal static bool IsAiFile(string rel)
+    {
+        var name = Path.GetFileName(rel);
+        return name.StartsWith("Draft", StringComparison.Ordinal) || name.StartsWith("Claude", StringComparison.Ordinal)
+            || name.StartsWith("Style", StringComparison.Ordinal) || name.StartsWith("Anthropic", StringComparison.Ordinal)
+            || name.StartsWith("OutlookAiMailbox", StringComparison.Ordinal);
+    }
+
+    /// <summary>Forbidden Outlook-style calls in AI file code; File./Directory. calls (temp files, atomic rename) are exempt.</summary>
+    internal static List<string> AiForbiddenHits(string code)
+    {
+        var hits = new List<string>();
+        foreach (Match m in AiForbiddenCall.Matches(code))
+        {
+            var lineStart = code.LastIndexOf('\n', Math.Max(0, m.Index - 1)) + 1;
+            // For ".Move(" the receiver precedes the match; for "Delete(" the receiver precedes a dot just before it.
+            var prefix = code[lineStart..m.Index];
+            if (!m.Value.StartsWith('.') && prefix.EndsWith('.')) prefix = prefix[..^1];
+            if (Regex.IsMatch(prefix, @"\b(File|Directory)\s*$")) continue;
+            hits.Add($"line {LineOf(code, m.Index)}: {m.Value.Trim()}");
+        }
+        return hits;
+    }
+
+    [Fact]
+    public void AiFiles_SendDisplayMoveDelete_Absent()
+    {
+        var files = Scan.Value.Files.Where(f => IsAiFile(f.Rel)).ToList();
+        Assert.Contains(files, f => f.Rel.EndsWith("/ClaudeCli.cs", StringComparison.Ordinal));
+        Assert.Contains(files, f => f.Rel.EndsWith("/OutlookAiMailbox.cs", StringComparison.Ordinal));
+        var hits = files.SelectMany(f => AiForbiddenHits(f.Code).Select(h => f.Rel + ": " + h)).ToList();
+        AssertNone(hits, "AI files must not call .Send(, .Display(, .Move( or Delete( (File./Directory. calls are exempt).");
+    }
+
+    [Fact]
+    public void AiForbiddenHits_MatcherCatchesPlantedViolations()
+    {
+        Assert.NotEmpty(AiForbiddenHits("item.Send();"));
+        Assert.NotEmpty(AiForbiddenHits("item . Display(false);"));
+        Assert.NotEmpty(AiForbiddenHits("reply.Move(drafts);"));
+        Assert.NotEmpty(AiForbiddenHits("item.Delete();"));
+        Assert.NotEmpty(AiForbiddenHits("Delete(x);"));
+        Assert.NotEmpty(AiForbiddenHits("File.Exists(a); item.Delete();"));
+        Assert.Empty(AiForbiddenHits("File.Delete(tmp); File.Move(a, b, true); Directory.Delete(d, true);"));
+        Assert.Empty(AiForbiddenHits("var x = list.Remove(y);"));
+        Assert.True(IsAiFile("src/A/DraftWorker.cs"));
+        Assert.True(IsAiFile("src/A/OutlookAiMailbox.cs"));
+        Assert.False(IsAiFile("src/A/OutlookMail.cs"));
+    }
+
+    [Fact]
+    public void NoClaudeCredentialReferences_InStringLiterals()
+    {
+        var hits = new List<string>();
+        foreach (var f in Scan.Value.Files)
+        {
+            hits.AddRange(f.Literals.Where(l => CredentialLiteral.IsMatch(l[(l.IndexOf('|') + 1)..])).Select(l => $"{f.Rel}:{l}"));
+        }
+        AssertNone(hits, "No literal may reference Claude credential stores (.credentials, claudeAiOauth, oauthAccount, sk-ant-oat).");
+        Assert.True(Hit(CredentialLiteral, ".credentials.json"));
+        Assert.True(Hit(CredentialLiteral, "sk-ant-oat01-abc"));
+        Assert.True(Hit(CredentialLiteral, "claudeAiOauth"));
+        Assert.True(Hit(CredentialLiteral, "oauthAccount"));
+        Assert.False(Hit(CredentialLiteral, "sk-ant-api03-abc"));
+    }
+
+    [Fact]
+    public void NoLiteralBareOrLogin_MatcherCatchesPlantedViolations()
+    {
+        var lits = new List<string>();
+        Strip("var a = \"--bare\"; var b = \"login\"; var c = \"--json-schema\";", blankStrings: false, lits);
+        var texts = lits.Select(l => l[(l.IndexOf('|') + 1)..]).ToList();
+        Assert.Contains("--bare", texts);
+        Assert.Contains("login", texts);
+        Assert.Contains("--json-schema", texts);
+    }
+
+    [Fact]
+    public void ModelGetsNoTools_ClaudeCliArgsAndApiCall()
+    {
+        var cli = Scan.Value.Files.Single(f => f.Rel == ClaudeCliFile);
+        var lits = cli.Literals.Select(l => l[(l.IndexOf('|') + 1)..]).ToList();
+        Assert.Contains("--tools", lits);
+        Assert.DoesNotContain(lits, l => l is "--mcp-config" or "--allowedTools" or "--dangerously-skip-permissions");
+        var api = Scan.Value.Files.Single(f => f.Rel == "src/ClippysRevenge.Core/AnthropicApiModel.cs");
+        Assert.DoesNotMatch(@"\bTools\s*=|\bToolChoice\s*=|\bMcpServers\b", api.Code);
+        Assert.Matches(@"\bTools\s*=", "Tools = x");
+    }
+
+    [Fact]
+    public void AiOutput_ReachesOutlookOnlyThroughReplyDraftWriter()
+    {
+        // The model classes never touch COM; only OutlookAiMailbox (App) calls the reply-draft path.
+        var comTypes = new Regex(@"\bOutlook\.|\bMarshal\b|\bMailItem\b|CreateReplyDraft");
+        var core = Scan.Value.Files.Where(f => f.Rel.StartsWith("src/ClippysRevenge.Core/", StringComparison.Ordinal) && IsAiFile(f.Rel));
+        var hits = core.Where(f => comTypes.IsMatch(f.Code)).Select(f => f.Rel).ToList();
+        AssertNone(hits, "AI files in Core must not reference COM types or CreateReplyDraft.");
+        Assert.True(Hit(comTypes, "x.CreateReplyDraft()"));
+    }}
+
+

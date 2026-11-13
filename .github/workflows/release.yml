@@ -59,7 +59,7 @@ jobs:
 
       - name: Test (no live Outlook)
         if: steps.ver.outputs.skip == 'false'
-        run: dotnet test -c Release --filter "live!=outlook"
+        run: dotnet test -c Release --filter "live!=outlook&live!=claude"
 
       - name: Publish single-file exe
         if: steps.ver.outputs.skip == 'false'

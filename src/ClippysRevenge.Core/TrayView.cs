@@ -157,6 +157,18 @@ public sealed class TrayPresenter
                 icon = TrayIconKey.Busy;
                 tip = label.Length == 0 ? p + "removing old mail" : p + "removing mail older than " + label;
                 break;
+            case ActivityState.Drafting:
+                {
+                    icon = TrayIconKey.Busy;
+                    var dt = label.Length == 0 ? ActivityHub.DraftingLabel : label;
+                    if (progress.Total > 0)
+                    {
+                        dt += " (" + progress.Done.ToString("N0", CultureInfo.InvariantCulture) + " / "
+                            + progress.Total.ToString("N0", CultureInfo.InvariantCulture) + ")";
+                    }
+                    tip = p + dt;
+                    break;
+                }
             case ActivityState.Paused:
                 icon = TrayIconKey.Paused;
                 tip = p + "indexing paused";
