@@ -21,6 +21,7 @@ public static class ActivityView
     {
         ActivityState.Idle => "Idle",
         ActivityState.Serving => "Serving a request",
+        ActivityState.Drafting => "Drafting replies",
         ActivityState.Paused => "Paused",
         ActivityState.Purging => "Purging old mail",
         ActivityState.Syncing => "Syncing",
@@ -35,7 +36,16 @@ public static class ActivityView
     {
         var text = StateName(state);
         var label = progress.Label ?? "";
-        if (state != ActivityState.Idle && label.Length > 0)
+        if (state == ActivityState.Drafting)
+        {
+            if (progress.Total > 0)
+            {
+                text += " (" + progress.Done.ToString("N0", CultureInfo.InvariantCulture) + " / "
+                    + progress.Total.ToString("N0", CultureInfo.InvariantCulture) + ")";
+            }
+            return new ActivityHeader(text, false, 0, "");
+        }
+        if (state !=ActivityState.Idle && label.Length > 0)
         {
             text += ": " + label;
         }

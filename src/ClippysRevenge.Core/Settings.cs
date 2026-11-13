@@ -17,6 +17,9 @@ public sealed class SharedMailbox
     public List<string> IndexedFolders { get; set; } = [.. Settings.DefaultIndexedFolders];
     public int? RetentionMonths { get; set; }
 
+    /// <summary>AI reply drafts for this mailbox's Inbox (SPEC 5.2, 19.7). Only used while AiDrafting.Enabled.</summary>
+    public bool AiDrafts { get; set; }
+
     /// <summary>"Helpdesk &lt;helpdesk@x.edu&gt;", or just the Smtp when DisplayName is blank.</summary>
     [JsonIgnore]
     public string MenuLabel => string.IsNullOrWhiteSpace(DisplayName) ? Smtp : $"{DisplayName} <{Smtp}>";
@@ -90,6 +93,7 @@ public sealed class Settings
     public bool StartWithWindows { get; set; } = true;
     public bool NotifyOnErrors { get; set; } = true;
     public LogLevel LogLevel { get; set; } = LogLevel.Information;
+    public AiDraftingSettings AiDrafting { get; set; } = new();
 
     /// <summary>Empty list = valid. Never throws, never mutates.</summary>
     public IReadOnlyList<SettingsError> Validate()
@@ -153,6 +157,9 @@ public sealed class Settings
                     Add(p + ".RetentionMonths", "Must be between 1 and 120.");
             }
         }
+
+        if (AiDrafting is null) Add("AiDrafting", "Must not be empty.");
+        else e.AddRange(AiDrafting.Validate());
         return e;
     }
 
@@ -180,7 +187,7 @@ public sealed class Settings
         }
     }
 
-    private static string? PathError(string? v)
+    internal static string? PathError(string? v)
     {
         if (string.IsNullOrWhiteSpace(v)) return "Must not be empty.";
         if (v.StartsWith(@"\\", StringComparison.Ordinal) || v.StartsWith("//", StringComparison.Ordinal))
@@ -280,6 +287,7 @@ public sealed class Settings
         StartWithWindows = c.StartWithWindows;
         NotifyOnErrors = c.NotifyOnErrors;
         LogLevel = c.LogLevel;
+        AiDrafting = c.AiDrafting;
     }
 
     public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
@@ -295,6 +303,8 @@ public sealed class Settings
         s.IndexedFolders ??= [.. DefaultIndexedFolders];
         s.AllowedFolders ??= d.AllowedFolders;
         s.SharedMailboxes ??= [];
+        s.AiDrafting ??= new AiDraftingSettings();
+        s.AiDrafting.FillDefaults();
         foreach (var sm in s.SharedMailboxes)
         {
             if (sm is null) continue;

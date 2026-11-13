@@ -40,6 +40,7 @@ public class SettingsEditorTests
         src.StartWithWindows = !src.StartWithWindows; handled++;
         src.NotifyOnErrors = !src.NotifyOnErrors; handled++;
         src.LogLevel = LogLevel.Debug; handled++;
+        src.AiDrafting = new AiDraftingSettings { DailyCap = 5, ExcludeSenders = ["x.org"] }; handled++;
 
         var count = typeof(Settings).GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Count(p => p.CanRead && p.CanWrite);
@@ -48,6 +49,16 @@ public class SettingsEditorTests
         var target = Settings.CreateDefault(Path.GetTempPath());
         target.CopyFrom(src);
         Assert.Equal(src.ToJson(), target.ToJson());
+    }
+
+    [Fact]
+    public void Rebase_AdoptsAiDraftsOfNewMailbox()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        live.AddOrEnableSharedMailbox("b@x.edu", null).AiDrafts = true;
+        e.Rebase(live);
+        Assert.True(e.Draft.FindSharedMailbox("b@x.edu")!.AiDrafts);
     }
 
     [Fact]

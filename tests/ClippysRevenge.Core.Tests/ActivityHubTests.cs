@@ -172,9 +172,95 @@ public class ActivityHubTests
             [
                 ActivityState.Error, ActivityState.AwaitingConfirmation, ActivityState.OutlookUnavailable,
                 ActivityState.Backfilling, ActivityState.Syncing, ActivityState.Purging,
-                ActivityState.Paused, ActivityState.Serving, ActivityState.Idle,
+                ActivityState.Paused, ActivityState.Drafting, ActivityState.Serving, ActivityState.Idle,
             ],
             sorted);
+    }
+
+    [Fact]
+    public void ActivityKind_Order() =>
+        Assert.Equal(
+            [
+                ActivityKind.Sync, ActivityKind.Backfill, ActivityKind.Purge, ActivityKind.Tool, ActivityKind.Draft,
+                ActivityKind.Invite, ActivityKind.Blocked, ActivityKind.Ai, ActivityKind.Error,
+            ],
+            Enum.GetValues<ActivityKind>());
+
+    [Fact]
+    public void ReportState_UpdatesDraftingScope()
+    {
+        using var hub = new ActivityHub(new ManualTimeProvider());
+        using var s = hub.Begin(ActivityState.Drafting, ActivityHub.DraftingLabel);
+        hub.Report(ActivityState.Drafting, 2, 5);
+        Assert.Equal(ActivityState.Drafting, hub.State);
+        Assert.Equal(new ActivityProgress(2, 5, "drafting replies"), hub.Progress);
+    }
+
+    [Fact]
+    public void ReportState_IsolatedFromSyncReport()
+    {
+        using var hub = new ActivityHub(new ManualTimeProvider());
+        using var drafting = hub.Begin(ActivityState.Drafting, ActivityHub.DraftingLabel);
+        var sync = hub.Begin(ActivityState.Syncing, "Inbox");
+        hub.Report(ActivityState.Drafting, 1, 3);
+        Assert.Equal(new ActivityProgress(0, 0, "Inbox"), hub.Progress);
+        hub.Report(4, 10);
+        Assert.Equal(new ActivityProgress(4, 10, "Inbox"), hub.Progress);
+        sync.Dispose();
+        Assert.Equal(new ActivityProgress(1, 3, "drafting replies"), hub.Progress);
+    }
+
+    [Fact]
+    public void Report_DoesNotTouchDraftingScope()
+    {
+        using var hub = new ActivityHub(new ManualTimeProvider());
+        using var drafting = hub.Begin(ActivityState.Drafting, ActivityHub.DraftingLabel);
+        hub.Report(7, 9);
+        Assert.Equal(new ActivityProgress(0, 0, "drafting replies"), hub.Progress);
+    }
+
+    [Fact]
+    public void ReportState_WithoutScope_IsNoOp()
+    {
+        var tp = new ManualTimeProvider();
+        using var hub = new ActivityHub(tp);
+        var fired = 0;
+        hub.Changed += () => fired++;
+        tp.Advance(Sec1);
+        hub.Report(ActivityState.Drafting, 1, 1);
+        Assert.Equal(0, fired);
+        Assert.Equal(ActivityProgress.None, hub.Progress);
+    }
+
+    [Fact]
+    public void ReportState_RejectsBadArguments()
+    {
+        using var hub = new ActivityHub(new ManualTimeProvider());
+        Assert.Throws<ArgumentOutOfRangeException>(() => hub.Report(ActivityState.Idle, 0, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => hub.Report((ActivityState)99, 0, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => hub.Report(ActivityState.Drafting, -1, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => hub.Report(ActivityState.Drafting, 0, -1));
+    }
+
+    [Fact]
+    public void ReportState_UpdatesNewestMatchingScope()
+    {
+        using var hub = new ActivityHub(new ManualTimeProvider());
+        var a = hub.Begin(ActivityState.Drafting, "a");
+        var b = hub.Begin(ActivityState.Drafting, "b");
+        hub.Report(ActivityState.Drafting, 3, 4);
+        Assert.Equal(new ActivityProgress(3, 4, "b"), hub.Progress);
+        b.Dispose();
+        Assert.Equal(new ActivityProgress(0, 0, "a"), hub.Progress);
+        a.Dispose();
+    }
+
+    [Fact]
+    public void Event_AiKindIsRecorded()
+    {
+        using var hub = new ActivityHub(new ManualTimeProvider());
+        hub.Event(ActivityKind.Ai, "AI drafts: 1 drafted (3.0 s)");
+        Assert.Equal(ActivityKind.Ai, hub.GetEvents()[0].Kind);
     }
 
     [Fact]

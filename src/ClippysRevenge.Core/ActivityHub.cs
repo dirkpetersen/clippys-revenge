@@ -5,16 +5,17 @@ public enum ActivityState
 {
     Idle = 0,
     Serving = 1,
-    Paused = 2,
-    Purging = 3,
-    Syncing = 4,
-    Backfilling = 5,
-    OutlookUnavailable = 6,
-    AwaitingConfirmation = 7,
-    Error = 8,
+    Drafting = 2,
+    Paused = 3,
+    Purging = 4,
+    Syncing = 5,
+    Backfilling = 6,
+    OutlookUnavailable = 7,
+    AwaitingConfirmation = 8,
+    Error = 9,
 }
 
-public enum ActivityKind { Sync, Backfill, Purge, Tool, Draft, Invite, Blocked, Error }
+public enum ActivityKind { Sync, Backfill, Purge, Tool, Draft, Invite, Blocked, Ai, Error }
 
 public readonly record struct ActivityProgress(int Done, int Total, string Label)
 {
@@ -31,6 +32,9 @@ public sealed record ActivityEvent(
 
 public sealed class ActivityHub : IDisposable
 {
+    /// <summary>The Begin label of the drafting worker's Drafting scope (SPEC 6.1).</summary>
+    public const string DraftingLabel = "drafting replies";
+
     public const int EventCapacity = 500;
     public static readonly TimeSpan ChangedInterval = TimeSpan.FromMilliseconds(100);
 
@@ -169,6 +173,40 @@ public sealed class ActivityHub : IDisposable
         }
     }
 
+    /// <summary>Updates the newest active scope in exactly this state; no-op (no Changed) when there is none.</summary>
+    /// <exception cref="ArgumentOutOfRangeException">state is Idle or undefined; done or total negative.</exception>
+    public void Report(ActivityState state, int done, int total)
+    {
+        if (state == ActivityState.Idle || !Enum.IsDefined(state))
+        {
+            throw new ArgumentOutOfRangeException(nameof(state));
+        }
+        ArgumentOutOfRangeException.ThrowIfNegative(done);
+        ArgumentOutOfRangeException.ThrowIfNegative(total);
+
+        bool fire = false;
+        lock (_lock)
+        {
+            ScopeRecord? target = null;
+            foreach (var s in _scopes)
+            {
+                if (s.State == state && (target is null || s.Seq > target.Seq))
+                {
+                    target = s;
+                }
+            }
+            if (target is not null)
+            {
+                target.Done = done;
+                target.Total = total;
+                fire = MarkChanged();
+            }
+        }
+        if (fire)
+        {
+            Raise();
+        }
+    }
     public void Event(ActivityKind kind, string summary, TimeSpan? duration = null, string? mailbox = null)
     {
         ArgumentNullException.ThrowIfNull(summary);

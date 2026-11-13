@@ -62,6 +62,7 @@ public sealed class SettingsEditor
                     {
                         Smtp = lm.Smtp, DisplayName = lm.DisplayName, Enabled = lm.Enabled,
                         RetentionMonths = lm.RetentionMonths, IndexedFolders = [.. lm.IndexedFolders ?? []],
+                        AiDrafts = lm.AiDrafts,
                     });
                 continue;
             }

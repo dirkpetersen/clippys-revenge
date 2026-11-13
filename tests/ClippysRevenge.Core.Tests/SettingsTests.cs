@@ -229,6 +229,7 @@ public class SettingsTests
         Assert.True(m.Enabled);
         Assert.Equal(new[] { "Inbox", "Sent Items" }, m.IndexedFolders);
         Assert.Null(m.RetentionMonths);
+        Assert.False(m.AiDrafts);
         Assert.Equal("", m.DisplayName);
     }
 
