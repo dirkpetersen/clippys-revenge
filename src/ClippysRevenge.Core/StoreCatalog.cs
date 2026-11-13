@@ -25,10 +25,13 @@ public static class StoreCatalog
     {
         ArgumentNullException.ThrowIfNull(candidates);
         var result = new List<MailboxStore>();
-        foreach (var c in candidates)
+        var mailboxes = candidates.Where(c => IsMailboxType(c.ExchangeStoreType)).ToList();
+        // The default store is the user's own; only when none qualifies (e.g. a PST default) use the first primary mailbox.
+        var ownCandidate = mailboxes.FirstOrDefault(c => c.IsDefaultStore)
+            ?? mailboxes.FirstOrDefault(c => c.ExchangeStoreType == PrimaryExchangeMailbox);
+        foreach (var c in mailboxes)
         {
-            if (!IsMailboxType(c.ExchangeStoreType)) continue;
-            var own = c.IsDefaultStore || c.ExchangeStoreType == PrimaryExchangeMailbox;
+            var own = ReferenceEquals(c, ownCandidate);
             result.Add(new MailboxStore(c.DisplayName ?? "", c.StoreId, EmailAddress.Normalize(c.Smtp), own));
         }
         return result;

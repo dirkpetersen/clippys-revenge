@@ -26,6 +26,23 @@ public class StoreCatalogTests
     }
 
     [Fact]
+    public void Only_the_default_store_is_own_when_two_primary_mailboxes_exist()
+    {
+        var all = StoreCatalog.Filter([C("Other", "o@x.org", 0), C("Me", "me@x.org", 0, true)]);
+        Assert.False(all[0].IsOwn);
+        Assert.True(all[1].IsOwn);
+        Assert.Equal("Me", StoreCatalog.Find(all, "")!.DisplayName);
+        Assert.Equal(["o@x.org"], StoreCatalog.SharedOnly(all).Select(s => s.Smtp));
+    }
+
+    [Fact]
+    public void First_primary_mailbox_is_own_when_default_store_is_not_a_mailbox()
+    {
+        var all = StoreCatalog.Filter([C("Pst", "", 3, true), C("A", "a@x.org", 0), C("B", "b@x.org", 0)]);
+        Assert.Equal(["A"], all.Where(s => s.IsOwn).Select(s => s.DisplayName));
+    }
+
+    [Fact]
     public void SharedOnly_excludes_own_and_unknown_smtp()
     {
         var all = StoreCatalog.Filter([

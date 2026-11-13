@@ -44,7 +44,7 @@ public class OutlookMailLiveTests
 
     private static dynamic Table(dynamic inbox, string filter, EventTimeField field, string? sort = null, bool desc = false)
     {
-        dynamic table = inbox.GetTable(filter, 1);
+        dynamic table = inbox.GetTable(filter, 0);
         dynamic cols = table.Columns;
         try
         {
@@ -74,6 +74,7 @@ public class OutlookMailLiveTests
             var t1 = Table(inbox, DaslFilter.Since(EventTimeField.Received, since), EventTimeField.Received);
             List<object?[]> rowsA;
             try { rowsA = ReadRows(t1); } finally { Marshal.ReleaseComObject(t1); }
+            if (rowsA.Count == 0) Assert.Skip("No mail in the Inbox in the last 30 days.");
             var a = MailTableQueries.EntryIds(rowsA, since).Select(s => s.EntryId).ToHashSet();
 
             var t2 = Table(inbox, "@SQL=\"" + MailTable.MessageClassProp + "\" LIKE 'IPM.Note%'", EventTimeField.Received,
