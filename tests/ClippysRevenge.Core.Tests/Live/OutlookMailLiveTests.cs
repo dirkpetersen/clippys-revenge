@@ -1,12 +1,13 @@
 using System.Runtime.InteropServices;
 using ClippysRevenge.Core;
 
-namespace ClippysRevenge.Core.Tests;
+namespace ClippysRevenge.Core.Tests.Live;
 
 /// <summary>Read-only live checks (SPEC §15). Run only with CLIPPY_LIVE=1 and Outlook running. Never writes anything.</summary>
+[Collection(LiveOutlookCollection.Name)]
 [Trait("live", "outlook")]
 [Trait("os", "windows")]
-public class OutlookMailLiveTests
+public sealed class OutlookMailLiveTests(LiveOutlook fx)
 {
     [DllImport("ole32.dll", CharSet = CharSet.Unicode)]
     private static extern int CLSIDFromProgID(string progId, out Guid clsid);
@@ -14,13 +15,8 @@ public class OutlookMailLiveTests
     [DllImport("oleaut32.dll")]
     private static extern int GetActiveObject(ref Guid clsid, IntPtr reserved, [MarshalAs(UnmanagedType.IUnknown)] out object? obj);
 
-    private static void RequireLive() =>
-        Assert.SkipUnless(OperatingSystem.IsWindows() && Environment.GetEnvironmentVariable("CLIPPY_LIVE") == "1",
-            "Set CLIPPY_LIVE=1 with Outlook running.");
-
     private static dynamic AttachOrSkip()
     {
-        RequireLive();
         if (CLSIDFromProgID("Outlook.Application", out var clsid) != 0) Assert.Skip("Outlook is not registered.");
         if (GetActiveObject(ref clsid, IntPtr.Zero, out var obj) != 0 || obj is null) Assert.Skip("Outlook is not running.");
         return obj;
@@ -59,9 +55,10 @@ public class OutlookMailLiveTests
         return table;
     }
 
-    [Fact]
-    public void Dasl_helper_parses_in_this_locale()
+    [Fact(Timeout = 180_000)]
+    public async Task Dasl_helper_parses_in_this_locale()
     {
+        await fx.RequireReadyAsync(TestContext.Current.CancellationToken);
         var app = AttachOrSkip();
         dynamic? session = null, inbox = null;
         try
@@ -119,9 +116,10 @@ public class OutlookMailLiveTests
         return row;
     }
 
-    [Fact]
-    public void Table_dates_are_utc()
+    [Fact(Timeout = 180_000)]
+    public async Task Table_dates_are_utc()
     {
+        await fx.RequireReadyAsync(TestContext.Current.CancellationToken);
         var app = AttachOrSkip();
         dynamic? session = null, inbox = null;
         try
@@ -161,9 +159,10 @@ public class OutlookMailLiveTests
         }
     }
 
-    [Fact]
-    public void Sort_keys_are_accepted()
+    [Fact(Timeout = 180_000)]
+    public async Task Sort_keys_are_accepted()
     {
+        await fx.RequireReadyAsync(TestContext.Current.CancellationToken);
         var app = AttachOrSkip();
         dynamic? session = null, inbox = null;
         try
