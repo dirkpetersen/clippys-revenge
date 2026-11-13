@@ -133,7 +133,18 @@ internal static class Program
             sync is null ? null : sync.SyncNow,
             sync is null ? null : () => { if (sync.IsPaused) sync.Resume(); else sync.Pause(); },
             sync is null ? null : m => sync.RebuildAsync(m),
-            () => worker.RunAsync(app => stores.List(app), WorkPriority.Interactive),
+            async () =>
+            {
+                try
+                {
+                    await stores.EnsureResolvedAsync(WorkPriority.Interactive, CancellationToken.None, includeUnconfigured: true);
+                }
+                catch (OutlookNotRespondingException)
+                {
+                    // Lookups that time out are recorded; list what is known.
+                }
+                return await worker.RunAsync(app => stores.List(app), WorkPriority.Interactive);
+            },
             indexes is null || sync is null ? null : new SharedMailboxToggler(settings, indexes, store.Save, sync.NotifySettingsChanged),
             tab => new SettingsForm(new SettingsFormServices(
                 () => settings, tokens,

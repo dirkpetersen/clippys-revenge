@@ -589,6 +589,19 @@ internal sealed class SettingsForm : Form
 
     // ---- mailbox add / remove / rebuild ----
 
+    private async Task<IReadOnlyList<MailboxStore>> ListWithResolveAsync()
+    {
+        try
+        {
+            await _s.Stores.EnsureResolvedAsync(WorkPriority.Interactive, _cts.Token, includeUnconfigured: true);
+        }
+        catch (OutlookNotRespondingException)
+        {
+            // Timed-out lookups are recorded; list what is known.
+        }
+        return await _s.Worker.RunAsync(app => _s.Stores.List(app), WorkPriority.Interactive, _cts.Token);
+    }
+
     private async void OpenAddMenu()
     {
         _addMenu.Items.Clear();
@@ -603,8 +616,7 @@ internal sealed class SettingsForm : Form
             }
             else
             {
-                var stores = await _s.Worker.RunAsync(app => _s.Stores.List(app), WorkPriority.Interactive, _cts.Token)
-                    .WaitAsync(ComLimit, _cts.Token);
+                var stores = await ListWithResolveAsync().WaitAsync(ComLimit, _cts.Token);
                 var enabled = _editor.MailboxChoices().Select(c => c.Key).ToHashSet(StringComparer.Ordinal);
                 foreach (var m in StoreCatalog.SharedOnly(stores))
                 {
