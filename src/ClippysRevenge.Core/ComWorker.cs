@@ -736,8 +736,7 @@ public class ComWorker<TApp> : IDisposable where TApp : class
             return;
         }
 
-        hungItem?.Fail(new OutlookNotRespondingException());
-        hungWaiting?.Fail(new OutlookNotRespondingException());
+        // State, hub event and log first, so a caller woken by the failure below sees them.
         SetState(OutlookConnectionState.NotResponding);
 
         var seconds = timeout.TotalSeconds.ToString("0.#", CultureInfo.InvariantCulture);
@@ -752,6 +751,8 @@ public class ComWorker<TApp> : IDisposable where TApp : class
         }
         _log?.LogWarning("{Text} (kind {Kind}, {Abandoned} abandoned thread(s)).", text, kind, abandonedNow);
 
+        hungItem?.Fail(new OutlookNotRespondingException());
+        hungWaiting?.Fail(new OutlookNotRespondingException());
         Lane? replacement = null;
         lock (_lock)
         {
