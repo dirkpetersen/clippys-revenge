@@ -95,7 +95,7 @@ v0.0.1 release.
 ## M10 Ship — deps: everything above
 - Review: [ ] pending
 - [x] M10.1 Safety source-scan test (one `.Send(`, no Outlook launch calls) `{arch:skip}`
-- [x] M10.2 Live tests (`[Trait("live","outlook")]`), run once by the user with `CLIPPY_LIVE=1` `{arch:brief}` (code done 2f7cfbd; user run pending: `powershell -NoProfile -File scripts\run-live-tests.ps1`)
+- [x] M10.2 Live tests (`[Trait("live","outlook")]`), run once by the user with `CLIPPY_LIVE=1` `{arch:brief}` (code done 2f7cfbd; user run 2026-11-13: 27 passed, 3 skipped (no shared mailbox), 0 failed)
 - [x] M10.3 `install.ps1` (install, Start menu shortcut, `-Uninstall`) and README (install, WSL mirrored networking, security model, index at rest) `{arch:skip}`
 - [~] M10.4 Final review of the whole branch by `reviewer`, CI green on the PR, then hand to the user to merge (→ v0.0.1 release) `{arch:skip}`
 
@@ -113,7 +113,7 @@ v0.0.1 release.
 - M6 review: `NotifySettingsChanged` cancels the running cycle on every settings change (should only for RetentionMonths); own-mailbox tag is `""` in sync events but `null` in reconcile/retention events; `RebuildAsync` may run `Reset` on the UI thread; no engine-level reconcile test.
 - M7 review: duplicate search-filter mapping (`MailQueries.Search` vs `SearchArgs.ToFilter`); duplicated mailbox validation in CreateDraft/ReplyDraft; `index_status` with `all`/unknown mailbox throws; `Optional<T>` and reply-draft Move-before-Save need SPEC §3/§8 notes.
 - M8 review: `list_events` `truncated` true at exactly 500; shared organizer name should fall back to store display name; `owner.Resolve()` result ignored; `InviteConfirmPresenter` leaks form if Show throws.
-- **Verify live (M10.2):** `CalendarEvents` builds DASL dtstart/dtend in local time; Outlook may compare in UTC (would shift the list_events window).
+- ~~Verify live (M10.2): calendar DASL local vs UTC~~ resolved: Outlook compares in UTC; fixed in 8ac84bc.
 - Flaky: `ComWorkerTests.StartsUnavailableAndFailsFast` failed 3/3 once on chain/A, passed after a clean rebuild. Investigate in M10.1.
 
 - M9 review (non-blocking): ComWorker Tick/AbandonedExit race window when a hung call returns; interactive `LookupOwnerSmtp` timeout counts queue wait; an item dequeued near its deadline can flip the worker to NotResponding; `SharedMailboxToggler` waits on `Settings.Gate` on the UI thread (blocks during a port-change restart); log files get a UTF-8 BOM; `ConnectionTester` may leave MCP sessions open.
@@ -140,3 +140,6 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-12 Smoke test vs cached Outlook: auth OK (401 no token, 401 Origin, 200 token), loopback-only bind, 10 tools listed; sync indexed 0 emails, list_events hung 180 s, no log file; Outlook itself then showed Not Responding. Added M9.4, M9.5.
 2026-11-12 M9.1–M9.6, M10.1, M10.3 built in parallel; M9 review approved after fixes; merged to dev, 1776 tests, ComWorker tests 5/5 runs green
 2026-11-12 M10.2 live suite (30 tests, skip without CLIPPY_LIVE) + runner merged; 1780 tests; M10.4 final review started
+2026-11-13 M10.4 final review fixes merged (ec9d88c, 3a6bd12); app smoke test vs cached Outlook OK (attach, backfill, search_emails, get_message, list_events 1.6 s, sender SMTP 50/50)
+2026-11-13 Live run 1: 23 passed, 4 failed -> fixed calendar DASL in UTC + free/busy code 5 (8ac84bc), long-term table EntryIDs (a264667), attachment test folder clash (89706dd); 1788 tests
+2026-11-13 Live run 2: 27 passed, 3 skipped (shared mailbox), 0 failed; PR dev -> main opened
