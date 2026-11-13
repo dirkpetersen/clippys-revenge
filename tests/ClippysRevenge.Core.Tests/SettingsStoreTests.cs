@@ -72,8 +72,7 @@ public sealed class SettingsStoreTests : IDisposable
         s.SaveApiKey(Key);
         var before = File.ReadAllBytes(s.ApiKeyPath);
         var ex = Assert.Throws<ArgumentException>(() => s.SaveApiKey(input));
-        Assert.StartsWith(message, ex.Message);
-        Assert.Equal("apiKey", ex.ParamName);
+        Assert.Equal(message, ex.Message);
         Assert.Equal(before, File.ReadAllBytes(s.ApiKeyPath));
     }
 

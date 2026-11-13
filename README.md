@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <img src="docs/assets/logo.svg" alt="Clippy's Revenge: a paperclip wrestling an envelope" width="300">
 </p>
 

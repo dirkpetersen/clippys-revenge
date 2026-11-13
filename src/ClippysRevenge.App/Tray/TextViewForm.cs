@@ -3,6 +3,14 @@ namespace ClippysRevenge.App.Tray;
 /// <summary>A read-only text window (Settings → AI drafts → View).</summary>
 internal sealed class TextViewForm : Form
 {
+    private readonly Font _font = new("Consolas", 9f);
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _font.Dispose();
+        base.Dispose(disposing);
+    }
+
     public TextViewForm(string title, string text)
     {
         Text = title;
@@ -19,7 +27,7 @@ internal sealed class TextViewForm : Form
             WordWrap = true,
             ScrollBars = ScrollBars.Vertical,
             Dock = DockStyle.Fill,
-            Font = new Font("Consolas", 9f),
+            Font = _font,
             Text = (text ?? "").Replace("\r\n", "\n").Replace("\n", "\r\n"),
         };
         Controls.Add(box);

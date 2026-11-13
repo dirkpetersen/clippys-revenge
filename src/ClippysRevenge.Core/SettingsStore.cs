@@ -178,9 +178,9 @@ public sealed class SettingsStore
         }
         var key = apiKey.Trim();
         if (key.Length == 0)
-            throw new ArgumentException("The API key is empty.", nameof(apiKey));
+            throw new ArgumentException("The API key is empty.");
         if (!IsValidApiKeyFormat(key))
-            throw new ArgumentException("The API key must be a single line without spaces.", nameof(apiKey));
+            throw new ArgumentException("The API key must be a single line without spaces.");
         Directory.CreateDirectory(DataDir);
         WriteAtomic(ApiKeyPath, _protector.Protect(Encoding.UTF8.GetBytes(key)));
         Volatile.Write(ref _cachedApiKey, key);

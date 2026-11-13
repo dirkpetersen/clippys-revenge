@@ -398,6 +398,14 @@ internal sealed class TrayApp : ApplicationContext
         {
             _s.Balloons.PostUserFeedback(AiMenuTexts.ToggleFailed(ex.Message));
         }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            // Type only: the message could carry paths or other text we don't want in a balloon.
+            _s.Balloons.PostUserFeedback(AiMenuTexts.ToggleFailed("something went wrong (" + ex.GetType().Name + ")"));
+        }
         finally
         {
             Interlocked.Exchange(ref _aiBusy, 0);

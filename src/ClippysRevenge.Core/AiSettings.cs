@@ -43,6 +43,10 @@ public sealed partial class AiDraftingSettings
     [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9._\[\]-]*\z")]
     private static partial Regex ModelRegex();
 
+    /// <summary>The one model-name rule (settings validation and CLI arguments).</summary>
+    internal static bool IsValidModelName(string? model) =>
+        model is not null && model.Length > 0 && model.Length <= MaxModelLength && ModelRegex().IsMatch(model);
+
     /// <summary>Sets ConsentedAtUtc to nowUtc (converted to UTC) when it is null. Never changes or clears an existing value.</summary>
     public void RecordConsent(DateTimeOffset nowUtc) => ConsentedAtUtc ??= nowUtc.ToUniversalTime();
 
@@ -81,7 +85,7 @@ public sealed partial class AiDraftingSettings
 
         if (Enabled && ConsentedAtUtc is null) Add("Enabled", ConsentRequiredMessage);
         if (!Enum.IsDefined(Backend)) Add("Backend", "Must be ClaudeCode or ApiKey.");
-        if (Model is null || Model.Length == 0 || Model.Length > MaxModelLength || !ModelRegex().IsMatch(Model))
+        if (!IsValidModelName(Model))
             Add("Model", "Must be a model name like claude-opus-5-5: up to 64 letters, digits, '.', '_', '-', '[' or ']', starting with a letter.");
         if (Effort is null || !Efforts.Contains(Effort, StringComparer.Ordinal))
             Add("Effort", "Must be low, medium, high, xhigh or max.");
@@ -99,6 +103,7 @@ public sealed partial class AiDraftingSettings
             var path = ClaudeCliPath.Trim();
             var pathError = Settings.PathError(path);
             if (pathError is not null) Add("ClaudeCliPath", pathError);
+            else if (path.Contains('/')) Add("ClaudeCliPath", "Use backslashes in the Claude Code path.");
             else
             {
                 var ext = Path.GetExtension(path);

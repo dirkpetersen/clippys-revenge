@@ -636,6 +636,7 @@ public static class StyleTexts
     public const string BadAnswer = "Claude's answer wasn't usable";
     public const string SaveFailed = "couldn't save the skill file";
     public const string IndexFailed = "couldn't read the index";
+    public const string CorpusFailed = "couldn't prepare your sent emails";
 
     public static string CallFailed(ModelFailure kind) => "a Claude call failed (" + kind + ")";
 
@@ -854,7 +855,17 @@ public sealed class StyleSkill
         }
 
         var sigs = SafeSignatures();
-        var corpus = StyleCorpus.Build(rows, owner.Email, now, StyleCorpus.WeekSeed(now), sigs);
+        StyleCorpusResult corpus;
+        try
+        {
+            corpus = StyleCorpus.Build(rows, owner.Email, now, StyleCorpus.WeekSeed(now), sigs);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Any failure here must record a failure (and so the 24 h retry), not repeat every pass.
+            _logger?.LogWarning("Writing style: preparing the sent emails failed ({Type})", ex.GetType().Name);
+            return Fail(StyleTexts.CorpusFailed, ex.GetType().Name);
+        }
         if (corpus is StyleCorpusResult.TooSmall small)
         {
             _activity.Event(ActivityKind.Ai, StyleTexts.TooFewEvent(small.Found), null, null);
@@ -863,7 +874,17 @@ public sealed class StyleSkill
         var built = (StyleCorpusResult.Built)corpus;
         setSamples(built.Samples.Count);
 
-        var result = await _model().RunAsync(StylePrompt.Request(built, s, now, _time.LocalTimeZone), ct).ConfigureAwait(false);
+        ModelRequest request;
+        try
+        {
+            request = StylePrompt.Request(built, s, now, _time.LocalTimeZone);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger?.LogWarning("Writing style: building the prompt failed ({Type})", ex.GetType().Name);
+            return Fail(StyleTexts.CorpusFailed, ex.GetType().Name);
+        }
+        var result = await _model().RunAsync(request, ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
 
         string? body = null;

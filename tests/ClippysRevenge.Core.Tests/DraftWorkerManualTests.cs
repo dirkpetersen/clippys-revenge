@@ -99,6 +99,16 @@ public class DraftWorkerManualTests
     }
 
     [Fact]
+    public async Task Shared_mailbox_without_an_open_index_fails_instead_of_using_the_own_index()
+    {
+        using var h = Make();
+        h.Mailbox.Live = h.Mailbox.Live! with { Mailbox = "shared-not-indexed@example.org" };
+        var r = await h.Worker.DraftSelectedAsync(Ct);
+        Assert.Equal(new ManualDraftResult(false, DraftTexts.ManualNotIndexed), r);
+        Assert.Empty(h.Writer.Plans);
+        Assert.Null(h.Decision("E1"));
+    }
+    [Fact]
     public async Task Rate_limited_sets_backoff_for_automatic_passes_only()
     {
         using var h = Make();

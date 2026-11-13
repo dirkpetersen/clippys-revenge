@@ -188,7 +188,8 @@ public sealed class SyncEngine
             }
             catch (Exception ex) when (ex is not OperationCanceledException and not MailSourceUnavailableException)
             {
-                _log?.LogWarning(ex, "Thread data refresh of folder {Folder} failed.", run.Path);
+                _log?.LogWarning("Thread data refresh of folder {Folder} failed ({Type}, HResult {HResult}).",
+                    run.Path, ex.GetType().Name, ex is System.Runtime.InteropServices.COMException ? ex.HResult : 0);
                 done = false;
             }
             if (!done) allDone = false;

@@ -367,6 +367,15 @@ internal sealed partial class SettingsForm
         catch (OperationCanceledException)
         {
         }
+        catch (Exception)
+        {
+            // Fixed text only: no exception message in the UI.
+            if (!IsDisposed)
+            {
+                _aiStatus.Text = AiTabTexts.CheckFailed;
+                _aiStatus.ForeColor = Color.Firebrick;
+            }
+        }
         finally
         {
             _aiChecking = false;
@@ -386,7 +395,7 @@ internal sealed partial class SettingsForm
             text = saved ? AiTabTexts.KeySaved : AiTabTexts.NoKeySaved;
             enableRemove = saved;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException)
+        catch (Exception)
         {
             text = AiTabTexts.KeyUnreadable;
             enableRemove = true;
@@ -411,7 +420,12 @@ internal sealed partial class SettingsForm
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or CryptographicException)
         {
+            // SaveApiKey's own messages never contain the key (SettingsStore tests assert it).
             if (!IsDisposed) _status.Text = AiTabTexts.KeySaveFailed(ex.Message);
+        }
+        catch (Exception)
+        {
+            if (!IsDisposed) _status.Text = AiTabTexts.KeySaveFailed("something went wrong");
         }
         text = null;
         if (IsDisposed) return;

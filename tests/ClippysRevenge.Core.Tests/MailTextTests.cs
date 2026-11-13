@@ -200,4 +200,32 @@ public class MailTextTests
     [InlineData(null)]
     [InlineData("")]
     public void Headers_null_or_empty(string? input) => Assert.Empty(MailText.Headers(input));
+
+    public static TheoryData<string> AdversarialInputs => new()
+    {
+        string.Concat(Enumerable.Repeat("1234 5678-", 3000)),
+        string.Concat(Enumerable.Repeat("+1 (", 7500)),
+        string.Concat(Enumerable.Repeat("a@", 15000)),
+        string.Concat(Enumerable.Repeat("http", 7500)),
+        string.Concat(Enumerable.Repeat("http://a.b/(", 2500)),
+        string.Concat(Enumerable.Repeat("> quoted line\n", 2200)),
+        string.Concat(Enumerable.Repeat(">", 30000)),
+        "On " + new string('x', 30000) + " wrote:",
+        "On Mon, " + string.Concat(Enumerable.Repeat("Ann <a@b.c>, ", 2300)) + "\nwrote",
+        string.Concat(Enumerable.Repeat("From: x\r\n", 3300)),
+    };
+
+    [Theory]
+    [MemberData(nameof(AdversarialInputs))]
+    public void Adversarial_input_finishes_without_regex_timeout(string input)
+    {
+        var sw = Stopwatch.StartNew();
+        var own = Record.Exception(() => MailText.OwnText(input));
+        var red = Record.Exception(() => MailText.Redact(input));
+        Assert.IsNotType<System.Text.RegularExpressions.RegexMatchTimeoutException>(own);
+        Assert.IsNotType<System.Text.RegularExpressions.RegexMatchTimeoutException>(red);
+        Assert.Null(own);
+        Assert.Null(red);
+        Assert.True(sw.Elapsed < PerfLimit, sw.Elapsed.ToString());
+    }
 }

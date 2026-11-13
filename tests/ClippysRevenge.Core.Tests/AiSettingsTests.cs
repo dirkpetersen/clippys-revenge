@@ -203,6 +203,11 @@ public class AiSettingsTests
             Errors(a => a.ClaudeCliPath = Tmp(name)));
 
     [Fact]
+    public void ClaudeCliPath_ForwardSlashRejected() =>
+        Assert.Equal([new SettingsError("AiDrafting.ClaudeCliPath", "Use backslashes in the Claude Code path.")],
+            Errors(a => a.ClaudeCliPath = @"C:/Users/you/claude.exe"));
+
+    [Fact]
     public void ClaudeCliPath_PathErrors()
     {
         Assert.Equal([new SettingsError("AiDrafting.ClaudeCliPath", @"Must be a full path, like C:\Users\you\Documents.")],

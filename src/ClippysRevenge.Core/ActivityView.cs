@@ -45,7 +45,7 @@ public static class ActivityView
             }
             return new ActivityHeader(text, false, 0, "");
         }
-        if (state !=ActivityState.Idle && label.Length > 0)
+        if (state != ActivityState.Idle && label.Length > 0)
         {
             text += ": " + label;
         }

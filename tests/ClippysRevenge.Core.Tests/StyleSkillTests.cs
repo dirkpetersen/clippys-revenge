@@ -368,6 +368,30 @@ public class StyleSkillTests : IDisposable
         Assert.Equal(2, _model.Requests.Count);
     }
 
+    private sealed class ThrowingList : IReadOnlyList<string>
+    {
+        public int Count => 1;
+        public string this[int index] => throw new InvalidOperationException("boom");
+        public IEnumerator<string> GetEnumerator() => throw new InvalidOperationException("boom");
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    [Fact]
+    public async Task Automatic_corpus_exception_records_failure_and_backs_off_for_24_hours()
+    {
+        Add(30);
+        _sigs = new ThrowingList();
+        var r = await _skill.RunIfDueAsync(Owner, Ct);
+        Assert.Equal(StyleTexts.CorpusFailed, Assert.IsType<StyleRunResult.Failed>(r).Reason);
+        Assert.Single(AiEvents());
+        Assert.Empty(_model.Requests);
+        _sigs = [];
+        _time.Advance(TimeSpan.FromHours(23));
+        Assert.IsType<StyleRunResult.NotDue>(await _skill.RunIfDueAsync(Owner, Ct));
+        _time.Advance(TimeSpan.FromHours(1));
+        Assert.IsType<StyleRunResult.Updated>(await _skill.RunIfDueAsync(Owner, Ct));
+    }
+
     [Fact]
     public async Task Automatic_runs_with_only_an_app_copy()
     {

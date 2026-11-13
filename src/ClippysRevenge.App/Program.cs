@@ -106,7 +106,20 @@ internal static class Program
             sync = new SyncService(mailSource, indexes, () => settings, hub, balloons,
                 logger: loggerFactory.CreateLogger<SyncService>(), reconcile: mailSource);
 
-            // AI drafting (SPEC 19). Needs the index, so there is no worker when the index failed to open.
+            replyWriter = new OutlookReplyDraftWriter(worker, mail, stores, loggerFactory.CreateLogger<OutlookReplyDraftWriter>());
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "The email index could not be opened.");
+            indexErrorScope = hub.Begin(ActivityState.Error, "index can't be opened");
+        }
+
+        // AI drafting (SPEC 19). Needs the index, so there is no worker when the index failed to open.
+        // A failure here is not an index failure: AI stays off and the rest of the app runs.
+        if (indexes is not null && mail is not null && sync is not null && replyWriter is not null)
+        {
+            try
+            {
             var cliRunner = new ClaudeCliRunner(Path.Combine(localDir, ClaudeCliRunner.WorkDirName),
                 logger: loggerFactory.CreateLogger<ClaudeCliRunner>());
             cliRunner.CleanupStaleFiles();   // SPEC 19.3 start-up cleanup
@@ -115,7 +128,6 @@ internal static class Program
             apiModel = new AnthropicApiModel(() => settings.AiDrafting, store.LoadApiKey,
                 logger: loggerFactory.CreateLogger<AnthropicApiModel>());
             draftModel = new DraftModelSwitch(() => settings.AiDrafting, cliModel, apiModel);
-            replyWriter = new OutlookReplyDraftWriter(worker, mail, stores, loggerFactory.CreateLogger<OutlookReplyDraftWriter>());
             aiMailbox = new OutlookAiMailbox(worker, mail, stores, loggerFactory.CreateLogger<OutlookAiMailbox>());
             var syncRef = sync;
             var indexesRef = indexes;
@@ -136,11 +148,15 @@ internal static class Program
                 Logger: loggerFactory.CreateLogger<DraftWorker>()));
             var draftsRef = drafts;
             sync.CycleCompleted += _ => draftsRef.Wake();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "The email index could not be opened.");
-            indexErrorScope = hub.Begin(ActivityState.Error, "index can't be opened");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError("AI drafting could not be set up ({ExceptionType}).", ex.GetType().Name);
+                drafts = null;
+                aiMailbox = null;
+                draftModel = null;
+                styleSkill = null;
+            }
         }
 
         // After Outlook stops hanging, resume sync at once instead of waiting for the next interval (SPEC 4).
@@ -167,7 +183,7 @@ internal static class Program
             : new AiTrayServices(drafts.DraftSelectedAsync, aiMailbox.ShowDraftsAsync, aiToggler, aiChecker);
         var aiMailboxForUi = aiMailbox;
         var indexesForUi = indexes;
-        var aiSettings = new AiSettingsServices(aiToggler, () => store.LoadApiKey() is not null, store.SaveApiKey,
+        var aiSettings = new AiSettingsServices(aiToggler, () => store.LoadApiKey() is { } k && SettingsStore.IsValidApiKeyFormat(k), store.SaveApiKey,
             TrayApp.ShellOpen, aiChecker, styleSkill,
             aiMailboxForUi is null || indexesForUi is null ? null
                 : ct => AiOwner.ResolveAsync(aiMailboxForUi, indexesForUi, WorkPriority.Interactive, ct),

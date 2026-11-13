@@ -14,7 +14,7 @@ little as possible and to keep that access on your PC.
 - **Never starts Outlook** on its own. It attaches to a running Outlook. The
   tray's **Start Outlook** item, which you click yourself, is the only exception.
 - **Never uses the cloud.** No Microsoft Graph, no Entra app registrations, no
-  OAuth. Nothing leaves your PC except what Claude Code itself sends to its model.
+  OAuth. Nothing leaves your PC except what Claude Code sends to its model and, while AI drafts are on, what Clippy sends to Anthropic (see [AI drafts data flow](#ai-drafts-data-flow)).
 - **Never indexes attachment contents.** Only file names.
 - **Never touches your Claude credentials.** [AI drafts](ai-drafts.md) run your own signed-in Claude Code, or an API key you type in. Clippy never reads Claude Code's stored sign-in.
 
@@ -27,7 +27,7 @@ little as possible and to keep that access on your PC.
   comparison is constant-time. Requests without a valid token get an empty `401`.
 - **Token storage.** The token is stored encrypted with Windows DPAPI for your
   Windows user, in `%APPDATA%\ClippysRevenge\token.bin`. It is never written to
-  `settings.json` or to logs. Regenerate it any time from the tray.
+  `settings.json` or to logs. Regenerate it any time from the tray. If you save an Anthropic API key for AI drafts, it is stored the same way (DPAPI-encrypted) in `%APPDATA%\ClippysRevenge\anthropic-key.bin`; the file exists only if you save a key.
 - **Browsers are blocked.** Any request with an `Origin` header gets a `401`, so a
   web page can't call the server, even from your own PC.
 - **No OAuth prompts.** The `401` carries no `WWW-Authenticate` header, so MCP
@@ -96,7 +96,7 @@ before you send them, and read the invite dialog before you click **Send**.
 ## Logs
 
 Logs are in `%LOCALAPPDATA%\ClippysRevenge\logs` and kept for 7 days. They contain
-tool names, counts and errors. The token is redacted, and mail bodies and search
+tool names, counts and errors. The token, the saved API key and any `sk-ant-…` or `Bearer …` text are masked, and mail bodies and search
 text are not logged. Activity events show subjects and counts only.
 
 ## Unsigned executable

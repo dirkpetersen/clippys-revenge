@@ -145,9 +145,6 @@ public sealed class ClaudeCliLocator
 /// <summary>The only place that builds Claude CLI arguments (SPEC 19.3).</summary>
 public static class ClaudeCliArgs
 {
-    private static readonly Regex ModelRegex = new(@"^[A-Za-z][A-Za-z0-9._\[\]-]*\z",
-        RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-
     public static IReadOnlyList<string> Version { get; } = ["--version"];
     public static IReadOnlyList<string> Help { get; } = ["--help"];
     public static IReadOnlyList<string> AuthStatus { get; } = ["auth", "status", "--json"];
@@ -173,18 +170,7 @@ public static class ClaudeCliArgs
         }
     }
 
-    internal static bool IsValidModel(string? model)
-    {
-        if (model is null || model.Length == 0 || model.Length > AiDraftingSettings.MaxModelLength) return false;
-        try
-        {
-            return ModelRegex.IsMatch(model);
-        }
-        catch (RegexMatchTimeoutException)
-        {
-            return false;
-        }
-    }
+    internal static bool IsValidModel(string? model) => AiDraftingSettings.IsValidModelName(model);
 
     internal static bool IsValidEffort(string? effort) =>
         effort is not null && AiDraftingSettings.Efforts.Contains(effort, StringComparer.Ordinal);

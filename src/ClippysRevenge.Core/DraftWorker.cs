@@ -73,6 +73,7 @@ public static class DraftTexts
     public const string ManualDone = "It looks like you want a reply. It's in your Drafts folder.";
     public const string ManualNoSelection = "Select one email in Outlook first.";
     public const string ManualNotInMailbox = "That email isn't in your mailbox or an enabled shared mailbox.";
+    public const string ManualNotIndexed = "That mailbox isn't indexed yet.";
     public const string ManualUnexpected = "something went wrong while talking to Outlook or Claude";
     public const string NotSignedInScope = "AI drafts: Claude isn't signed in";
     public const string SaveFailed = "AI drafts: a reply draft couldn't be saved in Outlook. I'll try again later.";
@@ -201,6 +202,28 @@ public sealed class DraftWorker : BackgroundService
             }
         }
         return total;
+    }
+
+    /// <summary>True when today's model calls reached the cap. Fails closed: an index that throws counts as "reached"
+    /// (the Settings display still treats it as 0).</summary>
+    private bool CapReached(int cap)
+    {
+        var start = LocalMidnightUtc(_time.GetUtcNow());
+        var total = 0;
+        foreach (var key in _s.Indexes.Mailboxes)
+        {
+            try
+            {
+                total += _s.Indexes.For(key).ModelCallsSince(start);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning("AI drafts: couldn't count today's model calls; treating the limit as reached ({Type}).",
+                    ex.GetType().Name);
+                return true;
+            }
+        }
+        return total >= cap;
     }
 
     /// <summary>Calls = ModelCallsToday(). Drafts = sum of DraftsCreatedSince(local midnight) over every open index
@@ -557,7 +580,7 @@ public sealed class DraftWorker : BackgroundService
 
         // 3. Daily limit.
         var now = _time.GetUtcNow();
-        if (ModelCallsToday() >= ai.DailyCap)
+        if (CapReached(ai.DailyCap))
         {
             var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, _s.Zone).DateTime);
             if (_limitReportedDay != today)
@@ -799,7 +822,7 @@ public sealed class DraftWorker : BackgroundService
 
         var status = await _s.Model.CheckAsync(ct).ConfigureAwait(false);
         if (!status.Ready) return Fail(DraftTexts.ManualNotReady(status.Text));
-        if (ModelCallsToday() >= ai.DailyCap) return Fail(DraftTexts.ManualLimit(ai.DailyCap));
+        if (CapReached(ai.DailyCap)) return Fail(DraftTexts.ManualLimit(ai.DailyCap));
 
         Interlocked.Increment(ref _yield);
         try
@@ -816,6 +839,8 @@ public sealed class DraftWorker : BackgroundService
         IDisposable? scope = null;
         try
         {
+            // The early check above only gives a fast answer; the pass may have used the cap while we waited.
+            if (CapReached(ai.DailyCap)) return Fail(DraftTexts.ManualLimit(ai.DailyCap));
             scope = _s.Hub.Begin(ActivityState.Drafting, ActivityHub.DraftingLabel);
             _s.Hub.Report(ActivityState.Drafting, 0, 1);
             return await ManualCoreAsync(live, ct).ConfigureAwait(false);
@@ -850,8 +875,8 @@ public sealed class DraftWorker : BackgroundService
         try { index = _s.Indexes.For(key); }
         catch (McpException)
         {
-            key = MailboxIndexes.OwnMailbox;
-            index = _s.Indexes.For(key);
+            // Never fall back to the own index: the decision row would land in the wrong mailbox's index.
+            return new ManualDraftResult(false, DraftTexts.ManualNotIndexed);
         }
 
         var e = live.Email;
@@ -933,7 +958,15 @@ public sealed class DraftWorker : BackgroundService
 
         if (made is not null)
         {
-            WriteManualRow(index, e, prior, made, now, confidence);
+            try
+            {
+                WriteManualRow(index, e, prior, made, now, confidence);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // The draft exists; a failed bookkeeping row must not turn that into a failure.
+                _log?.LogWarning("AI drafts: couldn't record the manual draft ({Type}).", ex.GetType().Name);
+            }
             _s.Hub.Event(ActivityKind.Draft, DraftTexts.DraftCreated(made.Subject),
                 mailbox: string.IsNullOrEmpty(made.Mailbox) ? null : made.Mailbox);
             return new ManualDraftResult(true, text);
