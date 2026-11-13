@@ -85,17 +85,18 @@ v0.0.1 release.
 - [x] M8.4 `CreateMeeting` + `send_meeting_invite` (all modes, Teams note, shared calendar) `{arch:brief}`
 
 ## M9 UI completion (SPEC §6) — deps: M6, M8.3
-- Review: [ ] pending
-- [ ] M9.1 Shared mailboxes submenu (check / uncheck with delete prompt / not-in-Outlook entries) `{arch:skip}`
-- [ ] M9.2 `SettingsForm` (all tabs, validation messages, Test connection via `initialize`) `{arch:brief}`
-- [ ] M9.3 `ActivityForm` (progress, filters, copy) `{arch:skip}`
-- [ ] M9.4 Rolling file log: `Microsoft.Extensions.Logging` to `%LOCALAPPDATA%\ClippysRevenge\logs\clippy-YYYYMMDD.log`, 7 days kept, level from `LogLevel` setting; never the token, bodies or search text (SPEC §2, §5.1, §6.4). Found missing in the 2026-11-12 smoke test: no task built it. `{arch:skip}`
-- [ ] M9.5 COM call watchdog: a single hung Outlook call must not block the worker forever. Interactive calls fail fast with an actionable error after a timeout ("Outlook isn't responding…"), the tray shows it, and background work resumes when Outlook answers again. Also: avoid per-call GAL lookups (`GetExchangeUser().PrimarySmtpAddress`) in `OutlookStores.List`; cache per connection and prefer local properties. Needs a SPEC §4 change. `{arch:brief}`
+- Review: [x] done (edcfb50, approve after 2 fix rounds + 1 extra ordering fix; M9.6 added after the review, covered by M10.4)
+- [x] M9.1 Shared mailboxes submenu (check / uncheck with delete prompt / not-in-Outlook entries) `{arch:skip}`
+- [x] M9.2 `SettingsForm` (all tabs, validation messages, Test connection via `initialize`) `{arch:brief}`
+- [x] M9.3 `ActivityForm` (progress, filters, copy) `{arch:skip}`
+- [x] M9.4 Rolling file log: `Microsoft.Extensions.Logging` to `%LOCALAPPDATA%\ClippysRevenge\logs\clippy-YYYYMMDD.log`, 7 days kept, level from `LogLevel` setting; never the token, bodies or search text (SPEC §2, §5.1, §6.4). Found missing in the 2026-11-12 smoke test: no task built it. `{arch:skip}`
+- [x] M9.5 COM call watchdog: a single hung Outlook call must not block the worker forever. Interactive calls fail fast with an actionable error after a timeout ("Outlook isn't responding…"), the tray shows it, and background work resumes when Outlook answers again. Also: avoid per-call GAL lookups (`GetExchangeUser().PrimarySmtpAddress`) in `OutlookStores.List`; cache per connection and prefer local properties. Needs a SPEC §4 change. `{arch:brief}`
+- [x] M9.6 Offline-safe sender SMTP: in `OutlookMail` read paths (`ReadForIndex`, ~OutlookMail.cs:374/435) prefer `PR_SENDER_SMTP_ADDRESS` / `PR_SENT_REPRESENTING_SMTP_ADDRESS` via `PropertyAccessor` and only fall back to `GetExchangeUser()` (GAL) when empty, so a cached-mode offline sync doesn't hit the watchdog every cycle. SPEC §8. From the M9.5 brief and M9 review. `{arch:skip}`
 ## M10 Ship — deps: everything above
 - Review: [ ] pending
-- [ ] M10.1 Safety source-scan test (one `.Send(`, no Outlook launch calls) `{arch:skip}`
+- [x] M10.1 Safety source-scan test (one `.Send(`, no Outlook launch calls) `{arch:skip}`
 - [ ] M10.2 Live tests (`[Trait("live","outlook")]`), run once by the user with `CLIPPY_LIVE=1` `{arch:brief}`
-- [ ] M10.3 `install.ps1` (install, Start menu shortcut, `-Uninstall`) and README (install, WSL mirrored networking, security model, index at rest) `{arch:skip}`
+- [x] M10.3 `install.ps1` (install, Start menu shortcut, `-Uninstall`) and README (install, WSL mirrored networking, security model, index at rest) `{arch:skip}`
 - [ ] M10.4 Final review of the whole branch by `reviewer`, CI green on the PR, then hand to the user to merge (→ v0.0.1 release) `{arch:skip}`
 
 ## Carry-forward notes from reviews
@@ -115,6 +116,7 @@ v0.0.1 release.
 - **Verify live (M10.2):** `CalendarEvents` builds DASL dtstart/dtend in local time; Outlook may compare in UTC (would shift the list_events window).
 - Flaky: `ComWorkerTests.StartsUnavailableAndFailsFast` failed 3/3 once on chain/A, passed after a clean rebuild. Investigate in M10.1.
 
+- M9 review (non-blocking): ComWorker Tick/AbandonedExit race window when a hung call returns; interactive `LookupOwnerSmtp` timeout counts queue wait; an item dequeued near its deadline can flip the worker to NotResponding; `SharedMailboxToggler` waits on `Settings.Gate` on the UI thread (blocks during a port-change restart); log files get a UTF-8 BOM; `ConnectionTester` may leave MCP sessions open.
 ## Log
 
 Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
@@ -136,3 +138,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-12 M5.1 OutlookWorker: Core ComWorker + attach-only App attacher, Start Outlook launcher, 65 tests
 2026-11-12 M5.2–M8.4 built in 3 parallel tracks, M5/M6/M7/M8 reviews approved; merged to dev, 1618 tests
 2026-11-12 Smoke test vs cached Outlook: auth OK (401 no token, 401 Origin, 200 token), loopback-only bind, 10 tools listed; sync indexed 0 emails, list_events hung 180 s, no log file; Outlook itself then showed Not Responding. Added M9.4, M9.5.
+2026-11-12 M9.1–M9.6, M10.1, M10.3 built in parallel; M9 review approved after fixes; merged to dev, 1776 tests, ComWorker tests 5/5 runs green

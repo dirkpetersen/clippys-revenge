@@ -52,7 +52,7 @@ artwork.
 | Database | `Microsoft.Data.Sqlite` 10.0.x (bundled SQLite with FTS5) + `Dapper` |
 | Tray UI | WinForms `NotifyIcon` + `ContextMenuStrip`, plus three small forms |
 | Secrets | DPAPI (`ProtectedData`, `DataProtectionScope.CurrentUser`; comes with the Windows Desktop framework, no package) |
-| Logging | `Microsoft.Extensions.Logging` → rolling file + the in-memory activity feed |
+| Logging | `Microsoft.Extensions.Logging` → rolling file (§5.1, Core `RollingFileLoggerProvider`) + the in-memory activity feed |
 | Tests | xUnit v3 (`xunit.v3.mtp-off` + `xunit.runner.visualstudio`), run by VSTest `dotnet test`, so `--filter "live!=outlook"` works |
 | Packaging | `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true` |
 | CI / release | GitHub Actions (§16). The version lives in `Directory.Build.props` |
@@ -173,14 +173,17 @@ There is one process and three kinds of threads:
        `GetActiveObject` attacher, so everything except the P/Invoke is
        tested on Linux with a fake.
      - Connection state is `Unknown` (before the first attempt),
-       `Available` or `Unavailable`. While `Unavailable` the worker holds
-       one `ActivityHub` `OutlookUnavailable` scope with an empty label.
+       `Available`, `Unavailable` or `NotResponding` (M9.5, below). While
+       `Unavailable` the worker holds one `ActivityHub`
+       `OutlookUnavailable` scope with an empty label; while
+       `NotResponding` the label is `not responding`.
      - "Outlook is gone" means a `COMException` (itself or in its
        `InnerException` chain) with HRESULT `MK_E_UNAVAILABLE`
        (`0x800401E3`), `RPC_E_DISCONNECTED` (`0x80010108`),
        `RPC_E_SERVERCALL_RETRYLATER` (`0x8001010A`) or
        `RPC_S_SERVER_UNAVAILABLE` (`0x800706BA`, what calls return after
-       Outlook exits). Any other exception from work propagates unchanged
+       Outlook exits) or `RPC_S_CALL_FAILED` (`0x800706BE`, added in
+       M9.5). Any other exception from work propagates unchanged
        and keeps the connection.
      - The work item that hit "gone" fails with
        `OutlookUnavailableException` (an `McpException` with the message
@@ -201,6 +204,42 @@ There is one process and three kinds of threads:
        next sync.
      - Background chunks: `MaxBackgroundChunk = 50`; `RunChunkedAsync`
        queues one background item per chunk of at most 50 inputs.
+   - Details (M9.5): watchdog
+     - Every COM call has a deadline: interactive items 30 s from
+       `RunAsync` (queue wait included), background items 60 s from their
+       start, attach attempts and probes 20 s. `RunAsync` takes an
+       optional per-call `timeout` that overrides the priority's value
+       (120 s for saving attachments, 10 s for a GAL owner lookup, §8).
+       The timeouts are constants, not settings.
+     - A queued interactive item past its deadline fails with
+       `OutlookNotRespondingException` without affecting the thread.
+     - A *running* call past its deadline can't be cancelled, so the
+       worker fails its item with `OutlookNotRespondingException` (an
+       `OutlookUnavailableException` with the message
+       `Outlook isn't responding. It may be busy, offline or showing a dialog box. Ask the user to check Outlook, then try again. If this call was creating a draft or a meeting, check Outlook for it before retrying.`),
+       **abandons** that STA thread, and starts a replacement STA thread.
+       The item is never retried. The connection state becomes
+       `NotResponding`. An `Error` event
+       `Outlook isn't responding: a call took longer than <n> s` is
+       recorded for each abandoned call (`<n>` is the call's timeout,
+       invariant, at most one decimal).
+     - An abandoned thread does nothing more except, when its call
+       returns, release its own Application object on its own thread and
+       exit. At most 2 abandoned threads may be alive; beyond that no new
+       thread starts until one returns.
+     - While `NotResponding`, interactive work fails at once with that
+       message, and background work waits. Every 10 s (or at once when an
+       abandoned call returns, or on `Nudge()`) the live thread tries
+       `GetActiveObject` plus the `Application.Name` probe. Success →
+       `Available`, and a sync cycle starts. No running Outlook or a
+       "gone" error → `Unavailable`. Re-attaching uses `GetActiveObject`
+       only and never starts Outlook.
+     - The worker exposes `ConnectionId`, which increments on each
+       successful attach, so callers can cache plain data per connection.
+       Caches never hold COM objects.
+     - A COM call still running after 5 s is logged (Warning) by method
+       name and duration only, once when it passes 5 s and again with
+       its total time when it returns (§5.1).
 
 The Outlook object model is single-threaded internally anyway. One STA
 worker makes that explicit and prevents cross-thread COM bugs.
@@ -219,6 +258,29 @@ worker makes that explicit and prevents cross-thread COM bugs.
 | Attachment exports (default) | `%USERPROFILE%\Downloads\Clippy's Revenge` |
 
 The token is never written to `settings.json` or to any log.
+
+**Log file (M9.4).** `RollingFileLoggerProvider` (Core) is a
+`Microsoft.Extensions.Logging` provider used by the app and the Kestrel
+host:
+- One file per **local** date, `clippy-YYYYMMDD.log`, appended as UTF-8.
+  Lines read `yyyy-MM-dd HH:mm:ss.fff <TRC|DBG|INF|WRN|ERR|CRT> <category>: <message>`,
+  plus the exception type, message and stack trace when there is one.
+- 7 days kept, today included. Older `clippy-YYYYMMDD.log` files are
+  deleted when the first line after start-up or after midnight is
+  written. Other files in
+  the folder are left alone.
+- The minimum level is the `LogLevel` setting, read on every call, so a
+  change applies at once. `None` turns the file log off.
+- Categories starting with `Microsoft.`, `System.` or
+  `ModelContextProtocol` are capped at Warning (lower levels are dropped),
+  because framework messages can carry request details.
+- Redaction is defensive: the current token (when it has at least 8
+  characters) is replaced with `[redacted]` anywhere in a line, and
+  `Bearer <anything>` becomes `Bearer [redacted]`. Callers still never
+  log the token, mail bodies or search text.
+- COM calls over 5 s are logged by name and duration only (§4).
+- Write errors (I/O, access denied) are swallowed; logging never breaks
+  the app.
 
 The indexes hold mail bodies in plain text, like Outlook's own OST cache.
 They are protected by the user profile's ACLs and by disk encryption
@@ -244,7 +306,7 @@ They are protected by the user profile's ACLs and by disk encryption
 | `AllowedFolders` | `[AttachmentDir, %USERPROFILE%\Documents]` | Live. `AttachmentDir` is always allowed, even if removed from the list |
 | `StartWithWindows` | `true` | Live: writes or removes the HKCU Run key |
 | `NotifyOnErrors` | `true` | Live |
-| `LogLevel` | `Information` | Live |
+| `LogLevel` | `Information` (`Trace` / `Debug` / `Information` / `Warning` / `Error` / `Critical` / `None`) | Live: applies at once to the rolling file log (§5.1) |
 
 Each `SharedMailboxes` entry is:
 
@@ -299,6 +361,13 @@ highest one in this table wins.
 
 When shared mailboxes are syncing, the label names the mailbox, e.g.
 `indexing helpdesk@… Inbox 300 / 2,000`.
+
+While the worker is `NotResponding` (§4), the tray uses the
+`OutlookUnavailable` icon with the tooltip
+`Clippy — Outlook is not responding` (scope label `not responding`).
+Start Outlook stays hidden. An `Error` event
+`Outlook isn't responding: a call took longer than <n> s` is recorded
+for each abandoned call.
 
 The icons are embedded resources: a 16/20/24/32 px `.ico` for each state.
 The animation is 4 frames on a 250 ms timer, and only runs while
@@ -411,15 +480,58 @@ After copying, the tray shows a short "Copied — paste it in WSL" balloon.
 The window has tabs. Changes take effect when you press OK or Apply; Cancel
 discards them.
 
+Regenerate in the Connection tab only stages a new token; it replaces the
+old one on OK/Apply. Rebuild and Test connection act at once. A port
+change asks `Change the port from <old> to <new>?` (followed by a line
+saying Claude Code must be set up again with the new `claude mcp add`
+command) before applying. If the new port can't be bound, the server goes
+back to the old port, nothing is saved, and the Port field shows
+`Port <n> is in use or can't be opened. The server stays on port <old>.`
+If the tray changes a setting while the window is open, the window's
+values win on Apply, except for shared-mailbox entries: mailboxes the
+tray added, and the tray's enable/disable and display-name changes, are
+kept unless the window changed that same field.
+
 - **Connection**:
   - Port.
   - Token field, masked, with Show, Copy and Regenerate buttons.
-  - Read-only box with the full `claude mcp add` command and a Copy button.
+  - Read-only box with the full `claude mcp add` command and a Copy
+    button. The box masks the token (`Bearer ••••••••`) until **Show**
+    is pressed; **Copy** always copies the full command.
   - **Test connection** button. It sends `POST /mcp` with an MCP
     `initialize` request twice: without the token (expects `401`) and with
     it (expects a JSON-RPC result with `serverInfo`). Then it shows ✓ or ✗.
+    It tests the running server (current port and token), not unsaved
+    changes, against `http://127.0.0.1:<port>/mcp` with no proxy and no
+    `Origin` header, 5 s per request. With the token it expects HTTP 200
+    and `result.serverInfo.name` = `clippy`; another name means another
+    MCP server holds the port. When a port or token change is pending,
+    the form adds
+    `Testing the running server. Press Apply first to test your changes.`
+    Results (`<port>` invariant):
+
+    | Case | Message |
+    |---|---|
+    | server not running | `✗ The server isn't running. Check the tray icon for the reason.` |
+    | connection refused / other HTTP error | `✗ Nothing answers on 127.0.0.1:<port>.` |
+    | a request times out | `✗ The server on 127.0.0.1:<port> didn't answer within 5 s.` |
+    | no-token request not `401` | `✗ The server answered without a token (HTTP <code>). Another program may be using port <port>.` |
+    | token request `401` | `✗ The server rejected the token (HTTP 401).` |
+    | token request other non-200 | `✗ The server answered HTTP <code> to initialize.` |
+    | 200 without a server name | `✗ The server answered, but not with an MCP initialize result.` |
+    | 200 with another name | `✗ Another MCP server (<name>) is answering on port <port>.` (name cut to 40 chars, control characters removed) |
+    | 200 with `clippy` | `✓ Connection works: 127.0.0.1:<port> needs the token and answers MCP.` |
   - The `.wslconfig` mirrored-networking snippet (§13).
 - **Index**:
+  - The picker lists enabled shared mailboxes. **Add** lists mounted
+    mailboxes not enabled (re-enabling keeps a disabled entry's folders
+    and retention); **Remove** is the tray's uncheck
+    (`Stop indexing <name>?`, Delete its index / Keep index file /
+    Cancel), applied on OK/Apply. The folder tree and the Add list load
+    from Outlook in the background, at most 15 s; if Outlook doesn't
+    answer, the tree shows only the configured folders with
+    `Outlook didn't answer, so only the configured folders are shown.`
+    The window never waits on Outlook.
   - A mailbox picker at the top: "My mailbox" plus each shared mailbox.
     These fields belong to the selected mailbox:
     - Retention (months). For shared mailboxes, "Use global" is a checkbox.
@@ -442,7 +554,7 @@ discards them.
   - Allowed folders: a list with Add / Remove.
   - Start with Windows.
   - Notify on errors.
-  - Log level.
+  - Log level (applies at once to the rolling file log, §5.1).
 
 The window warns before any change that breaks existing Claude
 configurations, which means changing the port or regenerating the token.
@@ -477,7 +589,10 @@ Balloon notifications are rate-limited to one per minute. They fire on:
 
 - the first run ("Clippy's Revenge is running — right-click to copy the Claude
   setup command");
-- Outlook becoming unavailable for more than 2 minutes;
+- Outlook becoming unavailable for more than 2 minutes (when the
+  episode is a `NotResponding` one, the balloon reads "It looks like
+  Outlook isn't responding. I'll keep trying — check Outlook for an open
+  dialog box.");
 - an error state lasting more than 2 minutes, when `NotifyOnErrors` is on;
 - an invite being sent or saved as a draft after a timeout;
 - an initial backfill finishing (per mailbox): "It looks like you're
@@ -567,8 +682,17 @@ sent.
 All calls run through `OutlookWorker`.
 
 - `OutlookStores.List()` → mounted Exchange mailboxes with display name,
-  store id and primary SMTP address. The SMTP comes from the store owner's
-  `AddressEntry.GetExchangeUser().PrimarySmtpAddress`.
+  store id and primary SMTP address. It reads local data only: the
+  store list and `Session.Accounts` (`Account.DeliveryStore` →
+  `Account.SmtpAddress`), plus SMTPs remembered from earlier lookups.
+  It is cached per worker connection (`ConnectionId`, §4) for at most 10
+  minutes. The GAL owner lookup (`PR_MAILBOX_OWNER_ENTRYID` →
+  `AddressEntry.GetExchangeUser().PrimarySmtpAddress`) runs only for
+  stores still unmatched when an enabled shared mailbox needs one, each
+  as its own work item with a 10 s timeout, before the tool's or sync's
+  main work item (`EnsureResolvedAsync`). A null result isn't retried on
+  the same connection. A timed-out lookup isn't retried for 30 minutes.
+  The own mailbox's SMTP never needs the GAL.
 - `OutlookStores.Get(mailbox)` → the `Store` for `""` (own) or an SMTP
   address. It throws `McpException` listing the configured mailboxes when
   the address isn't one of them.
@@ -1133,7 +1257,9 @@ is Core's `MeetingInvites`. COM sits behind `IMeetingCalendar`
 ### 11.10 `index_status(mailbox?)`
 
 Returns `Status()` for each configured mailbox (or just one), whether
-Outlook is running, and the current `ActivityHub` state. This is for
+Outlook is running, and the current `ActivityHub` state.
+`outlook_running` is `true` while Outlook is not responding (§4), `false`
+while it is unavailable, and `null` before the first attach attempt. This is for
 questions like "why didn't search find X" and for checking backfill
 progress.
 
@@ -1429,6 +1555,16 @@ Decided (2026-11-12):
   (`Recipients.Add(email)`), without resolving; Outlook resolves them when
   the user opens the draft. `McpTools` is a partial class; tool services
   are injected as tool-method parameters from DI.
+- Settings (M9.2): staged editing, diff and apply live in Core
+  (`SettingsEditor`, `SettingsApplier`, `ConnectionTester`); applying
+  copies into the one live `Settings` instance (`Settings.CopyFrom`,
+  fresh lists) and calls `SyncService.NotifySettingsChanged` when a
+  retention value changed, else `SyncNow` when the sync plan changed
+  (interval, folders, or a mailbox enabled/disabled).
+- Logging (M9.4): see §5.1 "Log file". The file provider is a small
+  in-repo class in Core, tested on Linux.
+- Watchdog (M9.5): see §4 Details (M9.5), §6.1, §6.5, §8 and §11.10.
+  Timeouts are constants, not settings.
 
 Open:
 
