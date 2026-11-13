@@ -106,3 +106,5 @@ coverage*.xml
 *.db-wal
 *.db-shm
 token.bin
+
+.claude/worktrees/

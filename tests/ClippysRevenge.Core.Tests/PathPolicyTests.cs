@@ -417,4 +417,51 @@ public class PathPolicyTests : IDisposable
         var f = Touch(Docs, "a.txt");
         Assert.Equal(Path.GetFullPath(f), PathPolicy.Check(f, [Docs + "."], PathMode.Read));
     }
+
+    private static void MakeJunction(string link, string target)
+    {
+        var psi = new ProcessStartInfo("cmd.exe") { CreateNoWindow = true, UseShellExecute = false };
+        psi.ArgumentList.Add("/c");
+        psi.ArgumentList.Add("mklink");
+        psi.ArgumentList.Add("/J");
+        psi.ArgumentList.Add(link);
+        psi.ArgumentList.Add(target);
+        using var proc = Process.Start(psi)!;
+        proc.WaitForExit();
+        Assert.Equal(0, proc.ExitCode);
+    }
+
+    [Fact]
+    [Trait("os", "windows")]
+    public void JunctionWithTrailingDot_Refused()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        var outside = Path.Combine(T, "outsideDot");
+        Touch(outside, "s.txt");
+        var link = Path.Combine(Docs, "link");
+        MakeJunction(link, outside);
+        try
+        {
+            Assert.Equal(PathRejectReason.LinkBelowRoot, Refused(Path.Combine(Docs, "link.", "s.txt"), roots, PathMode.Read));
+        }
+        finally { Directory.Delete(link); }
+    }
+
+    [Fact]
+    [Trait("os", "windows")]
+    public void JunctionAsShortName_Refused()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        var outside = Path.Combine(T, "outsideShort");
+        Touch(outside, "s.txt");
+        var link = Path.Combine(Docs, "linkjunction");
+        MakeJunction(link, outside);
+        try
+        {
+            var shortPath = Path.Combine(Docs, "LINKJU~1");
+            Assert.SkipUnless(Directory.Exists(shortPath), "8.3 short names are disabled on this volume");
+            Assert.Equal(PathRejectReason.LinkBelowRoot, Refused(Path.Combine(shortPath, "s.txt"), roots, PathMode.Read));
+        }
+        finally { Directory.Delete(link); }
+    }
 }

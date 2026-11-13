@@ -21,7 +21,19 @@ internal static class Program
 
         var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClippysRevenge");
         var store = new SettingsStore(dataDir, new DpapiProtector());
-        var loaded = store.Load();
+        // A locked settings.json must show a message, not crash silently (the log and handlers are not up yet).
+        SettingsLoadResult loaded;
+        try
+        {
+            loaded = store.Load();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(
+                $"Clippy's Revenge could not read its settings in {dataDir}.\n\n{ex.Message}\n\nClose whatever has settings.json open and start Clippy's Revenge again.",
+                "Clippy's Revenge", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return 1;
+        }
         var settings = loaded.Settings;
         var tokens = new TokenHolder(loaded.Token);
 

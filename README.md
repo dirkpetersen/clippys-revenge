@@ -12,6 +12,7 @@ it, Clippy can use it. `SPEC.md` is the source of truth for behavior.
 ## Install
 
 Requirements: Windows 11 with classic Outlook (not the new Outlook), signed in.
+An Exchange / Microsoft 365 mailbox is required (IMAP/POP-only profiles aren't supported).
 
 From PowerShell (no admin needed):
 
@@ -134,6 +135,11 @@ unchecking asks whether to delete that index. Tools reach it with
 
 - **"Outlook is not running"** in the tray: start classic Outlook (or use the
   tray's **Start Outlook**). Indexing resumes by itself.
+- **Outlook is open but Clippy says it isn't running**: run both at the same
+  elevation (neither as administrator). It must be classic Outlook, not "new
+  Outlook". After an Outlook restart, click into the Outlook window and then
+  another window, or wait a minute; otherwise restart Outlook. Clippy
+  re-attaches by itself.
 - **Outlook not responding** (a dialog is open, or it is busy): Clippy times
   out COM calls instead of hanging; close the dialog and retry.
 - **401 from curl or Claude**: wrong or regenerated token. Copy the command
