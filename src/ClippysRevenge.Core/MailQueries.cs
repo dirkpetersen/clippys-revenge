@@ -122,17 +122,18 @@ public static class MailQueries
     }
 
     public static IndexStatusDto Status(
-        MailboxIndexes indexes, ActivityHub hub, TimeZoneInfo tz, bool? outlookRunning, string? mailbox)
+        MailboxIndexes? indexes, ActivityHub hub, TimeZoneInfo tz, bool? outlookRunning, string? mailbox)
     {
-        ArgumentNullException.ThrowIfNull(indexes);
         ArgumentNullException.ThrowIfNull(hub);
-        IReadOnlyList<string> keys = string.IsNullOrWhiteSpace(mailbox)
+        // indexes == null: the index could not be opened; still report state and Outlook status (SPEC 11.10).
+        IReadOnlyList<string> keys = indexes is null ? []
+            : string.IsNullOrWhiteSpace(mailbox)
             ? indexes.Mailboxes
             : [MailboxIndexes.Normalize(mailbox)];
         var list = new List<MailboxStatusDto>();
         foreach (var k in keys)
         {
-            var s = indexes.For(k).Status();
+            var s = indexes!.For(k).Status();
             list.Add(new MailboxStatusDto(k, s.TotalEmails, s.FolderCounts,
                 s.Oldest is { } o ? Iso(o, tz) : null, s.Newest is { } n ? Iso(n, tz) : null,
                 s.DbSizeBytes, s.LastSync is { } ls ? Iso(ls, tz) : null, s.BackfillComplete));

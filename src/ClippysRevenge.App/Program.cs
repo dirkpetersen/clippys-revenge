@@ -133,6 +133,18 @@ internal static class Program
                     s.AddSingleton<IAttachmentSaver, OutlookAttachmentSaver>()
                         .AddSingleton(sp => new AttachmentExport(sp.GetRequiredService<IAttachmentSaver>(),
                             sp.GetRequiredService<MailboxIndexes>(), () => settings, hub));
+                    // Index-backed tools take Optional<T> so they stay listed (and explain the problem) when the index failed to open.
+                    s.AddSingleton(new Optional<MailboxIndexes>(indexes))
+                        .AddSingleton(new Optional<OutlookMail>(mail))
+                        .AddSingleton(sp => new Optional<ReplyDraftTool>(sp.GetRequiredService<ReplyDraftTool>()))
+                        .AddSingleton(sp => new Optional<AttachmentExport>(sp.GetRequiredService<AttachmentExport>()));
+                }
+                else
+                {
+                    s.AddSingleton(new Optional<MailboxIndexes>(null))
+                        .AddSingleton(new Optional<OutlookMail>(null))
+                        .AddSingleton(new Optional<ReplyDraftTool>(null))
+                        .AddSingleton(new Optional<AttachmentExport>(null));
                 }
             },
             ConfigureLogging = b => b.AddDebug(),

@@ -5,11 +5,12 @@ using ModelContextProtocol.Server;
 namespace ClippysRevenge.App;
 
 [McpServerToolType]
-internal sealed partial class McpTools(ActivityHub hub, MailboxIndexes indexes, OutlookMail mail, OutlookWorker worker)
+internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker)
 {
     [McpServerTool(Name = "search_emails", ReadOnly = true, Idempotent = true)]
     [Description("Searches the local email index (fast, works while Outlook is busy). All filters are optional and combine with AND; results are newest first. Each result has id, mailbox, folder, date (local time), from, sender_email, to, subject, has_attachments, attachments[] (name, size, inline flag) and snippet. Pass a result's id to get_message to read the full body. Only synced mail is indexed; use index_status to check coverage if something seems missing.")]
     public IReadOnlyList<SearchResultDto> SearchEmails(
+        Optional<MailboxIndexes> index,
         [Description("Free text over subject, body, sender, recipients and attachment file names. Words are ANDed; use OR between words for alternatives, \"quotes\" for a phrase, and a trailing * for a prefix.")] string? query = null,
         [Description("Substring of the sender's name or email address.")] string? sender = null,
         [Description("Substring of To or CC. Also accepts a list like 'Ann <ann@x.edu>; bob@x.edu', which matches mail involving any of them.")] string? recipient = null,
@@ -24,17 +25,20 @@ internal sealed partial class McpTools(ActivityHub hub, MailboxIndexes indexes, 
         [Description("Empty = the user's own mailbox, an SMTP address = that shared mailbox, 'all' = every enabled mailbox.")] string? mailbox = null,
         [Description("Maximum results, 1 to 200.")] int limit = 50,
         [Description("Number of results to skip, for paging.")] int offset = 0) =>
-        MailQueries.Search(indexes, TimeZoneInfo.Local, query, sender, recipient, subject, date_from, date_to,
+        MailQueries.Search(index.Required(), TimeZoneInfo.Local, query, sender, recipient, subject, date_from, date_to,
             folder, has_attachment, attachment_name, attachment_ext, unread, mailbox, limit, offset);
 
     [McpServerTool(Name = "get_message", ReadOnly = true, Idempotent = true)]
     [Description("Returns one email in full (headers, complete body, attachment list) by the id from search_emails. Reads the index first; if the email is not indexed yet, reads it live from Outlook, which needs Outlook to be running. The mailbox is found from the id.")]
     public async Task<MessageDto> GetMessage(
+        Optional<MailboxIndexes> index,
+        Optional<OutlookMail> outlookMail,
         [Description("The id of an email, as returned by search_emails.")] string id,
         CancellationToken cancellationToken = default)
     {
         var tz = TimeZoneInfo.Local;
-        if (MailQueries.GetIndexed(indexes, tz, id) is { } hit)
+        var mail = outlookMail.Required();
+        if (MailQueries.GetIndexed(index.Required(), tz, id) is { } hit)
         {
             return hit;
         }
@@ -46,6 +50,7 @@ internal sealed partial class McpTools(ActivityHub hub, MailboxIndexes indexes, 
     [McpServerTool(Name = "index_status", ReadOnly = true, Idempotent = true)]
     [Description("Shows the state of the local email index: per-mailbox counts, oldest and newest indexed mail, last sync and whether the initial backfill is complete, plus whether Outlook is running and what Clippy is doing right now. Use it to explain why a search found nothing or to check indexing progress.")]
     public IndexStatusDto IndexStatus(
+        Optional<MailboxIndexes> index,
         [Description("Optional SMTP address of a shared mailbox. Empty = all configured mailboxes.")] string? mailbox = null)
     {
         bool? running = worker.State switch
@@ -54,6 +59,6 @@ internal sealed partial class McpTools(ActivityHub hub, MailboxIndexes indexes, 
             OutlookConnectionState.Unavailable => false,
             _ => null,
         };
-        return MailQueries.Status(indexes, hub, TimeZoneInfo.Local, running, mailbox);
+        return MailQueries.Status(index.Value, hub, TimeZoneInfo.Local, running, mailbox);
     }
 }

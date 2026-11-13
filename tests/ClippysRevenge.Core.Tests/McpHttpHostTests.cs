@@ -40,6 +40,16 @@ public sealed class LongNameTools
 public sealed record ProbeService(string Prefix);
 
 [McpServerToolType]
+public sealed class OptionalProbeTools
+{
+    [McpServerTool(Name = "needs_index"), Description("needs index")]
+    public string NeedsIndex(Optional<ProbeService> svc, string text) => svc.Required().Prefix + text;
+
+    [McpServerTool(Name = "no_index"), Description("no index")]
+    public string NoIndex(string text) => "ok:" + text;
+}
+
+[McpServerToolType]
 public sealed class DiProbeTools
 {
     [McpServerTool(Name = "di_probe"), Description("probe")]
@@ -48,6 +58,30 @@ public sealed class DiProbeTools
 
 public class McpHttpHostTests
 {
+    [Fact]
+    public async Task MissingOptionalService_OtherToolsStayCallable_AndIndexToolsExplain()
+    {
+        await using var f = await Started(b => b.WithTools<OptionalProbeTools>(), s => s.AddSingleton(new Optional<ProbeService>(null)));
+        await using var c = await Client(f.Port);
+        var ct = TestContext.Current.CancellationToken;
+        var tools = await c.ListToolsAsync(cancellationToken: ct);
+        var needs = tools.Single(t => t.Name == "needs_index");
+        Assert.False(needs.JsonSchema.GetProperty("properties").TryGetProperty("svc", out _));
+        var ok = await c.CallToolAsync("no_index", new Dictionary<string, object?> { ["text"] = "x" }, cancellationToken: ct);
+        Assert.Equal("ok:x", Assert.IsType<TextContentBlock>(ok.Content[0]).Text);
+        var bad = await c.CallToolAsync("needs_index", new Dictionary<string, object?> { ["text"] = "x" }, cancellationToken: ct);
+        Assert.True(bad.IsError);
+        Assert.Contains("email index could not be opened", Assert.IsType<TextContentBlock>(bad.Content[0]).Text);
+    }
+
+    [Fact]
+    public void IndexStatus_WithoutIndex_ReportsStateAndOutlook()
+    {
+        using var hub = new ActivityHub();
+        var s = MailQueries.Status(null, hub, TimeZoneInfo.Utc, true, null);
+        Assert.Empty(s.Mailboxes);
+        Assert.True(s.OutlookRunning);
+    }
     [Fact]
     public async Task DiInjectedToolParameter_NotInSchema_AndBound()
     {

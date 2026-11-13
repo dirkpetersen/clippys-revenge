@@ -5,7 +5,7 @@ using ModelContextProtocol.Server;
 namespace ClippysRevenge.App;
 
 [McpServerToolType]
-internal sealed class AttachmentTools(AttachmentExport export)
+internal sealed class AttachmentTools(Optional<AttachmentExport> exports)
 {
     [McpServerTool(Name = "get_attachment")]
     [Description("Saves one attachment of an email to disk and returns its path. Use the id from search_emails. Pass filename or position when the email has more than one attachment. save_dir defaults to the user's attachment folder; relative paths go under it; it must be inside an allowed folder.")]
@@ -15,7 +15,7 @@ internal sealed class AttachmentTools(AttachmentExport export)
         [Description("1-based position of the attachment in the email's attachments list.")] int? position = null,
         [Description("Folder to save into. Empty = the user's attachment folder. Relative paths go under it.")] string? save_dir = null,
         CancellationToken cancellationToken = default) =>
-        export.GetAsync(id, filename, position, save_dir, cancellationToken);
+        exports.Required().GetAsync(id, filename, position, save_dir, cancellationToken);
 
     [McpServerTool(Name = "save_attachments")]
     [Description("Finds emails with the same filters as search_emails and saves their attachments into one folder (duplicates become 'name (2).ext'). attachment_name and attachment_ext also choose which attachments are saved. Inline images are skipped unless include_inline is true. limit is the number of emails (max 200).")]
@@ -37,7 +37,7 @@ internal sealed class AttachmentTools(AttachmentExport export)
         [Description("Maximum number of emails, 1 to 200.")] int limit = 50,
         [Description("Number of emails to skip, for paging.")] int offset = 0,
         CancellationToken cancellationToken = default) =>
-        export.SaveAsync(new SaveAttachmentsArgs
+        exports.Required().SaveAsync(new SaveAttachmentsArgs
         {
             SaveDir = save_dir,
             IncludeInline = include_inline,
