@@ -10,6 +10,7 @@
   <a href="https://github.com/dirkpetersen/clippys-revenge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/dirkpetersen/clippys-revenge/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <a href="https://github.com/dirkpetersen/clippys-revenge/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/dirkpetersen/clippys-revenge?sort=semver&label=release"></a>
   <a href="https://github.com/dirkpetersen/clippys-revenge/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/dirkpetersen/clippys-revenge/total?label=downloads"></a>
+  <a href="https://dirkpetersen.github.io/clippys-revenge/"><img alt="Documentation" src="https://img.shields.io/badge/docs-dirkpetersen.github.io-0F6CBD"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/dirkpetersen/clippys-revenge"></a>
   <br>
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white">
@@ -34,6 +35,7 @@ free/busy to Claude Code (including Claude Code running in WSL) over
 
 No Microsoft Graph, no Entra app registration, no OAuth. If Outlook can open
 it, Clippy can use it. `SPEC.md` is the source of truth for behavior.
+User documentation: <https://dirkpetersen.github.io/clippys-revenge/>.
 
 ## Install
 
