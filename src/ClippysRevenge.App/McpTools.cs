@@ -58,6 +58,24 @@ internal sealed class McpTools(ActivityHub hub)
                earliest_hour, latest_hour, business_days_only, include_me, max_suggestions, mailbox),
                settings, cancellationToken);
 #pragma warning restore IDE1006
+
+    private const string SendMeetingInviteDescription =
+        "Creates a meeting and sends the invite to the attendees. This is the only tool that can send anything. In Send mode the user is asked to confirm in a dialog, and the invite goes out immediately once they click Send; they may instead save it as a draft or cancel. If the result is \"cancelled\", do not retry unless the user asks. In Draft only mode the meeting is saved in the calendar unsent and the user sends it from Outlook. Times are local; pass the start and end from find_free_times. Every recipient must resolve in Outlook or nothing is created.";
+
+    [McpServerTool(Name = "send_meeting_invite", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true)]
+    [Description(SendMeetingInviteDescription)]
+    public Task<MeetingInviteResult> SendMeetingInvite(
+        MeetingInvites invites,
+        [Description("Attendees as \"Name <email>; Name <email>\" or bare emails, separated by \";\" (never \",\"). Paste the list as given.")] string recipients,
+        [Description("Meeting subject.")] string subject,
+        [Description("Local start date-time, e.g. 2026-03-01T14:30, or the start of a find_free_times suggestion.")] string start,
+        [Description("Local end date-time, e.g. 2026-03-01T15:30, or the end of a find_free_times suggestion.")] string end,
+        [Description("Optional plain-text invite body.")] string? body = null,
+        [Description("Optional location, e.g. a room.")] string? location = null,
+        [Description("true = add a Teams meeting link when the Teams add-in is usable; otherwise a note says it wasn't added.")] bool teams = false,
+        [Description("Optional SMTP address of a configured shared mailbox to organize the meeting from. Empty = the user's own calendar.")] string? mailbox = null,
+        CancellationToken cancellationToken = default)
+        => invites.SendAsync(recipients, subject, start, end, body, location, teams, mailbox, cancellationToken);
 }
 
 public sealed record ListEventsResult(
