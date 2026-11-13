@@ -27,6 +27,10 @@ artwork.
    and in `Send` mode every invite needs the user's click in a **tray
    confirmation dialog** (§6.6). Invites can also be set to draft-only or
    disabled.
+   It also **never deletes or moves email**: no `Delete`, `PermanentDelete`
+   or `EmptyDeletedItems` on Outlook items or folders. The only `Move`
+   puts a reply draft it just created into Drafts. Reconcile and retention
+   remove rows from Clippy's own index only, never mail.
 5. Reply drafts always have a subject that starts with **`Re:: `**.
 6. Search runs against local **SQLite + FTS5** indexes: one database for
    the user's own mailbox, plus **one database per shared mailbox** the user
@@ -983,8 +987,10 @@ connection; the library pools them.
      folder (entry ids match case-insensitively). Add mail that is missing,
      refresh `unread` with `SetUnread`, and delete rows for mail that is gone,
      but only rows at least one day newer than the cutoff (older ones are left
-     to the purge). If Outlook lists no items at all while 20 or more rows
-     would be deleted, nothing is deleted that day. `last_reconcile` is set
+     to the purge). If Outlook lists no items at all, or none of its ids match
+     an index row, or more than half of the in-window rows would go, while 20
+     or more rows would be deleted, nothing is deleted (and for the last two
+     `last_reconcile` stays unset). `last_reconcile` is set
      only when the whole pass succeeds. Read-state changes may not update
      `LastModificationTime`; this catches them either way (§17).
 - After all folders: `PurgeOlderThan(cutoff)` (`Purging` state), and emit a
@@ -1490,9 +1496,10 @@ mode, the DASL date helper, and whether marking a message read changes
   `windows-latest`. Live tests are filtered out (`--filter "live!=outlook"`).
 - **`release.yml`** (pushes to `main`): if tag `v<Version>` doesn't exist,
   it runs the tests, publishes `ClippysRevenge.exe` (§2) and creates a
-  GitHub release with the exe, `install.ps1` and `SHA256SUMS.txt`. 0.x
-  versions are marked as pre-releases. **To ship, bump `<Version>` and
-  merge to `main`.**
+  GitHub release with the exe, `install.ps1` and `SHA256SUMS.txt`. A plain
+  version (`0.0.2`) becomes the **latest** release, which the one-line
+  installer uses. A version with a suffix (`0.0.3-beta.1`) is published as
+  a pre-release. **To ship, bump `<Version>` and merge to `main`.**
 - Both workflows skip cleanly while there is no solution file.
 - The exe is not code-signed yet, so SmartScreen warns on first launch.
 
@@ -1516,6 +1523,10 @@ Decided (2026-11-12):
 - Table rows use the long-term EntryID (`PR_LONGTERM_ENTRYID_FROM_TABLE`,
   fallback to the `EntryID` column) so they match `MailItem.EntryID` in the
   index.
+- Reconcile refuses mass deletes when Outlook's ids don't match the index
+  (no overlap, or over half the in-window rows missing, with 20 or more
+  candidates), and abandons the pass without setting `last_reconcile` if
+  reads return ids that weren't requested.
 - Calendar DASL bounds are UTC, verified live 2026-11-13. Free/busy code
   `5` (no information, past the published horizon) counts as not busy.
 

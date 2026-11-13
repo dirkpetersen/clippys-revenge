@@ -57,12 +57,13 @@ function Remove-IfExists([string]$Path, [switch]$Recurse) {
 
 function Get-ReleaseExe {
     $tmp = Join-Path ([IO.Path]::GetTempPath()) ('clippy-' + [Guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $tmp | Out-Null
+    # Download + verify into a private temp dir even under -WhatIf; nothing is installed until later steps.
+    New-Item -ItemType Directory -Path $tmp -WhatIf:$false | Out-Null
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $headers = @{ 'User-Agent' = 'ClippysRevenge-installer' }
     Write-Host 'Looking up the latest release...'
-    # /releases (not /releases/latest) so that 0.x pre-releases are found too.
-    $rel = @(Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repo/releases?per_page=1")[0]
+    # The latest full release; pre-releases (versions with a -suffix) are never picked.
+    $rel = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repo/releases/latest"
     $exeAsset = $rel.assets | Where-Object { $_.name -eq 'ClippysRevenge.exe' } | Select-Object -First 1
     $sumAsset = $rel.assets | Where-Object { $_.name -eq 'SHA256SUMS.txt' } | Select-Object -First 1
     if (-not $exeAsset -or -not $sumAsset) {
@@ -83,7 +84,7 @@ function Get-ReleaseExe {
     if (-not $expected) { throw 'SHA256SUMS.txt has no entry for ClippysRevenge.exe.' }
     $actual = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actual -ne $expected) {
-        Remove-Item -LiteralPath $tmp -Recurse -Force
+        Remove-Item -LiteralPath $tmp -Recurse -Force -WhatIf:$false
         throw "SHA-256 mismatch for the downloaded exe (expected $expected, got $actual). Nothing was installed."
     }
     Write-Host 'SHA-256 verified.'

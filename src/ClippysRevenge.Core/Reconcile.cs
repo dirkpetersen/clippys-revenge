@@ -16,7 +16,8 @@ public sealed record ReconcilePlan(
     IReadOnlyList<string> ToAdd,
     IReadOnlyList<(string EntryId, bool Unread)> UnreadChanges,
     bool DeletesSuppressed,
-    int SuppressedCount);
+    int SuppressedCount,
+    bool IdMismatch = false);
 
 public sealed record ReconcileResult(
     string FolderPath, bool Ran, int Deleted, int Added, int Skipped, int UnreadUpdated, bool DeletesSuppressed);
@@ -38,6 +39,13 @@ public static class ReconcilePlanner
     public const int SuppressDeleteThreshold = 20;
     public static readonly TimeSpan EdgeMargin = TimeSpan.FromDays(1);
 
+    /// <summary>
+    /// Deletes are suppressed (nothing removed, <c>DeletesSuppressed</c> set) when there are at least
+    /// <see cref="SuppressDeleteThreshold"/> delete candidates AND any of: Outlook listed no items;
+    /// no listed id matches any indexed id (both sets non-empty, so the ids are probably in a different
+    /// format); or the candidates are more than half of the indexed rows inside the reconcile window
+    /// (event time at or after cutoff + <see cref="EdgeMargin"/>). The last two set <c>IdMismatch</c>.
+    /// </summary>
     public static ReconcilePlan Plan(
         IReadOnlyList<OutlookEntry> outlook, IReadOnlyList<IndexedEntry> indexed, DateTimeOffset cutoff)
     {
@@ -65,8 +73,15 @@ public static class ReconcilePlanner
             if (listed.TryGetValue(r.EntryId, out var o) && o.Unread != r.Unread)
                 unread.Add((r.EntryId, o.Unread));
 
-        if (order.Count == 0 && candidates.Count >= SuppressDeleteThreshold)
-            return new ReconcilePlan([], toAdd, unread, true, candidates.Count);
+        if (candidates.Count >= SuppressDeleteThreshold)
+        {
+            if (order.Count == 0)
+                return new ReconcilePlan([], toAdd, unread, true, candidates.Count);
+            var noOverlap = indexed.Count > 0 && !indexed.Any(r => listed.ContainsKey(r.EntryId));
+            var inWindow = indexed.Count(r => r.EventTime >= edge);
+            if (noOverlap || candidates.Count * 2 > inWindow)
+                return new ReconcilePlan([], toAdd, unread, true, candidates.Count, true);
+        }
         return new ReconcilePlan(candidates, toAdd, unread, false, 0);
     }
 }
@@ -120,11 +135,18 @@ public sealed class MailboxReconciler
         var deleted = index.Delete(plan.ToDelete);
 
         int added = 0, skipped = 0, done = 0;
+        var abandoned = false;
         foreach (var chunk in plan.ToAdd.Chunk(BatchSize))
         {
             ct.ThrowIfCancellationRequested();
             var read = await _source.ReadForIndexAsync(mailbox, folder, chunk, ct).ConfigureAwait(false);
             var wanted = new HashSet<string>(chunk, StringComparer.OrdinalIgnoreCase);
+            var mismatched = read.Count(e => e is not null && !wanted.Contains(e.EntryId));
+            if (mismatched * 2 > chunk.Length)
+            {
+                abandoned = true;
+                break;
+            }
             var keep = read.Where(e => e is not null && wanted.Contains(e.EntryId) && !string.IsNullOrEmpty(e.Folder)).ToList();
             if (keep.Count > 0) index.UpsertBatch(keep);
             added += keep.Count;
@@ -134,7 +156,7 @@ public sealed class MailboxReconciler
         }
 
         var fresh = index.GetSyncState(folder.FolderKey);
-        if (fresh is not null)
+        if (fresh is not null && !abandoned && !plan.IdMismatch)
             index.SetSyncState(fresh with { LastReconcile = now });
 
         var duration = _time.GetElapsedTime(started);
@@ -144,7 +166,13 @@ public sealed class MailboxReconciler
             if (skipped > 0) text += $", {Num(skipped)} unreadable";
             _hub.Event(ActivityKind.Sync, text, duration, tag);
         }
-        if (plan.DeletesSuppressed)
+        if (abandoned)
+            _hub.Event(ActivityKind.Sync,
+                $"Reconcile {path} abandoned: Outlook ids did not match the index, will retry", null, tag);
+        else if (plan.IdMismatch)
+            _hub.Event(ActivityKind.Sync,
+                $"Reconcile {path} abandoned: Outlook ids did not match the index, kept {Num(plan.SuppressedCount)} indexed emails, will retry", null, tag);
+        else if (plan.DeletesSuppressed)
             _hub.Event(ActivityKind.Sync,
                 $"Reconcile {path}: Outlook listed no items, kept {Num(plan.SuppressedCount)} indexed emails", null, tag);
 

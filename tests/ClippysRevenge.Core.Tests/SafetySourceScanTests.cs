@@ -231,6 +231,27 @@ public class SafetySourceScanTests
     public void NoDisplayCalls() =>
         AssertNone(Find(f => f.Code, @"\.\s*Display\s*\("), ".Display( is forbidden: drafts are saved, never shown.");
 
+    [Fact]
+    public void NeverDeletesOutlookItems()
+    {
+        // Only the app's own files (index databases, logs, partial attachment saves) may be deleted.
+        var hits = Find(f => f.Code, @"\b\w+\s*\.\s*(Delete|PermanentDelete|EmptyDeletedItems)\s*\(",
+                f => !f.Rel.StartsWith("src/ClippysRevenge.App/", StringComparison.Ordinal))
+            .Where(h => !Regex.IsMatch(h, @": (File|Directory)\s*\.")).ToList();
+        AssertNone(hits, "Clippy never deletes Outlook items, folders or mail (CLAUDE.md hard rule).");
+    }
+
+    [Fact]
+    public void OnlyMoveIsNewReplyDraftIntoDrafts()
+    {
+        var hits = Find(f => f.Code, @"\b\w+\s*\.\s*Move\s*\(\s*\w*",
+                f => !f.Rel.StartsWith("src/ClippysRevenge.App/", StringComparison.Ordinal))
+            .Where(h => !Regex.IsMatch(h, @": (File|Directory)\s*\.")).ToList();
+        Assert.True(hits.Count == 1 && hits[0].StartsWith("src/ClippysRevenge.App/OutlookMail.Reply.cs:", StringComparison.Ordinal)
+                && hits[0].EndsWith("reply.Move(drafts", StringComparison.Ordinal),
+            "The only Outlook .Move( allowed is the new reply draft into Drafts, found:" + Environment.NewLine + string.Join(Environment.NewLine, hits));
+    }
+
     // ---- Graph ----
 
     [Fact]

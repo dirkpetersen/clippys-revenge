@@ -1,4 +1,31 @@
-# Clippy's Revenge
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="Clippy's Revenge: a paperclip wrestling an envelope" width="300">
+</p>
+
+<h1 align="center">Clippy's Revenge</h1>
+
+<p align="center"><b>Your classic Outlook, as a local MCP server for Claude Code. No cloud, no Graph, no OAuth.</b></p>
+
+<p align="center">
+  <a href="https://github.com/dirkpetersen/clippys-revenge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/dirkpetersen/clippys-revenge/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/dirkpetersen/clippys-revenge/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/dirkpetersen/clippys-revenge?sort=semver&label=release"></a>
+  <a href="https://github.com/dirkpetersen/clippys-revenge/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/dirkpetersen/clippys-revenge/total?label=downloads"></a>
+  <a href="https://dirkpetersen.github.io/clippys-revenge/"><img alt="Documentation" src="https://img.shields.io/badge/docs-dirkpetersen.github.io-0F6CBD"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/dirkpetersen/clippys-revenge"></a>
+  <br>
+  <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white">
+  <img alt="Windows 11" src="https://img.shields.io/badge/platform-Windows%2011-0078D4">
+  <img alt="Classic Outlook via COM" src="https://img.shields.io/badge/Outlook-classic%20(COM)-0F6CBD">
+  <img alt="MCP server" src="https://img.shields.io/badge/MCP-streamable%20HTTP-6E56CF">
+  <img alt="Works from WSL" src="https://img.shields.io/badge/works%20from-WSL-E95420?logo=ubuntu&logoColor=white">
+  <br>
+  <img alt="Never sends email" src="https://img.shields.io/badge/never-sends%20email-2EA043">
+  <img alt="Never deletes email" src="https://img.shields.io/badge/never-deletes%20email-2EA043">
+  <img alt="Localhost only" src="https://img.shields.io/badge/network-localhost%20only-2EA043">
+  <a href="https://github.com/dirkpetersen/clippys-revenge/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/dirkpetersen/clippys-revenge"></a>
+</p>
+
+---
 
 A fast Outlook MCP server that works without the cloud. It is a Windows tray
 app that drives your **classic Outlook** desktop client through COM, keeps a
@@ -8,26 +35,54 @@ free/busy to Claude Code (including Claude Code running in WSL) over
 
 No Microsoft Graph, no Entra app registration, no OAuth. If Outlook can open
 it, Clippy can use it. `SPEC.md` is the source of truth for behavior.
+User documentation: <https://dirkpetersen.github.io/clippys-revenge/>.
 
 ## Install
 
 Requirements: Windows 11 with classic Outlook (not the new Outlook), signed in.
 An Exchange / Microsoft 365 mailbox is required (IMAP/POP-only profiles aren't supported).
 
-From PowerShell (no admin needed):
+Paste this into PowerShell (no admin needed):
 
 ```powershell
-# download install.ps1 from the latest GitHub release, then:
-.\install.ps1                      # downloads the latest release and checks it against SHA256SUMS.txt
+irm https://github.com/dirkpetersen/clippys-revenge/releases/latest/download/install.ps1 | iex
+```
+
+It downloads the latest release, checks `ClippysRevenge.exe` against the
+release's `SHA256SUMS.txt`, installs it and starts it. Run the same line
+again to update.
+
+<details>
+<summary>Other ways to install</summary>
+
+Preview what it would do, without changing anything:
+
+```powershell
+& ([scriptblock]::Create((irm https://github.com/dirkpetersen/clippys-revenge/releases/latest/download/install.ps1))) -WhatIf
+```
+
+Or download `install.ps1` from the
+[latest release](https://github.com/dirkpetersen/clippys-revenge/releases/latest) and run it:
+
+```powershell
+.\install.ps1                                # same as the one-liner
 .\install.ps1 -Source .\ClippysRevenge.exe   # install a local build instead
 ```
+
+</details>
 
 This copies `ClippysRevenge.exe` to `%LOCALAPPDATA%\Programs\ClippysRevenge\`,
 creates a Start menu shortcut and starts the app. You can also just download
 `ClippysRevenge.exe` from the release and run it. The exe is not code-signed
 yet, so SmartScreen warns on first launch.
 
-Uninstall: `.\install.ps1 -Uninstall`. It stops the app and removes the exe,
+Uninstall:
+
+```powershell
+& ([scriptblock]::Create((irm https://github.com/dirkpetersen/clippys-revenge/releases/latest/download/install.ps1))) -Uninstall
+```
+
+It stops the app and removes the exe,
 the shortcut and the "Start with Windows" entry, then asks whether to delete
 your settings, token, index and logs. Add `-Purge` to delete them without
 asking.
