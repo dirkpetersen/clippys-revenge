@@ -1,3 +1,4 @@
+using System.Reflection;
 using ClippysRevenge.App.Tray;
 using ClippysRevenge.Core;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +11,7 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        var startedUtc = DateTimeOffset.UtcNow;
         ApplicationConfiguration.Initialize();
 
         using var instance = SingleInstance.TryAcquire();
@@ -59,6 +61,59 @@ internal static class Program
         var logger = loggerFactory.CreateLogger("ClippysRevenge");
         logger.LogInformation("Clippy's Revenge starting.");
         if (apiKeyUnreadable) logger.LogWarning("anthropic-key.bin could not be read.");
+
+        // Auto-update (SPEC 20). Decide before anything else starts; an update staged earlier installs right here.
+        var updatePaths = UpdatePaths.Default(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+        var running = AppVersionInfo.FromAssembly(Assembly.GetEntryAssembly());
+        var installed = updatePaths.IsInstalledCopy(Environment.ProcessPath);
+        var updateStore = new UpdateStateStore(updatePaths.StateFile, loggerFactory.CreateLogger<UpdateStateStore>());
+        logger.LogInformation("Version {Version} ({Commit}), installed copy: {Installed}.", running.Version, running.ShortCommit ?? "-", installed);
+        var startupPlan = StartupUpdatePlan.Nothing;
+        if (installed)
+        {
+            try
+            {
+                startupPlan = UpdateStartup.Prepare(updatePaths, updateStore, running.Version, settings.Updates, loggerFactory.CreateLogger("Update"));
+            }
+            catch (Exception ex)
+            {
+                logger.LogError("Update start-up check failed ({ExceptionType}).", ex.GetType().Name);
+            }
+        }
+        if (startupPlan.InstallNow is { } staged)
+        {
+            PendingInstall? pendingAtStart = null;
+            try
+            {
+                pendingAtStart = RunBlocking(() => UpdateInstall.BeginAsync(updatePaths, updateStore, staged, running.Version,
+                    log: loggerFactory.CreateLogger("Update")));
+            }
+            catch (UpdateInstallException ex)
+            {
+                logger.LogWarning("Update {Version} not installed at start-up: {Reason}", staged.Version, ex.Message);
+                try
+                {
+                    updateStore.Update(s => s.LastError = ex.Message);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    logger.LogWarning("The update state could not be saved ({ExceptionType}).", e.GetType().Name);
+                }
+            }
+            if (pendingAtStart is not null)
+            {
+                logger.LogInformation("Installing update {Version} at start-up.", staged.Version);
+                instance.Dispose();
+                var pending = pendingAtStart;
+                var startOutcome = RunBlocking(() => UpdateHandover.RunAsync(updatePaths, updateStore, pending,
+                    p => UpdateRestarter.Start(updatePaths, p), log: loggerFactory.CreateLogger("Update")));
+                logger.LogInformation("Update handover: {Outcome}.", startOutcome);
+                loggerFactory.Dispose();
+                fileLog.Dispose();
+                return 0;
+            }
+        }
+
         var hub = new ActivityHub();
         var worker = new OutlookWorker(hub, loggerFactory.CreateLogger("OutlookWorker"));
         worker.Start();
@@ -191,6 +246,8 @@ internal static class Program
 
         SettingsApplier? applier = null;
         McpHttpHost? hostRef = null;
+        UpdateService? updates = null;
+        TrayApp? trayRef = null;
         var tray = new TrayApp(new TrayServices(
             hub,
             balloons,
@@ -244,8 +301,45 @@ internal static class Program
                 applier ?? throw new InvalidOperationException("Settings applier is not ready."),
                 () => hostRef?.Port, worker, stores, indexes,
                 sync is null ? null : m => sync.RebuildAsync(m),
-                () => worker.State == OutlookConnectionState.Unavailable, TimeZoneInfo.Local, aiSettings), tab),
-            aiTray));
+                () => worker.State == OutlookConnectionState.Unavailable, TimeZoneInfo.Local, aiSettings,
+                ShowAboutAndCheck: () => trayRef?.ShowAbout(checkNow: true)), tab),
+            aiTray,
+            CreateAboutForm: () =>
+            {
+                // The form owns its own icon set; the tray's icons stay the tray's.
+                var icons = new TrayIcons();
+                var form = new AboutForm(updates ?? throw new InvalidOperationException("Updates are not ready."),
+                    TrayApp.ShellOpen, icons.Get(TrayIconKey.Idle));
+                form.Disposed += (_, _) => icons.Dispose();
+                return form;
+            }));
+        trayRef = tray;
+
+        // Auto-update service (SPEC 20). Started after the server start was attempted, see AfterStartAsync.
+        PendingInstall? handover = null;   // set by RequestInstall on a pool thread, read after the message loop
+        var updateClient = new UpdateClient(running.Version);
+        updates = new UpdateService(new UpdateServiceOptions(
+            () => settings, updateClient, updateStore, updatePaths, running, installed,
+            Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory,
+            IsBusy: () => hub.IsActive(ActivityState.Serving) || hub.IsActive(ActivityState.Drafting)
+                || hub.IsActive(ActivityState.AwaitingConfirmation) || tray.IsSettingsOpen,
+            ReadExeVersion: UpdateRestarter.ReadExeVersion,
+            RequestInstall: async (stagedUpdate, ct) =>
+            {
+                try
+                {
+                    var p = await UpdateInstall.BeginAsync(updatePaths, updateStore, stagedUpdate, running.Version,
+                        log: loggerFactory.CreateLogger("Update"), ct: ct);
+                    Volatile.Write(ref handover, p);
+                    tray.ExitForUpdate();
+                    return null;
+                }
+                catch (UpdateInstallException ex)
+                {
+                    return ex.Message;
+                }
+            },
+            hub, balloons, startedUtc, Logger: loggerFactory.CreateLogger<UpdateService>()));
 
         var inviteQueue = new InviteConfirmQueue(new InviteConfirmPresenter(SynchronizationContext.Current!), hub);
 
@@ -300,7 +394,8 @@ internal static class Program
             e => StartupRegistration.Apply(e), indexes,
             sync is null ? null : sync.NotifySettingsChanged, sync is null ? null : sync.SyncNow,
             drafts is null ? null : drafts.NotifySettingsChanged), logger);
-        _ = StartHostAsync(host, settings.Port, logger);
+        var hostStart = StartHostAsync(host, settings.Port, logger);
+        _ = AfterStartAsync(hostStart, SynchronizationContext.Current!, startupPlan, updatePaths, updateStore, running, updates, hub, balloons, loggerFactory);
         _ = sync?.StartAsync(CancellationToken.None);
         _ = drafts?.StartAsync(CancellationToken.None);
 
@@ -316,6 +411,7 @@ internal static class Program
         // Task.Run avoids the WinForms SynchronizationContext.
         Task.Run(async () =>
         {
+            await updates!.StopAsync(CancellationToken.None);
             if (drafts is not null)
             {
                 await drafts.StopAsync(CancellationToken.None);
@@ -331,9 +427,69 @@ internal static class Program
         indexes?.Dispose();
         indexErrorScope?.Dispose();
         hub.Dispose();
+        updateClient.Dispose();
+        if (Volatile.Read(ref handover) is { } pendingHandover)
+        {
+            instance.Dispose();   // releases the mutex and the pipe before the new exe starts (SPEC 14)
+            var outcome = RunBlocking(() => UpdateHandover.RunAsync(updatePaths, updateStore, pendingHandover,
+                p => UpdateRestarter.Start(updatePaths, p), log: loggerFactory.CreateLogger("Update")));
+            logger.LogInformation("Update handover: {Outcome}.", outcome);
+        }
         loggerFactory.Dispose();
         fileLog.Dispose();
         return 0;
+    }
+
+    /// <summary>Process entry point only: blocks the STA main thread before the message loop starts or after it ended.
+    /// Task.Run avoids the WinForms SynchronizationContext.</summary>
+    private static T RunBlocking<T>(Func<Task<T>> work) => Task.Run(work).GetAwaiter().GetResult();
+
+    /// <summary>Once the server start was attempted and the message loop pumps: confirm a fresh update, show notices,
+    /// then start the update schedule (so the first check is 60 s after a working tray).</summary>
+    private static async Task AfterStartAsync(Task hostStart, SynchronizationContext ui, StartupUpdatePlan plan,
+        UpdatePaths paths, UpdateStateStore store, AppVersionInfo running, UpdateService updates, ActivityHub hub,
+        BalloonCenter balloons, ILoggerFactory loggerFactory)
+    {
+        await hostStart.ConfigureAwait(false);
+        var log = loggerFactory.CreateLogger("Update");
+        ui.Post(_ =>
+        {
+            try
+            {
+                UpdateNotice? notice = plan.Notice;
+                if (plan.ConfirmAfterStart)
+                {
+                    var confirmed = UpdateStartup.Confirm(store, running.Version, log);
+                    if (confirmed is not null)
+                    {
+                        notice = confirmed;
+                        _ = UpdateStartup.CleanupOldAsync(paths, store, running.Version, log: log);
+                    }
+                    else if (notice?.Kind == UpdateNoticeKind.Updated)
+                    {
+                        notice = null;
+                    }
+                }
+                if (notice is not null)
+                {
+                    if (notice.Kind == UpdateNoticeKind.RolledBack)
+                    {
+                        balloons.Post(BalloonTexts.UpdateRolledBack(notice.FromVersion, notice.ToVersion));
+                        hub.Event(ActivityKind.Update, UpdateTexts.EventRolledBack(notice.FromVersion, notice.ToVersion));
+                    }
+                    else
+                    {
+                        balloons.Post(BalloonTexts.Updated(notice.ToVersion));
+                        hub.Event(ActivityKind.Update, UpdateTexts.EventUpdated(notice.FromVersion, notice.ToVersion));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                log.LogError("Update notice failed ({ExceptionType}).", ex.GetType().Name);
+            }
+            _ = updates.StartAsync(CancellationToken.None);
+        }, null);
     }
 
     private static async Task StartHostAsync(McpHttpHost host, int port, ILogger logger)

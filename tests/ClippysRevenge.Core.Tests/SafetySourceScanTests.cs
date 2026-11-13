@@ -213,8 +213,8 @@ public class SafetySourceScanTests
     [Fact]
     public void ProcessStart_OnlyInOutlookLauncher_AndLauncherUsesNoCom()
     {
-        AssertNone(Find(f => f.Code, @"\bProcess\s*\.\s*Start\b|\bShellExecute\w*\s*\(", f => f.Rel == Launcher || f.Rel == TrayFile || f.Rel == ClaudeCliFile),
-            "Only OutlookLauncher.cs, TrayApp.cs (ShellOpen: folders, the skill file, the manual link) and ClaudeCli.cs may start a process.");
+        AssertNone(Find(f => f.Code, @"\bProcess\s*\.\s*Start\b|\bShellExecute\w*\s*\(", f => f.Rel == Launcher || f.Rel == TrayFile || f.Rel == ClaudeCliFile || f.Rel == RestarterFile),
+            "Only OutlookLauncher.cs, TrayApp.cs (ShellOpen: folders, the skill file, the manual link), ClaudeCli.cs and UpdateRestarter.cs (the update handover) may start a process.");
         // TrayApp.ShellOpen hands one path or URL to the shell (not Outlook); it is the only other Process.Start.
         var tray = Scan.Value.Files.Single(f => f.Rel == TrayFile);
         Assert.Single(Regex.Matches(tray.Code, @"\bProcess\s*\.\s*Start\b"));
@@ -225,6 +225,81 @@ public class SafetySourceScanTests
         Assert.NotNull(l);
         Assert.Matches(@"Process\s*\.\s*Start\s*\(", l!.Code);
         Assert.DoesNotMatch(@"Marshal\b|Outlook\.|GetActiveObject|Activator|ProgID", l.Code);
+
+        // UpdateRestarter starts the installed exe only: no arguments, no shell, no verb, no Outlook.
+        var r = Scan.Value.Files.SingleOrDefault(f => f.Rel == RestarterFile);
+        Assert.NotNull(r);
+        Assert.Single(Regex.Matches(r!.Code, @"\bProcess\s*\.\s*Start\b"));
+        Assert.Matches(@"UseShellExecute\s*=\s*false", r.Code);
+        Assert.DoesNotMatch(@"\bArgumentList\b|\.Arguments\b|\bVerb\s*=|UseShellExecute\s*=\s*true", r.Code);
+        Assert.DoesNotMatch(@"\bOutlook\b|GetActiveObject|Marshal\b|ProgID|Activator", r.Code);
+        Assert.Matches(@"new\s+ProcessStartInfo\s*\(\s*paths\s*\.\s*ExePath\s*\)", r.Code);
+        Assert.Matches(@"Path\s*\.\s*GetFullPath\s*\(\s*paths\s*\.\s*ExePath\s*\)", r.Code);
+    }
+
+    private const string RestarterFile = "src/ClippysRevenge.App/UpdateRestarter.cs";
+    private const string UpdateInstallFile = "src/ClippysRevenge.Core/UpdateInstall.cs";
+    private const string KillRegex = @"\.\s*Kill\s*\(";
+    private const string UpdateHostRegex = @"api\.github\.com|githubusercontent\.com|/releases/download/";
+    private const string HttpClientRegex = @"new\s+HttpClient\s*\(";
+
+    [Fact]
+    public void Kill_OnlyInKnownProcessOwners()
+    {
+        // ClaudeCli kills its own headless claude process; UpdateInstall kills the new Clippy process through
+        // IUpdateProcess; UpdateRestarter wraps that process. Nothing else may kill a process.
+        AssertNone(Find(f => f.Code, KillRegex, f => f.Rel == ClaudeCliFile || f.Rel == UpdateInstallFile || f.Rel == RestarterFile),
+            "Process.Kill is allowed only in ClaudeCli.cs, UpdateInstall.cs and UpdateRestarter.cs.");
+        foreach (var rel in new[] { ClaudeCliFile, UpdateInstallFile, RestarterFile })
+        {
+            var f = Scan.Value.Files.Single(x => x.Rel == rel);
+            Assert.Single(Regex.Matches(f.Code, KillRegex));
+        }
+        Assert.DoesNotMatch(@"entireProcessTree", Scan.Value.Files.Single(x => x.Rel == RestarterFile).Code);
+    }
+
+    [Fact]
+    public void UpdateHosts_OnlyInUpdateRelease()
+    {
+        const string release = "src/ClippysRevenge.Core/UpdateRelease.cs";
+        AssertNone(Find(f => f.WithStrings, UpdateHostRegex, f => f.Rel == release, RegexOptions.IgnoreCase),
+            "GitHub release hosts may appear only in UpdateRelease.cs.");
+        var f = Scan.Value.Files.Single(x => x.Rel == release);
+        Assert.Matches(new Regex(UpdateHostRegex, RegexOptions.IgnoreCase), f.WithStrings);
+    }
+
+    [Fact]
+    public void NewHttpClient_OnlyInKnownFiles()
+    {
+        string[] allowed =
+        [
+            "src/ClippysRevenge.Core/ConnectionTester.cs",
+            "src/ClippysRevenge.Core/AnthropicApiModel.cs",
+            "src/ClippysRevenge.Core/UpdateClient.cs",
+        ];
+        AssertNone(Find(f => f.Code, HttpClientRegex, f => allowed.Contains(f.Rel)),
+            "new HttpClient is allowed only in ConnectionTester.cs, AnthropicApiModel.cs and UpdateClient.cs.");
+    }
+
+    [Fact]
+    public void UpdateFiles_NeverTouchOutlookOrMail()
+    {
+        var files = Scan.Value.Files.Where(f => Path.GetFileName(f.Rel).StartsWith("Update", StringComparison.Ordinal)).ToList();
+        var names = files.Select(f => Path.GetFileName(f.Rel)).ToHashSet();
+        Assert.Contains("UpdateClient.cs", names);
+        Assert.Contains("UpdateInstall.cs", names);
+        Assert.Contains("UpdateRestarter.cs", names);
+        var re = new Regex(@"\bOutlook\.|\bMarshal\b|GetActiveObject|\bMailItem\b|CreateReplyDraft|\.\s*Send\s*\(|\.\s*Display\s*\(");
+        var hits = files.SelectMany(f => re.Matches(f.Code).Select(m => $"{f.Rel}:{LineOf(f.Code, m.Index)}: {m.Value}")).ToList();
+        AssertNone(hits, "Update files must not touch Outlook or mail.");
+    }
+
+    [Fact]
+    public void UpdateMatchers_CatchPlantedViolations()
+    {
+        Assert.Matches(KillRegex, "p.Kill();");
+        Assert.Matches(new Regex(UpdateHostRegex, RegexOptions.IgnoreCase), "\"https://api.github.com/x\"");
+        Assert.Matches(HttpClientRegex, "new HttpClient(h)");
     }
 
     [Fact]
