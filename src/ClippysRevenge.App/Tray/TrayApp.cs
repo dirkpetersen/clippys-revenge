@@ -20,7 +20,10 @@ internal sealed record TrayServices(
     Func<bool>? StartOutlook,
     Action? SyncNow = null,
     Action? TogglePause = null,
-    Func<string, Task>? Rebuild = null);
+    Func<string, Task>? Rebuild = null,
+    Func<Task<IReadOnlyList<MailboxStore>>>? ListMounted = null,
+    SharedMailboxToggler? SharedToggler = null,
+    Func<SettingsTab, Form>? CreateSettingsForm = null);
 
 /// <summary>Tray icon and menu (SPEC 6.1, 6.2). All UI objects are touched on the UI thread only.</summary>
 internal sealed class TrayApp : ApplicationContext
@@ -49,6 +52,10 @@ internal sealed class TrayApp : ApplicationContext
     private int _frame;
     private int _renderQueued;
     private volatile bool _disposed;
+    private IReadOnlyList<MailboxStore>? _mounted;
+    private int _listing;
+    private ActivityForm? _activity;
+    private Form? _settingsForm;
 
     public TrayApp(TrayServices services)
     {
@@ -100,16 +107,58 @@ internal sealed class TrayApp : ApplicationContext
         Render();
     }
 
-    /// <summary>Any thread; opens the Settings window on the UI thread (stub until M9.2).</summary>
-    public void ShowSettings() => PostToUi(() =>
+    /// <summary>Any thread; opens (or raises) the single Settings window on the UI thread.</summary>
+    public void ShowSettings(SettingsTab tab = SettingsTab.Connection) => PostToUi(() =>
     {
-        // TODO(M9.2): show SettingsForm.
+        if (_s.CreateSettingsForm is null)
+        {
+            return;
+        }
+        if (_settingsForm is { IsDisposed: false } open)
+        {
+            if (open is SettingsForm sf)
+            {
+                sf.SelectTab(tab);
+            }
+            if (open.WindowState == FormWindowState.Minimized)
+            {
+                open.WindowState = FormWindowState.Normal;
+            }
+            open.Activate();
+            return;
+        }
+        var form = _s.CreateSettingsForm(tab);
+        _settingsForm = form;
+        form.FormClosed += (_, _) =>
+        {
+            if (ReferenceEquals(_settingsForm, form))
+            {
+                _settingsForm = null;
+            }
+            form.Dispose();
+        };
+        form.Show();
     });
 
-    /// <summary>Any thread; opens the Activity window on the UI thread (stub until M9.3).</summary>
+    /// <summary>Any thread; opens (or raises) the single Activity window on the UI thread.</summary>
     public void ShowActivity() => PostToUi(() =>
     {
-        // TODO(M9.3): show ActivityForm.
+        if (_activity is { IsDisposed: false } open)
+        {
+            if (open.WindowState == FormWindowState.Minimized)
+            {
+                open.WindowState = FormWindowState.Normal;
+            }
+            open.Activate();
+            return;
+        }
+        _activity = new ActivityForm(_s.Hub);
+        _activity.FormClosed += (_, _) =>
+        {
+            _activity?.Dispose();
+            _activity = null;
+        };
+        _activity.Show();
     });
 
     private void PostToUi(Action action) => _ui.Post(_ =>
@@ -218,9 +267,9 @@ internal sealed class TrayApp : ApplicationContext
         regen.Click += (_, _) => RegenerateToken();
 
         var activity = new ToolStripMenuItem("Activity…");
-        activity.Click += (_, _) => ShowActivity(); // TODO(M9.3)
+        activity.Click += (_, _) => ShowActivity();
         var settings = new ToolStripMenuItem("Settings…");
-        settings.Click += (_, _) => ShowSettings(); // TODO(M9.2)
+        settings.Click += (_, _) => ShowSettings();
         var logs = new ToolStripMenuItem("Open log folder");
         logs.Click += (_, _) => OpenFolder(_s.LogFolder);
         var data = new ToolStripMenuItem("Open data folder");
@@ -249,7 +298,7 @@ internal sealed class TrayApp : ApplicationContext
         _rebuild.Enabled = _s.Rebuild is not null;
         _rebuild.Click += (_, _) => AskRebuild();
         _shared.DropDownOpening += (_, _) => RebuildShared();
-        _shared.DropDownItems.Add(new ToolStripMenuItem("Manage in Settings…", null, (_, _) => ShowSettings()));
+        _shared.DropDownItems.Add(new ToolStripMenuItem("Manage in Settings…", null, (_, _) => ShowSettings(SettingsTab.Index)));
         _menu.Opening += (_, _) =>
         {
             _startWithWindows.Checked = _s.GetSettings().StartWithWindows;
@@ -311,20 +360,112 @@ internal sealed class TrayApp : ApplicationContext
         }
     }
 
+    private static readonly TimeSpan ListTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Fills the submenu from settings and the last known store list at once, then refreshes the store list on
+    /// the Outlook worker; the UI thread never waits for COM.
+    /// </summary>
     private void RebuildShared()
     {
-        _shared.DropDownItems.Clear();
-        var boxes = _s.GetSettings().SharedMailboxes;
-        foreach (var m in boxes)
+        var outlookUp = !_s.IsOutlookUnavailable();
+        FillShared(outlookUp ? _mounted : null);
+        if (!outlookUp || _s.ListMounted is null || Interlocked.Exchange(ref _listing, 1) == 1)
         {
-            // TODO(M9.1): toggling.
-            _shared.DropDownItems.Add(new ToolStripMenuItem(m.MenuLabel) { Checked = m.Enabled, Enabled = false });
+            return;
         }
-        if (boxes.Count > 0)
+        _ = RefreshMountedAsync();
+    }
+
+    private async Task RefreshMountedAsync()
+    {
+        try
+        {
+            var list = await _s.ListMounted!().WaitAsync(ListTimeout).ConfigureAwait(false);
+            PostToUi(() =>
+            {
+                _mounted = list;
+                if (_shared.DropDown.Visible)
+                {
+                    FillShared(_mounted);
+                }
+            });
+        }
+        catch (Exception)
+        {
+            // Outlook is slow or gone: keep what the menu shows. The next opening tries again.
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _listing, 0);
+        }
+    }
+
+    private void FillShared(IReadOnlyList<MailboxStore>? mounted)
+    {
+        _shared.DropDownItems.Clear();
+        var model = SharedMailboxMenu.Build(mounted, _s.GetSettings().SharedMailboxes);
+        foreach (var e in model.Entries)
+        {
+            var entry = e;
+            var item = new ToolStripMenuItem(entry.Label) { Checked = entry.Checked, CheckOnClick = false, Enabled = _s.SharedToggler is not null };
+            item.Click += (_, _) => ToggleShared(entry);
+            _shared.DropDownItems.Add(item);
+        }
+        if (model.StartOutlookHint)
+        {
+            _shared.DropDownItems.Add(new ToolStripMenuItem(SharedMailboxMenu.StartOutlookHintText) { Enabled = false });
+        }
+        if (model.Entries.Count > 0 || model.StartOutlookHint)
         {
             _shared.DropDownItems.Add(new ToolStripSeparator());
         }
-        _shared.DropDownItems.Add(new ToolStripMenuItem("Manage in Settings…", null, (_, _) => ShowSettings()));
+        _shared.DropDownItems.Add(new ToolStripMenuItem("Manage in Settings…", null, (_, _) => ShowSettings(SettingsTab.Index)));
+    }
+
+    private void ToggleShared(SharedMenuEntry entry)
+    {
+        var toggler = _s.SharedToggler;
+        if (toggler is null)
+        {
+            return;
+        }
+        try
+        {
+            if (!entry.Checked)
+            {
+                toggler.Check(entry.Smtp, entry.DisplayName);
+                return;
+            }
+            var name = string.IsNullOrWhiteSpace(entry.DisplayName) ? entry.Smtp : entry.DisplayName;
+            var delete = new TaskDialogButton("Delete its index");
+            var keep = new TaskDialogButton("Keep index file");
+            var cancel = new TaskDialogButton("Cancel");
+            var page = new TaskDialogPage
+            {
+                Caption = BalloonTexts.Title,
+                Heading = $"Stop indexing {name}?",
+                Text = "The mailbox is switched off either way. Deleting the index frees disk space; checking it again later starts from scratch.",
+                AllowCancel = true,
+                DefaultButton = keep,
+            };
+            page.Buttons.Add(delete);
+            page.Buttons.Add(keep);
+            page.Buttons.Add(cancel);
+            var choice = TaskDialog.ShowDialog(page);
+            if (choice == delete)
+            {
+                toggler.Uncheck(entry.Smtp, true);
+            }
+            else if (choice == keep)
+            {
+                toggler.Uncheck(entry.Smtp, false);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or ObjectDisposedException)
+        {
+            _s.Balloons.PostUserFeedback("Couldn't change that mailbox: " + ex.Message);
+        }
     }
 
     private void CopyToClipboard(Func<string> text, bool announce)
@@ -379,6 +520,8 @@ internal sealed class TrayApp : ApplicationContext
             _animTimer.Dispose();
             _houseTimer.Stop();
             _houseTimer.Dispose();
+            _activity?.Dispose();
+            _settingsForm?.Dispose();
             _notify.Visible = false;
             _notify.Dispose();
             _menu.Dispose();

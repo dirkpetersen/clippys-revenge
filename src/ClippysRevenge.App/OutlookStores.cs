@@ -193,6 +193,86 @@ internal sealed class OutlookStores
         }
     }
 
+    private const int MaxFolderDepth = 6, MaxFolders = 2000;
+
+    /// <summary>Canonical paths (MailFolderPath.FromOutlook) of every mail folder of the mailbox's store,
+    /// depth up to 6, at most 2000 folders. Resolves the store from List(app) by key WITHOUT the
+    /// "configured" check of Get (a mailbox being added in Settings isn't configured yet).</summary>
+    /// <exception cref="McpException">The mailbox is not open in Outlook.</exception>
+    public IReadOnlyList<string> ListMailFolders(Outlook.Application app, string? mailbox)
+    {
+        var key = EmailAddress.Normalize(mailbox);
+        var found = StoreCatalog.Find(List(app), key);
+        if (found is null)
+            throw key.Length == 0
+                ? new McpException("Your own Exchange mailbox is not open in Outlook.")
+                : StoreCatalog.NotAvailable(mailbox, [key]);
+
+        var session = app.Session;
+        Outlook.Store? store = null;
+        Outlook.Folder? inbox = null, sent = null;
+        Outlook.Folder? root = null;
+        try
+        {
+            try { store = session.GetStoreFromID(found.StoreId); }
+            catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
+            {
+                throw StoreCatalog.NotAvailable(mailbox, [key]);
+            }
+            string? inboxName = null, sentName = null;
+            try
+            {
+                inbox = (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderInbox);
+                inboxName = inbox.Name;
+                sent = (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderSentMail);
+                sentName = sent.Name;
+            }
+            catch (COMException ex) when (!ComErrors.IsOutlookGone(ex)) { }
+
+            var result = new List<string>();
+            root = (Outlook.Folder)store.GetRootFolder();
+            Walk(root, 0, inboxName, sentName, result);
+            return result;
+        }
+        finally
+        {
+            if (root is not null) Marshal.ReleaseComObject(root);
+            if (sent is not null) Marshal.ReleaseComObject(sent);
+            if (inbox is not null) Marshal.ReleaseComObject(inbox);
+            if (store is not null) Marshal.ReleaseComObject(store);
+            Marshal.ReleaseComObject(session);
+        }
+    }
+
+    private static void Walk(Outlook.Folder parent, int depth, string? inboxName, string? sentName, List<string> into)
+    {
+        if (depth >= MaxFolderDepth) return;
+        var children = parent.Folders;
+        try
+        {
+            foreach (Outlook.Folder f in children)
+            {
+                try
+                {
+                    if (into.Count >= MaxFolders) return;
+                    if (f.DefaultItemType == Outlook.OlItemType.olMailItem
+                        && MailFolderPath.FromOutlook(f.FolderPath, inboxName, sentName) is { } path)
+                        into.Add(path);
+                    Walk(f, depth + 1, inboxName, sentName, into);
+                }
+                catch (COMException ex) when (!ComErrors.IsOutlookGone(ex)) { }
+                finally
+                {
+                    Marshal.ReleaseComObject(f);
+                }
+            }
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(children);
+        }
+    }
+
     private IReadOnlyList<string> ConfiguredKeys()
     {
         var keys = new List<string> { MailboxIndexes.OwnMailbox };
