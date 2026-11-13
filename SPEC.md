@@ -1496,9 +1496,10 @@ mode, the DASL date helper, and whether marking a message read changes
   `windows-latest`. Live tests are filtered out (`--filter "live!=outlook"`).
 - **`release.yml`** (pushes to `main`): if tag `v<Version>` doesn't exist,
   it runs the tests, publishes `ClippysRevenge.exe` (§2) and creates a
-  GitHub release with the exe, `install.ps1` and `SHA256SUMS.txt`. 0.x
-  versions are marked as pre-releases. **To ship, bump `<Version>` and
-  merge to `main`.**
+  GitHub release with the exe, `install.ps1` and `SHA256SUMS.txt`. A plain
+  version (`0.0.2`) becomes the **latest** release, which the one-line
+  installer uses. A version with a suffix (`0.0.3-beta.1`) is published as
+  a pre-release. **To ship, bump `<Version>` and merge to `main`.**
 - Both workflows skip cleanly while there is no solution file.
 - The exe is not code-signed yet, so SmartScreen warns on first launch.
 

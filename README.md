@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/dirkpetersen/clippys-revenge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/dirkpetersen/clippys-revenge/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-  <a href="https://github.com/dirkpetersen/clippys-revenge/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/dirkpetersen/clippys-revenge?include_prereleases&sort=semver&label=release"></a>
+  <a href="https://github.com/dirkpetersen/clippys-revenge/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/dirkpetersen/clippys-revenge?sort=semver&label=release"></a>
   <a href="https://github.com/dirkpetersen/clippys-revenge/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/dirkpetersen/clippys-revenge/total?label=downloads"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/dirkpetersen/clippys-revenge"></a>
   <br>
@@ -43,7 +43,7 @@ An Exchange / Microsoft 365 mailbox is required (IMAP/POP-only profiles aren't s
 Paste this into PowerShell (no admin needed):
 
 ```powershell
-irm https://raw.githubusercontent.com/dirkpetersen/clippys-revenge/main/install.ps1 | iex
+irm https://github.com/dirkpetersen/clippys-revenge/releases/latest/download/install.ps1 | iex
 ```
 
 It downloads the latest release, checks `ClippysRevenge.exe` against the
@@ -56,11 +56,11 @@ again to update.
 Preview what it would do, without changing anything:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/dirkpetersen/clippys-revenge/main/install.ps1))) -WhatIf
+& ([scriptblock]::Create((irm https://github.com/dirkpetersen/clippys-revenge/releases/latest/download/install.ps1))) -WhatIf
 ```
 
 Or download `install.ps1` from the
-[latest release](https://github.com/dirkpetersen/clippys-revenge/releases) and run it:
+[latest release](https://github.com/dirkpetersen/clippys-revenge/releases/latest) and run it:
 
 ```powershell
 .\install.ps1                                # same as the one-liner
@@ -77,7 +77,7 @@ yet, so SmartScreen warns on first launch.
 Uninstall:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/dirkpetersen/clippys-revenge/main/install.ps1))) -Uninstall
+& ([scriptblock]::Create((irm https://github.com/dirkpetersen/clippys-revenge/releases/latest/download/install.ps1))) -Uninstall
 ```
 
 It stops the app and removes the exe,

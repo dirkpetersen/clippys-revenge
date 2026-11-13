@@ -83,4 +83,4 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "Clippy's Revenge ${{ steps.ver.outputs.tag }}" \
             --generate-notes \
-            $([[ "${{ steps.ver.outputs.version }}" == 0.* ]] && echo --prerelease)
+            $([[ "${{ steps.ver.outputs.version }}" == *-* ]] && echo --prerelease || echo --latest)

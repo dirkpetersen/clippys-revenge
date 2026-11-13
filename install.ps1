@@ -62,8 +62,8 @@ function Get-ReleaseExe {
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $headers = @{ 'User-Agent' = 'ClippysRevenge-installer' }
     Write-Host 'Looking up the latest release...'
-    # /releases (not /releases/latest) so that 0.x pre-releases are found too.
-    $rel = @(Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repo/releases?per_page=1")[0]
+    # The latest full release; pre-releases (versions with a -suffix) are never picked.
+    $rel = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repo/releases/latest"
     $exeAsset = $rel.assets | Where-Object { $_.name -eq 'ClippysRevenge.exe' } | Select-Object -First 1
     $sumAsset = $rel.assets | Where-Object { $_.name -eq 'SHA256SUMS.txt' } | Select-Object -First 1
     if (-not $exeAsset -or -not $sumAsset) {
