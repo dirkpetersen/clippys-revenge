@@ -116,8 +116,22 @@ internal static class Program
             replyWriter = new OutlookReplyDraftWriter(worker, mail, stores, loggerFactory.CreateLogger<OutlookReplyDraftWriter>());
             aiMailbox = new OutlookAiMailbox(worker, mail, stores, loggerFactory.CreateLogger<OutlookAiMailbox>());
             var syncRef = sync;
+            var indexesRef = indexes;
+            var draftModelRef = draftModel;
+            var aiMailboxRef = aiMailbox;
+            // Writing-style skill (SPEC 19.6): own mailbox only; shared mailboxes use the same skill (SPEC 18 Q7).
+            var styleSkill = new StyleSkill(
+                new StyleSkillFiles(StylePaths.Default(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), dataDir)),
+                () => indexesRef.For(null), () => draftModelRef, () => settings.AiDrafting,
+                () => StyleCorpus.SignatureTexts(kind => signatures.Default(kind)), hub,
+                logger: loggerFactory.CreateLogger<StyleSkill>());
+            var styleGuide = new StyleGuideSource(styleSkill, async ct =>
+            {
+                var id = await aiMailboxRef.GetIdentityAsync(WorkPriority.Background, ct).ConfigureAwait(false);
+                return new Recipient(id.DisplayName, id.OwnSmtp);
+            });
             drafts = new DraftWorker(new DraftWorkerServices(() => settings, indexes, aiMailbox, replyWriter, draftModel,
-                NoStyleGuide.Instance, // M11.6: the orchestrator swaps in the StyleSkill adapter after both are merged.
+                styleGuide,
                 () => signatures.Default(SignatureKind.Reply), hub, balloons,
                 () => worker.State == OutlookConnectionState.Available, () => syncRef.IsPaused, TimeZoneInfo.Local,
                 Logger: loggerFactory.CreateLogger<DraftWorker>()));
