@@ -465,4 +465,35 @@ public class ComWorkerTests
         });
         Assert.NotEqual(workerId, after);
     }
+
+    private sealed class ListLogger : Microsoft.Extensions.Logging.ILogger
+    {
+        public readonly ConcurrentQueue<string> Lines = new();
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+            TState state, Exception? exception, Func<TState, Exception?, string> formatter) => Lines.Enqueue(formatter(state, exception));
+    }
+
+    [Fact]
+    public async Task SlowComCallIsLoggedWithNameAndDurationOnly()
+    {
+        var log = new ListLogger();
+        var attacher = new FakeAttacher { Running = true };
+        using var hub = new ActivityHub();
+        using var w = new ComWorker<FakeApp>(attacher, hub, new ComWorkerOptions
+        {
+            Logger = log,
+            SlowCallThreshold = TimeSpan.FromMilliseconds(50),
+            ProbeInterval = TimeSpan.FromHours(1),
+        });
+        w.Start();
+        await w.RunAsync(_ => { Thread.Sleep(200); return 1; }, WorkPriority.Interactive, Ct);
+        Assert.Contains(log.Lines, l => l.Contains("took") && l.Contains("COM call"));
+        Assert.Contains(log.Lines, l => l.Contains("still running"));
+
+        var before = log.Lines.Count(l => l.Contains("COM call"));
+        await w.RunAsync(_ => 2, WorkPriority.Interactive, Ct);
+        Assert.Equal(before, log.Lines.Count(l => l.Contains("COM call")));
+    }
 }

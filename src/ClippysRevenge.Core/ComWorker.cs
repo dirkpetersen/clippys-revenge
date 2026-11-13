@@ -14,6 +14,9 @@ public sealed class ComWorkerOptions
 
     public string ThreadName { get; init; } = "OutlookWorker";
     public ILogger? Logger { get; init; }
+
+    /// <summary>A COM call running longer than this is logged (name and duration only). SPEC 2.</summary>
+    public TimeSpan SlowCallThreshold { get; init; } = TimeSpan.FromSeconds(5);
 }
 
 /// <summary>
@@ -27,6 +30,7 @@ public class ComWorker<TApp> : IDisposable where TApp : class
     private abstract class Item
     {
         public abstract bool IsDone { get; }
+        public abstract string Name { get; }
         public abstract Exception? Run(TApp app);
         public abstract void Fail(Exception ex);
     }
@@ -39,6 +43,8 @@ public class ComWorker<TApp> : IDisposable where TApp : class
         public Item(Func<TApp, T> work) => _work = work;
 
         public override bool IsDone => Tcs.Task.IsCompleted;
+
+        public override string Name => DescribeWork(_work);
 
         public override Exception? Run(TApp app)
         {
@@ -54,6 +60,27 @@ public class ComWorker<TApp> : IDisposable where TApp : class
         }
 
         public override void Fail(Exception ex) => Tcs.TrySetException(ex);
+    }
+
+    /// <summary>Method name of the delegate (never arguments). Lambdas show the enclosing method.</summary>
+    internal static string DescribeWork(Delegate work)
+    {
+        var m = work.Method;
+        var type = m.DeclaringType;
+        while (type?.DeclaringType is not null && type.Name.StartsWith('<'))
+        {
+            type = type.DeclaringType;
+        }
+        var name = m.Name;
+        if (name.StartsWith('<'))
+        {
+            var end = name.IndexOf('>');
+            if (end > 1)
+            {
+                name = name[1..end];
+            }
+        }
+        return type is null ? name : type.Name + "." + name;
     }
 
     private readonly IComAttacher<TApp> _attacher;
@@ -310,7 +337,7 @@ public class ComWorker<TApp> : IDisposable where TApp : class
         TApp? app = null;
         try
         {
-            app = _attacher.TryAttach();
+            app = TimedCall("TryAttach", _attacher.TryAttach);
         }
         catch (Exception ex)
         {
@@ -334,7 +361,7 @@ public class ComWorker<TApp> : IDisposable where TApp : class
 
     private void RunItem(Item item)
     {
-        var failure = item.Run(_instance!);
+        var failure = TimedCall(item.Name, () => item.Run(_instance!));
         if (failure is not null)
         {
             if (ComErrors.IsOutlookGone(failure))
@@ -350,11 +377,36 @@ public class ComWorker<TApp> : IDisposable where TApp : class
         _lastActivity = Now;
     }
 
+    // Logs name and duration only. The timer line is what shows a call that never returns.
+    private T TimedCall<T>(string name, Func<T> call)
+    {
+        if (_log is null)
+        {
+            return call();
+        }
+        var threshold = _options.SlowCallThreshold;
+        var sw = Stopwatch.StartNew();
+        using var timer = new Timer(
+            _ => _log.LogWarning("COM call {Name} is still running after {Seconds:F0} s.", name, threshold.TotalSeconds),
+            null, threshold, Timeout.InfiniteTimeSpan);
+        try
+        {
+            return call();
+        }
+        finally
+        {
+            if (sw.Elapsed >= threshold)
+            {
+                _log.LogWarning("COM call {Name} took {Seconds:F1} s.", name, sw.Elapsed.TotalSeconds);
+            }
+        }
+    }
+
     private void Probe()
     {
         try
         {
-            _attacher.Probe(_instance!);
+            TimedCall("Probe", () => { _attacher.Probe(_instance!); return 0; });
         }
         catch (Exception ex)
         {

@@ -19,19 +19,30 @@ internal static class Program
             return 0;
         }
 
-        var loggerFactory = LoggerFactory.Create(b => b.AddDebug());
-        var logger = loggerFactory.CreateLogger("ClippysRevenge");
-        var hub = new ActivityHub();
-        var worker = new OutlookWorker(hub, loggerFactory.CreateLogger("OutlookWorker"));
-        worker.Start();
         var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClippysRevenge");
         var store = new SettingsStore(dataDir, new DpapiProtector());
         var loaded = store.Load();
+        var settings = loaded.Settings;
+        var tokens = new TokenHolder(loaded.Token);
+
+        // Rolling file log (SPEC 5.1); level is live from the LogLevel setting, the token is masked.
+        var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClippysRevenge", "logs");
+        var fileLog = new RollingFileLoggerProvider(new RollingFileLogOptions
+        {
+            Directory = logDir,
+            MinLevel = () => settings.LogLevel,
+            Secrets = () => [tokens.Current],
+        });
+        var loggerFactory = LoggerFactory.Create(b => b.AddDebug().AddProvider(fileLog));
+        var logger = loggerFactory.CreateLogger("ClippysRevenge");
+        logger.LogInformation("Clippy's Revenge starting.");
+        var hub = new ActivityHub();
+        var worker = new OutlookWorker(hub, loggerFactory.CreateLogger("OutlookWorker"));
+        worker.Start();
         foreach (var w in loaded.Warnings)
         {
             logger.LogWarning("{Warning}", w);
         }
-        var settings = loaded.Settings;
         try
         {
             StartupRegistration.Apply(settings.StartWithWindows);
@@ -40,8 +51,6 @@ internal static class Program
         {
             logger.LogWarning(ex, "Could not update the Run key.");
         }
-        var tokens = new TokenHolder(loaded.Token);
-
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (_, e) => logger.LogCritical(e.Exception, "Unhandled UI thread exception.");
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
@@ -92,7 +101,7 @@ internal static class Program
             },
             dataDir,
             // Logs live under %LOCALAPPDATA% (SPEC 5.1). "Open data folder" opens %APPDATA% on purpose: settings.json and token.bin.
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClippysRevenge", "logs"),
+            logDir,
             () => worker.State == OutlookConnectionState.Unavailable,
             () =>
             {
@@ -154,7 +163,7 @@ internal static class Program
                         .AddSingleton(new Optional<AttachmentExport>(null));
                 }
             },
-            ConfigureLogging = b => b.AddDebug(),
+            ConfigureLogging = b => b.AddDebug().AddProvider(fileLog),
         });
         _ = StartHostAsync(host, settings.Port, logger);
         _ = sync?.StartAsync(CancellationToken.None);
@@ -182,6 +191,7 @@ internal static class Program
         indexErrorScope?.Dispose();
         hub.Dispose();
         loggerFactory.Dispose();
+        fileLog.Dispose();
         return 0;
     }
 
