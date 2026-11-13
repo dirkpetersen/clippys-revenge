@@ -797,7 +797,10 @@ Status line:
    `✗ The update couldn't be downloaded: <reason>`,
    `✗ The update couldn't be installed: <reason>` or
    `Clippy is busy. Try again in a minute.`
-3. The last lookup failed: `✗ Couldn't check for updates: <reason>`.
+3. `LastError` is set (the last automatic lookup, download or install
+   failed, §20.7): `✗ The last update attempt failed: <reason>`.
+   (`✗ Couldn't check for updates: <reason>` is only the message of a
+   failed manual check, item 2.)
 4. No lookup yet: `No update check yet.`
 5. The latest release isn't newer: `You have the latest version.`
 6. The latest is the failed version:
@@ -1720,6 +1723,13 @@ progress.
 
 - Kestrel listens on `IPAddress.Loopback:Port` only. On startup it checks
   that no other binding exists.
+- `McpHttpHost.StartAsync(port, ct, bindRetryFor)`: a bind that fails
+  because the address is in use is retried every 500 ms until
+  `bindRetryFor` has passed (default none: fail at once). `Program`
+  passes 10 s only when the start-up plan has `ConfirmAfterStart` (the
+  first start of a freshly updated exe, while the old process may still
+  be releasing the port, §20.9), and none otherwise. Other bind errors
+  fail at once. The failure label stays `port <n> is in use`.
 - `BearerAuth` middleware runs before `MapMcp`:
   - It reads the expected token from a `TokenHolder` that the tray updates
     directly, so a regenerated token takes effect without a restart.
@@ -1785,10 +1795,22 @@ progress.
   are cleaned up at the next start (§20.9); `-Uninstall` removes them
   with the install folder, and its purge removes `update-state.json`
   with the data folder.
-- **Update handover and the single instance**: the old process releases
-  the mutex and the pipe (and the server its port) before it starts the
-  new exe, then waits up to 60 s for the new instance to confirm
-  (§20.9).
+- **Shutdown order** (after the message loop ends, each step bounded):
+  1. The update service stops (at most 35 s: it waits up to 30 s for a
+     file swap that is still running, so the process never exits with
+     only `.old` on disk, §20.8).
+  2. The MCP host is disposed first among the services, with its own
+     10 s wait, so no new requests arrive and the port is free for a new
+     version.
+  3. Drafting and sync stop (at most 5 s together); then the Outlook
+     worker, the indexes and the rest are disposed.
+- **Update handover and the single instance**: the handover runs only if
+  the MCP host stopped within its 10 s. Then the old process releases
+  the mutex and the pipe before it starts the new exe, and waits up to
+  60 s for the new instance to confirm (§20.9). If the host didn't stop
+  in time, the port may still be held, so the handover is skipped (a
+  Warning is logged): the swapped exe stays in place with `Pending` set,
+  and it confirms itself at the next start.
 - If the app crashes, there is no automatic restart. Unhandled exceptions
   are logged, and a wrapper around the host restarts the HTTP and sync
   services in-process. If the process itself dies, the user restarts it
@@ -2037,6 +2059,10 @@ window. Design choices made by the spec owner:
   when GitHub provides it, the exact size, an `MZ` header and the exe's
   `ProductVersion`. That gives integrity, not independent authenticity
   (§20.5, open question 12).
+- Update authenticity rests on GitHub (who can publish a release in the
+  repository), HTTPS to the pinned hosts and `SHA256SUMS.txt` from the
+  same release. There is no signature check of our own yet. Open
+  question 12 stays open for the user.
 - Only full releases strictly newer than the running version; never
   pre-releases, drafts or downgrades.
 - Installs only at start-up (an update staged earlier, or the check in
@@ -2051,8 +2077,16 @@ window. Design choices made by the spec owner:
   instance to confirm. Otherwise it rolls back, remembers the failed
   version and never installs it automatically again.
 - Idle (no tool call, drafting pass, invite dialog or Settings window)
-  is required for an in-session install. Sync and backfill don't block
-  it.
+  is required for an in-session install, tested again right before the
+  swap. **Update now** ignores the Settings window. Sync and backfill
+  don't block it.
+- Shutdown (M12 review): the update service stops first (it waits up to
+  30 s for a swap in progress), then the MCP host on its own 10 s wait,
+  then drafting and sync. The handover runs only if the host stopped in
+  time; otherwise the swapped exe confirms at the next start. A new
+  exe retries an in-use port for 10 s and confirms only after its MCP
+  server started; if the `Pending` write fails, the swap is undone
+  (§13, §14, §20.9).
 - Update state lives in its own file (`update-state.json`), not in
   `settings.json`.
 - One setting, `Updates` = `Install` (default, as the user asked) /
@@ -3189,6 +3223,9 @@ documentation (§6.7).
 - `SemVersion` follows SemVer 2.0.0: `MAJOR.MINOR.PATCH`, an optional
   `-PRERELEASE` (dot-separated identifiers) and optional `+BUILD`, which
   is dropped. Numeric parts have no leading zeros and fit an `int`.
+  Digits are ASCII `0`–`9` only in both grammars (version and tag);
+  other Unicode digits don't match. A tag whose number doesn't fit an
+  `int` is rejected, never an exception.
   Precedence is SemVer §11, so `0.0.6-beta.1 < 0.0.6 < 0.0.7`.
 - A release qualifies only when its tag is exactly
   `v<MAJOR>.<MINOR>.<PATCH>` (no pre-release, no build part). That is
@@ -3309,7 +3346,7 @@ second expected hash. GitHub has filled this field since 2025.
 |---|---|
 | `LastCheckUtc` | Last successful lookup |
 | `LastAttemptUtc` | Last lookup, successful or not |
-| `LastError` | Reason of the last failed lookup or download (§20.10), cleared by a successful lookup |
+| `LastError` | Reason of the last failed lookup, download or install (§20.10, including an install at start-up), cleared by a successful lookup, download or swap |
 | `LatestTag`, `LatestPublishedUtc` | Newest full release seen |
 | `Staged` | `{Version, Sha256, Size}` of the verified download in the staging folder |
 | `FailedVersion` | A version that didn't start; never installed automatically again |
@@ -3317,9 +3354,11 @@ second expected hash. GitHub has filled this field since 2025.
 | `Pending` | `{FromVersion, ToVersion, StartedUtc, Confirmed}` while a swap is being handed over |
 | `Notice` | `{Kind, FromVersion, ToVersion}`, shown once at the next start. Written for a rollback (`Kind = RolledBack`, `FromVersion` = the version that failed, `ToVersion` = the version running again) |
 
-It is written atomically (temp file, then replace). A missing,
-unreadable or invalid file loads as an empty state with a Warning log,
-never an exception. Each invalid field (an unparseable version or tag,
+It is written atomically (temp file, then replace). It is read with
+`FileShare.ReadWrite | FileShare.Delete`, so a reader in one process
+never blocks the other process's replace. A missing, unreadable or
+invalid file loads as an empty state with a Warning log:
+`UpdateStateStore.Load` never throws, whatever the exception. Each invalid field (an unparseable version or tag,
 a hash that isn't 64 hex characters, a size outside the limits) is
 dropped on its own. It is not in `settings.json`, because the Settings
 window copies the whole settings object on Apply (§6.3) and would
@@ -3353,18 +3392,27 @@ overwrite times written in the background.
   Settings) runs one lookup at once, whatever the mode and the due
   time. It doesn't download. **Update now** runs the lookup if no
   latest version is known, downloads and verifies unless that version
-  is staged, waits for idle for at most 2 minutes, and installs. It is
-  allowed for a version in `FailedVersion` (the About window says it
-  failed before).
+  is staged, waits for idle for at most 2 minutes, and installs. Its
+  idle test (`UpdateServiceOptions.IsBusyManual`) ignores an open
+  Settings window, since it is the user's own action and About may have
+  been opened from Settings (§20.9). It is allowed for a version in
+  `FailedVersion` (the About window says it failed before).
 - Only one check, download or install runs at a time. A second request
   while one runs does nothing.
+- `UpdateService.StopAsync` waits up to 30 s (`InstallStopWait`) for a
+  file swap that is in progress, so the app never exits halfway through
+  a swap (§14).
 
 ### 20.9 Installing
 
 **Idle** means no open `Serving`, `Drafting` or `AwaitingConfirmation`
 scope in `ActivityHub` (`IsActive`, §7) and no open Settings window.
-Sync and backfill may be running: they stop with the app and resume
-after the restart.
+**Update now** uses the same test without the Settings window
+(`IsBusyManual`, §20.8). Sync and backfill may be running: they stop
+with the app and resume after the restart. An automatic install tests
+for idle once more right before it swaps; if Clippy became busy in the
+meantime, it goes back to waiting (within the same 10-minute limit).
+Update now doesn't re-test.
 
 **At start-up, before anything runs.** Right after the settings and the
 log are loaded, and before the Outlook worker, the tray, the server,
@@ -3373,12 +3421,22 @@ When it returns *install now*, `Program` swaps the files, releases the
 single-instance mutex, hands over and exits. No MCP request or drafting
 pass can be running at that point. *Install now* needs `Updates =
 Install`, an installed copy, and a `Staged` version that is an update
-(§20.2) whose file exists with the recorded size.
+(§20.2) whose file exists with the recorded size. Any error of this
+start-up install never keeps the app from starting: an
+`UpdateInstallException` is logged with its reason, any other exception
+is logged by type name only (Error) and recorded as
+`the installed program couldn't be replaced (<exception type name>)`;
+both set `LastError` (a failed state write is only logged), and start-up
+continues with the old exe.
 
 **During the session** (the start-up window of §20.8, or **Update now**):
 the staged file is checked again, the files are swapped, and the tray
-exits through the normal shutdown (drafting, sync and the server stop,
-at most 5 s). Then the mutex is released and the handover runs.
+exits through the normal shutdown in the order of §14: the update
+service, then the MCP host (10 s), then drafting and sync (5 s). If the
+host stopped in time, the mutex is released and the handover runs. If
+it didn't, the handover is skipped (Warning log), the process exits
+with `Pending` set and the new exe in place, and the new exe confirms
+itself at the next start (`Prepare`, below).
 
 **Swap** (`UpdateInstall.Begin`):
 1. Check the staged file's size and SHA-256 against `Staged`.
@@ -3389,15 +3447,22 @@ at most 5 s). Then the mutex is released and the handover runs.
    allows renaming a running exe, though not deleting it.
 4. Move the staged file to `ClippysRevenge.exe`. If that fails, rename
    `.old` back and stop.
-5. Write `Pending = {FromVersion, ToVersion, StartedUtc, Confirmed = false}`
-   and clear `Staged`.
+5. Write `Pending = {FromVersion, ToVersion, StartedUtc, Confirmed = false}`,
+   clear `Staged` and `LastError`. If that write fails, undo the swap
+   (without `Pending` no later start could roll back): move the new exe
+   back to its staging file, rename `.old` back to
+   `ClippysRevenge.exe` (same retries; if that fails too, log a
+   Critical error that tells the user to run `install.ps1`), and stop
+   with `the installed program couldn't be replaced (<exception type name>)`.
+   `Staged` stays as it was.
 
 File operations retry every 500 ms for up to 10 s on `IOException` or
 `UnauthorizedAccessException`, because antivirus may hold a new file
 for a moment. A failed swap leaves the old exe in place, records
 `LastError` and keeps the app running.
 
-**Handover** (`UpdateHandover`, in the old process after shutdown):
+**Handover** (`UpdateHandover`, in the old process after shutdown, only
+when the MCP host stopped in time, §14):
 1. Start the installed exe (§20.11). If that throws, roll back.
 2. Every 250 ms, read the state. A read that fails (the file is being
    replaced) is ignored until the next poll. `Pending` cleared, or
@@ -3412,18 +3477,27 @@ the restored exe the same way, and exit. If the files can't be restored,
 log a Critical error, keep `Pending` and exit; the troubleshooting page
 tells the user to run `install.ps1` again.
 
-**Confirm** (new process): when the tray is up and the server start was
-attempted (posted to the UI thread, so the message loop runs), a
-process whose version equals `Pending.ToVersion` sets `Confirmed = true`,
-shows the `Updated` balloon and records the `updated from …` event. In
-the background it then deletes `.old`
-(retrying every second for up to 60 s, since the old process may still
-be exiting) and clears `Pending`. A leftover `.old` is deleted at the
-next start.
+**Confirm** (new process): the MCP host starts with the 10 s in-use
+bind retry of §13, because the old process may still be releasing the
+port. When the tray is up and the server start finished (posted to the
+UI thread, so the message loop runs):
+- If the MCP server did **not** start, the process doesn't confirm
+  (Warning log). A version that can't serve isn't a working update, so
+  the old process rolls back after its 60 s.
+- Otherwise `UpdateStartup.ConfirmAsync`: a process whose version
+  equals `Pending.ToVersion` sets `Confirmed = true`, retrying the state
+  write every 250 ms for up to 10 s (the old process may be reading the
+  file at that moment); if it still fails, it logs and doesn't confirm.
+  After a confirmation it shows the `Updated` balloon and records the
+  `updated from …` event. In the background it then deletes `.old`
+  (retrying every second for up to 60 s, since the old process may
+  still be exiting) and clears `Pending`. A leftover `.old` is deleted
+  at the next start.
 
 **`UpdateStartup.Prepare`** (installed copies only, at every start):
 - `Pending` for this version: confirm after start-up (above). This also
-  covers an old process that died during the handover.
+  covers an old process that died during the handover, and a handover
+  that was skipped because the MCP host didn't stop in time.
 - `Pending` for another version: that update didn't take. Set
   `FailedVersion = ToVersion`, `Notice = RolledBack`, clear `Pending`.
 - Without `Pending`: delete `.old` if `ClippysRevenge.exe` exists (one
