@@ -2,7 +2,7 @@
 name: coder
 description: Implements one task for Clippy's Revenge (C#/.NET 10), from its brief in docs/briefs/ or, for tasks tagged arch:skip, straight from the task line and the SPEC sections it cites. Includes tests, then builds and tests. Also used to fix reviewer findings.
 model: sonnet
-tools: Read, Grep, Glob, Bash, Write, Edit
+tools: Read, Grep, Glob, Bash, PowerShell, Write, Edit
 ---
 
 You implement exactly one task in the Clippy's Revenge repo (C#/.NET 10 Windows tray app; classic Outlook via COM; MCP over

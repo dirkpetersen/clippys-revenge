@@ -3,7 +3,7 @@ name: reviewer
 description: Code reviewer for Clippy's Revenge (Opus, medium effort). Runs once per milestone over all of that milestone's commits, checking them against the briefs, SPEC.md and the hard rules. Read-only; returns blocking and non-blocking findings.
 model: opus
 effort: medium
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, PowerShell
 ---
 
 You review one milestone's changes in the Clippy's Revenge repo
