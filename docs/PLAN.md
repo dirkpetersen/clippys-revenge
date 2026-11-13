@@ -89,7 +89,8 @@ v0.0.1 release.
 - [ ] M9.1 Shared mailboxes submenu (check / uncheck with delete prompt / not-in-Outlook entries) `{arch:skip}`
 - [ ] M9.2 `SettingsForm` (all tabs, validation messages, Test connection via `initialize`) `{arch:brief}`
 - [ ] M9.3 `ActivityForm` (progress, filters, copy) `{arch:skip}`
-
+- [ ] M9.4 Rolling file log: `Microsoft.Extensions.Logging` to `%LOCALAPPDATA%\ClippysRevenge\logs\clippy-YYYYMMDD.log`, 7 days kept, level from `LogLevel` setting; never the token, bodies or search text (SPEC §2, §5.1, §6.4). Found missing in the 2026-11-12 smoke test: no task built it. `{arch:skip}`
+- [ ] M9.5 COM call watchdog: a single hung Outlook call must not block the worker forever. Interactive calls fail fast with an actionable error after a timeout ("Outlook isn't responding…"), the tray shows it, and background work resumes when Outlook answers again. Also: avoid per-call GAL lookups (`GetExchangeUser().PrimarySmtpAddress`) in `OutlookStores.List`; cache per connection and prefer local properties. Needs a SPEC §4 change. `{arch:brief}`
 ## M10 Ship — deps: everything above
 - Review: [ ] pending
 - [ ] M10.1 Safety source-scan test (one `.Send(`, no Outlook launch calls) `{arch:skip}`
@@ -134,3 +135,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-12 M2 + M4 milestone reviews approved after 1 fix round each; dev at 946 tests passing
 2026-11-12 M5.1 OutlookWorker: Core ComWorker + attach-only App attacher, Start Outlook launcher, 65 tests
 2026-11-12 M5.2–M8.4 built in 3 parallel tracks, M5/M6/M7/M8 reviews approved; merged to dev, 1618 tests
+2026-11-12 Smoke test vs cached Outlook: auth OK (401 no token, 401 Origin, 200 token), loopback-only bind, 10 tools listed; sync indexed 0 emails, list_events hung 180 s, no log file; Outlook itself then showed Not Responding. Added M9.4, M9.5.
