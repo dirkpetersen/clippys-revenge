@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>ClippysRevenge.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- BearerAuth (SPEC §13) is ASP.NET Core middleware; cross-platform. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.15" />
+    <PackageReference Include="Dapper" Version="2.1.89" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="ClippysRevenge.Core.Tests" />
+  </ItemGroup>
+</Project>

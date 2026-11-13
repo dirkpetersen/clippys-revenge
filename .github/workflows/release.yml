@@ -1,0 +1,86 @@
+name: Release
+
+# Publishes GitHub release v<Version> (from Directory.Build.props) with the
+# single-file ClippysRevenge.exe whenever main has a version that has no tag yet.
+# To ship a new version: bump <Version> in Directory.Build.props and merge to main.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version and check for existing tag
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! compgen -G "*.sln" >/dev/null && ! compgen -G "*.slnx" >/dev/null; then
+            echo "::notice::No solution file yet; nothing to release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props | head -1)
+          [ -n "$version" ] || { echo "::error::No <Version> in Directory.Build.props"; exit 1; }
+          tag="v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null || gh release view "$tag" >/dev/null 2>&1; then
+            echo "::notice::$tag already released; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.ver.outputs.skip == 'false'
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Test (no live Outlook)
+        if: steps.ver.outputs.skip == 'false'
+        run: dotnet test -c Release --filter "live!=outlook"
+
+      - name: Publish single-file exe
+        if: steps.ver.outputs.skip == 'false'
+        run: |
+          dotnet publish src/ClippysRevenge.App -c Release -r win-x64 \
+            --self-contained -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:Version=${{ steps.ver.outputs.version }} -o publish
+          mkdir dist
+          cp publish/ClippysRevenge.exe dist/
+          [ -f install.ps1 ] && cp install.ps1 dist/ || true
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          ls -l dist
+
+      - name: Create GitHub release
+        if: steps.ver.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.ver.outputs.tag }}" dist/* \
+            --target "$GITHUB_SHA" \
+            --title "Clippy's Revenge ${{ steps.ver.outputs.tag }}" \
+            --generate-notes \
+            $([[ "${{ steps.ver.outputs.version }}" == 0.* ]] && echo --prerelease)

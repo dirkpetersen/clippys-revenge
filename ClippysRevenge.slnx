@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ClippysRevenge.App/ClippysRevenge.App.csproj" />
+    <Project Path="src/ClippysRevenge.Core/ClippysRevenge.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ClippysRevenge.Core.Tests/ClippysRevenge.Core.Tests.csproj" />
+  </Folder>
+</Solution>

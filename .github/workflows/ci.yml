@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      has_code: ${{ steps.check.outputs.has_code }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        shell: bash
+        run: |
+          if compgen -G "*.sln" >/dev/null || compgen -G "*.slnx" >/dev/null; then
+            echo "has_code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_code=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No solution file yet; skipping build."
+          fi
+
+  # Core is net10.0 with no Windows/COM dependency, so its tests run on Linux (SPEC §15).
+  core-tests-linux:
+    needs: detect
+    if: needs.detect.outputs.has_code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Test Core
+        run: dotnet test tests/ClippysRevenge.Core.Tests -c Release --filter "live!=outlook" --logger trx --results-directory TestResults
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-linux
+          path: TestResults
+
+  # Full solution (incl. the WinForms/COM app) only builds on Windows.
+  build-windows:
+    needs: detect
+    if: needs.detect.outputs.has_code == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build
+        run: dotnet build -c Release
+      - name: Test (no live Outlook)
+        run: dotnet test -c Release --no-build --filter "live!=outlook"
+      - name: Publish single-file exe (smoke)
+        run: >
+          dotnet publish src/ClippysRevenge.App -c Release -r win-x64
+          --self-contained -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClippysRevenge-win-x64
+          path: publish/ClippysRevenge.exe
+          retention-days: 7
