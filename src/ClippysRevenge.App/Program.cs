@@ -83,6 +83,8 @@ internal static class Program
                 return ok;
             }));
 
+        var inviteQueue = new InviteConfirmQueue(new InviteConfirmPresenter(SynchronizationContext.Current!), hub);
+
         instance.StartListening(() =>
         {
             logger.LogInformation("Second launch asked to open Settings.");
@@ -94,7 +96,7 @@ internal static class Program
             Tokens = tokens,
             Hub = hub,
             ConfigureMcp = b => b.WithTools<McpTools>(),
-            ConfigureServices = s => s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker),
+            ConfigureServices = s => s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(inviteQueue),
             ConfigureLogging = b => b.AddDebug(),
         });
         _ = StartHostAsync(host, settings.Port, logger);
@@ -105,6 +107,7 @@ internal static class Program
         }
 
         Application.Run(tray);
+        inviteQueue.Dispose();
 
         // Process entry point after the message loop ended: the one allowed blocking wait.
         // Task.Run avoids the WinForms SynchronizationContext.
