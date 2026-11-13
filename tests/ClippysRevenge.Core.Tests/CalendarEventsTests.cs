@@ -61,16 +61,26 @@ public class CalendarEventsTests
             var w = new EventWindow(new DateTimeOffset(2026, 3, 4, 9, 5, 0, TimeSpan.Zero), new DateTimeOffset(2026, 3, 11, 17, 0, 0, TimeSpan.Zero));
             Assert.Equal(
                 "@SQL=\"urn:schemas:calendar:dtend\" > '2026-03-04 09:05' AND \"urn:schemas:calendar:dtstart\" < '2026-03-11 17:00'",
-                CalendarEvents.BuildFilter(w, Utc));
+                CalendarEvents.BuildFilter(w));
         }
         finally { CultureInfo.CurrentCulture = old; }
     }
 
     [Fact]
-    public void DaslDate_converts_to_local_zone()
+    public void DaslDate_is_utc()
     {
-        var tz = TimeZoneInfo.CreateCustomTimeZone("t", TimeSpan.FromHours(-8), "t", "t");
-        Assert.Equal("2026-03-04 07:00", CalendarEvents.DaslDate(new DateTimeOffset(2026, 3, 4, 15, 0, 0, TimeSpan.Zero), tz));
+        Assert.Equal("2026-03-04 15:00", CalendarEvents.DaslDate(new DateTimeOffset(2026, 3, 4, 15, 0, 0, TimeSpan.Zero)));
+        Assert.Equal("2026-03-04 13:00", CalendarEvents.DaslDate(new DateTimeOffset(2026, 3, 4, 5, 0, 0, TimeSpan.FromHours(-8))));
+    }
+
+    [Fact]
+    public void BuildFilter_uses_utc_for_non_utc_window()
+    {
+        var o = TimeSpan.FromHours(-8);
+        var w = new EventWindow(new DateTimeOffset(2026, 3, 4, 3, 0, 0, o), new DateTimeOffset(2026, 3, 4, 7, 0, 0, o));
+        Assert.Equal(
+            "@SQL=\"urn:schemas:calendar:dtend\" > '2026-03-04 11:00' AND \"urn:schemas:calendar:dtstart\" < '2026-03-04 15:00'",
+            CalendarEvents.BuildFilter(w));
     }
 
     [Fact]

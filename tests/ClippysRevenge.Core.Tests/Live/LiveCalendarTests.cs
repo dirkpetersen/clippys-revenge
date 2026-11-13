@@ -128,7 +128,7 @@ public sealed class LiveCalendarTests(LiveOutlook fx)
                 if ((hit is not null) != expected || (checkStart && hit is not null && hit.Start != At(s, tz)))
                     Assert.Fail($"list_events window looks shifted: event [{s:yyyy-MM-dd HH:mm}..{e:yyyy-MM-dd HH:mm}] vs window "
                         + $"[{window.Start:yyyy-MM-dd HH:mm zzz}..{window.End:yyyy-MM-dd HH:mm zzz}] ({name}, expected {(expected ? "found" : "absent")}), "
-                        + $"UTC offset {tz.GetUtcOffset(s)}. Outlook may compare calendar DASL dates in UTC (CalendarEvents.DaslDate builds local time).");
+                        + $"UTC offset {tz.GetUtcOffset(s)}. Check the window bounds against the event times (CalendarEvents.DaslDate).");
             }
 
             await Check("[S-2h, S+2h]", new EventWindow(At(s.AddHours(-2), tz), At(s.AddHours(2), tz)), true, checkStart: true);
@@ -170,7 +170,7 @@ public sealed class LiveCalendarTests(LiveOutlook fx)
             }
             // Outlook may return more than was asked for (whole 28-day chunks), never less.
             Assert.True(fb.Length >= days * 48, $"Free/busy for {days} days is {fb.Length} slots; expected at least {days * 48}.");
-            Assert.All(fb, c => Assert.InRange(c, '0', '4'));
+            Assert.All(fb, c => Assert.InRange(c, '0', '5'));
             fx.Result("freebusy-self", $"ok ({fb.Length} slots)");
         }
     }

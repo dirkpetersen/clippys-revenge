@@ -51,6 +51,13 @@ public class FreeBusyTests
         Assert.Equal(new[] { R(T(12, 9), T(12, 9, 15)) }, FreeBusy.BusyIntervals("2", T(12, 9), 15, true));
 
     [Fact]
+    public void Busy_NoInformationIsFree() => Assert.Empty(FreeBusy.BusyIntervals("055", T(12, 0), 30, true));
+
+    [Fact]
+    public void Busy_NoInformationEndsRun() =>
+        Assert.Equal(new[] { R(T(12, 0), T(12, 0, 30)) }, FreeBusy.BusyIntervals("255", T(12, 0), 30, true));
+
+    [Fact]
     public void Busy_BadChar()
     {
         var ex = Assert.Throws<FormatException>(() => FreeBusy.BusyIntervals("02x", T(12, 0), 30, true));
