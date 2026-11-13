@@ -42,7 +42,7 @@ Run one development cycle for Clippy's Revenge. Follow these steps exactly.
    instead, handle it like a blocking architect question. It must report
    a passing build and tests.
 6. **Verify yourself.** Run `dotnet build -c Release` and
-   `dotnet test -c Release --filter "live!=outlook"`. Both must pass.
+   `dotnet test -c Release --filter "live!=outlook&live!=claude"`. Both must pass.
 7. **Commit and push.** Mark the task `[x]` in `docs/PLAN.md` and append a
    log line. Commit everything with message `<id>: <summary>` (plus the
    required attribution trailer), then `git push origin dev`.

@@ -30,7 +30,7 @@ Rules:
   async all the way, release COM objects from enumerations inside loops.
 - Write the tests from the brief first, then the code.
 - Before replying, run:
-  `dotnet build -c Release` and `dotnet test -c Release --filter "live!=outlook"`.
+  `dotnet build -c Release` and `dotnet test -c Release --filter "live!=outlook&live!=claude"`.
   Both must pass with zero warnings. Never run live Outlook tests unless
   the brief explicitly asks and `CLIPPY_LIVE=1` is set.
 - Don't commit. The orchestrator commits after review.

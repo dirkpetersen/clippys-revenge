@@ -28,7 +28,7 @@ Check, in order:
    tray.
 3. **Tests**: do the brief's test cases exist and actually assert the
    behavior? Run `dotnet build -c Release` and
-   `dotnet test -c Release --filter "live!=outlook"` yourself and report
+   `dotnet test -c Release --filter "live!=outlook&live!=claude"` yourself and report
    the results.
 4. **Scope and size**: features or abstractions the brief didn't ask for,
    new packages, duplicated helpers.
