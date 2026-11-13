@@ -1,4 +1,4 @@
-﻿using ClippysRevenge.Core;
+using ClippysRevenge.Core;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Xunit;
@@ -272,6 +272,19 @@ public class EmailIndexAiTests : IDisposable
         Assert.Equal(["A"], _ix.DraftCandidates(T(-100), 1).Select(c => c.EntryId));
         Assert.Throws<ArgumentOutOfRangeException>(() => _ix.DraftCandidates(T(-100), 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => _ix.DraftCandidates(T(-100), 501));
+    }
+
+    [Fact]
+    public void DraftsCreatedSince_counts_only_drafted_rows_created_since()
+    {
+        _ix.UpsertDecision(new AiDecision("d1", null, null, T(-10), AiOutcome.Drafted, DraftCreated: T(-10)));
+        _ix.UpsertDecision(new AiDecision("d2", null, null, T(-60), AiOutcome.Drafted, DraftCreated: T(-60)));
+        _ix.UpsertDecision(new AiDecision("d3", null, null, T(-5), AiOutcome.Drafted, DraftCreated: T(-30)));
+        _ix.UpsertDecision(new AiDecision("f1", null, null, T(-5), AiOutcome.Failed, Attempts: 1));
+        _ix.UpsertDecision(new AiDecision("n1", null, null, T(-1), AiOutcome.NoReply));
+        Assert.Equal(2, _ix.DraftsCreatedSince(T(-30)));
+        Assert.Equal(3, _ix.DraftsCreatedSince(T(-61)));
+        Assert.Equal(0, _ix.DraftsCreatedSince(T(0)));
     }
 
     [Fact]

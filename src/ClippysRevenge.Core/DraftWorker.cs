@@ -61,6 +61,9 @@ public enum DraftPassEnd
 /// <summary>NoReply includes low_confidence. ModelCalls counts calls made in this pass.</summary>
 public sealed record DraftPassResult(DraftPassEnd End, int Drafted, int NoReply, int Skipped, int Failed, int ModelCalls);
 
+/// <summary>Today's Claude calls and created drafts (Settings "Today" line).</summary>
+public sealed record AiDraftsToday(int Calls, int Drafts);
+
 /// <summary>Message: the click-feedback balloon text (SPEC 19.7 manual).</summary>
 public sealed record ManualDraftResult(bool Drafted, string Message);
 
@@ -198,6 +201,27 @@ public sealed class DraftWorker : BackgroundService
             }
         }
         return total;
+    }
+
+    /// <summary>Calls = ModelCallsToday(). Drafts = sum of DraftsCreatedSince(local midnight) over every open index
+    /// (an index that throws counts 0). For the Settings "Today" line.</summary>
+    public AiDraftsToday Today()
+    {
+        var calls = ModelCallsToday();
+        var start = LocalMidnightUtc(_time.GetUtcNow());
+        var drafts = 0;
+        foreach (var key in _s.Indexes.Mailboxes)
+        {
+            try
+            {
+                drafts += _s.Indexes.For(key).DraftsCreatedSince(start);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning("AI drafts: couldn't count today's drafts ({Type}).", ex.GetType().Name);
+            }
+        }
+        return new AiDraftsToday(calls, drafts);
     }
 
     private DateTimeOffset LocalMidnightUtc(DateTimeOffset now)
@@ -406,7 +430,7 @@ public sealed class DraftWorker : BackgroundService
             var elapsed = _time.GetElapsedTime(p.Start);
             if (p.Rows > 0)
                 _s.Hub.Event(ActivityKind.Ai, DraftTexts.Summary(p.Drafted, p.NoReply, p.Skipped, p.Failed, elapsed), duration: elapsed);
-            if (p.Drafted > 0) _s.Balloons.Post(BalloonTexts.AiDrafted(p.Drafted));
+            if (p.Drafted > 0) _s.Balloons.Post(BalloonTexts.AiDrafted(p.Drafted), BalloonKind.Info, BalloonAction.ShowDrafts);
             _log?.LogInformation("AI drafts pass: {End}, {Drafted} drafted, {NoReply} no reply, {Skipped} skipped, {Failed} failed, {Calls} calls in {Ms} ms",
                 end, p.Drafted, p.NoReply, p.Skipped, p.Failed, p.Calls, (long)elapsed.TotalMilliseconds);
         }

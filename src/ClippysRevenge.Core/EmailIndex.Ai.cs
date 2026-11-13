@@ -214,6 +214,15 @@ public sealed partial class EmailIndex
             new { s = sinceUtc.ToUnixTimeSeconds() });
     }
 
+    /// <summary>COUNT(*) of ai_decisions rows with outcome 'drafted' and draft_created &gt;= sinceUtc.</summary>
+    public int DraftsCreatedSince(DateTimeOffset sinceUtc)
+    {
+        using var conn = OpenConnection();
+        return (int)conn.ExecuteScalar<long>(
+            "SELECT COUNT(*) FROM ai_decisions WHERE outcome = @o AND draft_created >= @s",
+            new { o = AiOutcomes.ToDb(AiOutcome.Drafted), s = sinceUtc.ToUnixTimeSeconds() });
+    }
+
     private static void ValidateDecision(AiDecision? d)
     {
         ArgumentNullException.ThrowIfNull(d, "decision");

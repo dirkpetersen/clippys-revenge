@@ -59,6 +59,61 @@ public sealed class SettingsApplierTests : IDisposable
 
     private Action? _aiChanged;
 
+    [Fact]
+    public async Task Apply_after_a_tray_enable_keeps_consent_and_enabled_and_applies_the_window_edit()
+    {
+        var editor = new SettingsEditor(_live);   // opened before consent
+        var toggler = new AiDraftingToggler(_live, _store.Save, () => { });
+        var consent = toggler.RecordConsent();
+        toggler.SetEnabled(true);
+        var enabledAt = _live.AiDrafting.EnabledAtUtc;
+        editor.Draft.AiDrafting.DailyCap = 40;
+
+        var r = await Applier().ApplyAsync(editor, TestContext.Current.CancellationToken);
+
+        Assert.True(r.Ok);
+        Assert.Equal(consent, _live.AiDrafting.ConsentedAtUtc);
+        Assert.True(_live.AiDrafting.Enabled);
+        Assert.Equal(enabledAt, _live.AiDrafting.EnabledAtUtc);
+        Assert.Equal(40, _live.AiDrafting.DailyCap);
+        var saved = _store.Load().Settings.AiDrafting;
+        Assert.Equal(consent, saved.ConsentedAtUtc);
+        Assert.True(saved.Enabled);
+        Assert.Equal(40, saved.DailyCap);
+    }
+
+    [Fact]
+    public async Task Apply_never_clears_live_consent()
+    {
+        _live.AiDrafting.RecordConsent(DateTimeOffset.Parse("2026-11-13T10:00:00Z"));
+        var consent = _live.AiDrafting.ConsentedAtUtc;
+        var editor = new SettingsEditor(_live);
+        editor.Draft.AiDrafting.ConsentedAtUtc = null;
+        editor.Draft.AiDrafting.DailyCap = 41;
+
+        var r = await Applier().ApplyAsync(editor, TestContext.Current.CancellationToken);
+
+        Assert.True(r.Ok);
+        Assert.Equal(consent, _live.AiDrafting.ConsentedAtUtc);
+        Assert.Equal(41, _live.AiDrafting.DailyCap);
+    }
+
+    [Fact]
+    public async Task Apply_after_the_form_enables_notifies_once()
+    {
+        var calls = 0;
+        _aiChanged = () => calls++;
+        var editor = new SettingsEditor(_live);
+        editor.AdoptConsent(DateTimeOffset.Parse("2026-11-13T10:00:00Z"));
+        editor.Draft.AiDrafting.SetEnabled(true, DateTimeOffset.Parse("2026-11-13T10:01:00Z"));
+
+        var r = await Applier().ApplyAsync(editor, TestContext.Current.CancellationToken);
+
+        Assert.True(r.Ok);
+        Assert.True(_live.AiDrafting.Enabled);
+        Assert.Equal(1, calls);
+    }
+
     private SettingsApplier Applier(bool withIndexes = false)
     {
         if (withIndexes)

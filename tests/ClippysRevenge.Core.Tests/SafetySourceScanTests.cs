@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -214,16 +214,50 @@ public class SafetySourceScanTests
     public void ProcessStart_OnlyInOutlookLauncher_AndLauncherUsesNoCom()
     {
         AssertNone(Find(f => f.Code, @"\bProcess\s*\.\s*Start\b|\bShellExecute\w*\s*\(", f => f.Rel == Launcher || f.Rel == TrayFile || f.Rel == ClaudeCliFile),
-            "Only OutlookLauncher.cs, TrayApp.cs (Open data folder) and ClaudeCli.cs may start a process.");
-        // TrayApp.OpenFolder opens a folder in Explorer (not Outlook); it is the only other Process.Start.
+            "Only OutlookLauncher.cs, TrayApp.cs (ShellOpen: folders, the skill file, the manual link) and ClaudeCli.cs may start a process.");
+        // TrayApp.ShellOpen hands one path or URL to the shell (not Outlook); it is the only other Process.Start.
         var tray = Scan.Value.Files.Single(f => f.Rel == TrayFile);
         Assert.Single(Regex.Matches(tray.Code, @"\bProcess\s*\.\s*Start\b"));
-        Assert.Matches(@"void\s+OpenFolder\s*\(string path\)\s*\{[^}]*Process\.Start\(new ProcessStartInfo\(path\)", tray.Code);
+        Assert.Matches(@"void\s+ShellOpen\s*\(string target\)\s*\{\s*Process\.Start\(new ProcessStartInfo\(target\)\s*\{\s*UseShellExecute\s*=\s*true\s*\}\)", tray.Code);
+        Assert.DoesNotMatch(@"\bArgumentList\b|\.Arguments\b|\bVerb\s*=", tray.Code);
 
         var l = Scan.Value.Files.SingleOrDefault(f => f.Rel == Launcher);
         Assert.NotNull(l);
         Assert.Matches(@"Process\s*\.\s*Start\s*\(", l!.Code);
         Assert.DoesNotMatch(@"Marshal\b|Outlook\.|GetActiveObject|Activator|ProgID", l.Code);
+    }
+
+    [Fact]
+    public void AiUi_NeverSignsInAndNeverShowsTheKey()
+    {
+        const string TrayDir = "src/ClippysRevenge.App/Tray/";
+        var ui = Scan.Value.Files.Where(f => f.Rel.StartsWith(TrayDir, StringComparison.Ordinal)
+            || f.Rel == "src/ClippysRevenge.Core/AiDraftsUi.cs").ToList();
+        Assert.NotEmpty(ui);
+        Assert.Contains(ui, f => f.Rel.EndsWith("AiDraftsUi.cs", StringComparison.Ordinal));
+
+        var bad = new List<string>();
+        foreach (var f in ui)
+            foreach (var lit in f.Literals)
+            {
+                var text = lit[(lit.IndexOf('|') + 1)..];
+                if (Regex.IsMatch(text, @"(?i)claude\.ai|\blogin\b|/login|setup-token|oauth")) bad.Add($"{f.Rel}: \"{text}\"");
+            }
+        AssertNone(bad, "AI UI strings must never mention a sign-in (claude.ai, login, setup-token, oauth).");
+
+        var trayFiles = ui.Where(f => f.Rel.StartsWith(TrayDir, StringComparison.Ordinal)).ToList();
+        AssertNone(trayFiles.Where(f => Regex.IsMatch(f.Code, @"\bLoadApiKey\b|\bCachedApiKey\b")).Select(f => f.Rel).ToList(),
+            "Tray code never reads the API key: only Program calls LoadApiKey.");
+
+        var form = trayFiles.Where(f => f.Rel.StartsWith(TrayDir + "SettingsForm", StringComparison.Ordinal)).ToList();
+        Assert.NotEmpty(form);
+        foreach (var f in form)
+            foreach (Match m in Regex.Matches(f.Code, @"_apiKeyBox\s*\.\s*Text\s*=(?!=)"))
+                Assert.Matches(@"\G\s*""""\s*;", f.Code[(m.Index + m.Length)..]);
+        Assert.Contains(form, f => Regex.IsMatch(f.Code, @"_apiKeyBox\s*\.\s*Text\s*=(?!=)"));
+
+        AssertNone(trayFiles.Where(f => Regex.IsMatch(f.Code, @"_status\.Text\s*=[^;]*_apiKeyBox|Log\w*\([^;]*_apiKeyBox"))
+            .Select(f => f.Rel).ToList(), "The API key box is never logged or shown in the status line.");
     }
 
     [Fact]

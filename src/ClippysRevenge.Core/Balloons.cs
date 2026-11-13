@@ -2,7 +2,10 @@ namespace ClippysRevenge.Core;
 
 public enum BalloonKind { Info, Warning, Error }
 
-public sealed record Balloon(string Text, BalloonKind Kind);
+/// <summary>What a click on the balloon does (SPEC 19.10). Only the AI drafts balloon has one.</summary>
+public enum BalloonAction { None, ShowDrafts }
+
+public sealed record Balloon(string Text, BalloonKind Kind, BalloonAction Action = BalloonAction.None);
 
 public static class BalloonTexts
 {
@@ -50,7 +53,7 @@ public sealed class BalloonCenter
 
     public event Action<Balloon>? Shown;
 
-    public bool Post(string text, BalloonKind kind = BalloonKind.Info)
+    public bool Post(string text, BalloonKind kind = BalloonKind.Info, BalloonAction action = BalloonAction.None)
     {
         var clean = Clean(text);
         lock (_lock)
@@ -62,7 +65,7 @@ public sealed class BalloonCenter
             }
             _lastAccepted = now;
         }
-        Raise(new Balloon(clean, kind));
+        Raise(new Balloon(clean, kind, action));
         return true;
     }
 
