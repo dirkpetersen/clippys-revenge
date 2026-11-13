@@ -14,6 +14,7 @@
 .PARAMETER TimeoutMinutes  Hard limit for the whole test run (default 20).
 .PARAMETER Shared          SMTP address of a shared mailbox open in Outlook (enables the shared-mailbox tests).
 .PARAMETER AllowClosed     Run only the attach-never-launches test when Outlook is closed.
+.PARAMETER Claude          Also run the live Claude tests (sets CLIPPY_LIVE_CLAUDE=1). They use a little of your Claude usage (two small Haiku calls).
 .PARAMETER NoBuild         Skip `dotnet build` (use the last build).
 .PARAMETER DryRun          Print what would run, then exit 0 without running anything.
 #>
@@ -22,6 +23,7 @@ param(
     [int]$TimeoutMinutes = 20,
     [string]$Shared,
     [switch]$AllowClosed,
+    [switch]$Claude,
     [switch]$NoBuild,
     [switch]$DryRun
 )
@@ -53,6 +55,7 @@ $root = Join-Path $env:TEMP 'clippy-live'
 $results = Join-Path $root "results-$stamp.txt"
 $resultsDir = Join-Path $root "TestResults-$stamp"
 $filter = 'live=outlook'
+$useClaude = [bool]$Claude
 
 # 1. Outlook must be running.
 $outlook = @(Get-Process OUTLOOK -ErrorAction SilentlyContinue)
@@ -62,6 +65,7 @@ if ($outlook.Count -eq 0) {
         exit 2
     }
     $filter = 'FullyQualifiedName~Attach_never_launches_outlook'
+    $useClaude = $false
 }
 
 # 2. Outlook must respond (no COM from this script).
@@ -86,6 +90,8 @@ if (@(Get-Process ClippysRevenge -ErrorAction SilentlyContinue).Count -gt 0) {
     Write-Warning "Clippy's Revenge is running. That is OK, but pausing sync from the tray makes the run faster."
 }
 
+if ($useClaude) { $filter = 'live=outlook|live=claude' }
+
 $testArgs = @(
     'test', 'tests/ClippysRevenge.Core.Tests', '-c', 'Release', '--no-build',
     '--filter', $filter,
@@ -103,6 +109,7 @@ if ($DryRun) {
     if (-not $NoBuild) { Write-Host '  dotnet build -c Release' }
     Write-Host ('  dotnet ' + ($testArgs -join ' '))
     Write-Host '  CLIPPY_LIVE=1'
+    if ($useClaude) { Write-Host '  CLIPPY_LIVE_CLAUDE=1' }
     Write-Host "  CLIPPY_LIVE_RESULTS=$results"
     if ($Shared) { Write-Host "  CLIPPY_LIVE_SHARED=$Shared" }
     Write-Host "  Timeout: $TimeoutMinutes minutes"
@@ -111,13 +118,15 @@ if ($DryRun) {
 
 # 4. Environment, restored in finally.
 $saved = @{}
-foreach ($name in 'CLIPPY_LIVE', 'CLIPPY_LIVE_RESULTS', 'CLIPPY_LIVE_SHARED') {
+foreach ($name in 'CLIPPY_LIVE', 'CLIPPY_LIVE_RESULTS', 'CLIPPY_LIVE_SHARED', 'CLIPPY_LIVE_CLAUDE') {
     $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
 $exit = 0
 try {
     New-Item -ItemType Directory -Force -Path $root | Out-Null
     $env:CLIPPY_LIVE = '1'
+    # A plain run never spends Claude usage, even when the variable is set in the user's shell.
+    if ($useClaude) { $env:CLIPPY_LIVE_CLAUDE = '1' } else { Remove-Item Env:CLIPPY_LIVE_CLAUDE -ErrorAction SilentlyContinue }
     $env:CLIPPY_LIVE_RESULTS = $results
     if ($Shared) { $env:CLIPPY_LIVE_SHARED = $Shared } else { Remove-Item Env:CLIPPY_LIVE_SHARED -ErrorAction SilentlyContinue }
 
