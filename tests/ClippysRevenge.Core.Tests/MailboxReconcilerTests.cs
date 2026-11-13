@@ -193,6 +193,31 @@ public class MailboxReconcilerTests : IDisposable
     }
 
     [Fact]
+    public async Task Disjoint_ids_delete_nothing_and_retry()
+    {
+        _ix.UpsertBatch(Enumerable.Range(0, 30).Select(i => M("x" + i)).ToList());
+        _src.Listed = Enumerable.Range(0, 30).Select(i => new OutlookEntry("long" + i, false)).ToList();
+        var r = await Run();
+        Assert.True(r.DeletesSuppressed);
+        Assert.Equal(0, r.Deleted);
+        Assert.Equal(30, _ix.Status().TotalEmails - r.Added);
+        Assert.Null(_ix.GetSyncState("fk-inbox")!.LastReconcile);
+    }
+
+    [Fact]
+    public async Task Mismatched_read_abandons_without_last_reconcile()
+    {
+        _src.Listed = [new("short1", false), new("short2", false)];
+        _src.Readable["short1"] = M("LONG1");
+        _src.Readable["short2"] = M("LONG2");
+        var r = await Run();
+        Assert.Equal(0, r.Added);
+        Assert.Equal(0, _ix.Status().TotalEmails);
+        Assert.Null(_ix.GetSyncState("fk-inbox")!.LastReconcile);
+        Assert.Contains("abandoned", Assert.Single(_hub.GetEvents()).Summary);
+    }
+
+    [Fact]
     public async Task Event_text_and_mailbox_tag()
     {
         Full();

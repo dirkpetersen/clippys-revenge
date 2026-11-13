@@ -102,4 +102,45 @@ public class ReconcilePlannerTests
         Assert.Throws<ArgumentNullException>(() => ReconcilePlanner.Plan(null!, [], Cutoff));
         Assert.Throws<ArgumentNullException>(() => ReconcilePlanner.Plan([], null!, Cutoff));
     }
+
+    [Fact]
+    public void Disjoint_sets_suppress_deletes()
+    {
+        var idx = Enumerable.Range(0, 3000).Select(n => I("old" + n)).ToArray();
+        var o = Enumerable.Range(0, 3000).Select(n => O("new" + n)).ToArray();
+        var p = Plan(o, idx);
+        Assert.Empty(p.ToDelete);
+        Assert.True(p.DeletesSuppressed);
+        Assert.True(p.IdMismatch);
+        Assert.Equal(3000, p.SuppressedCount);
+    }
+
+    [Fact]
+    public void Small_deletion_with_overlap_still_deletes()
+    {
+        var idx = Enumerable.Range(0, 100).Select(n => I("m" + n)).ToArray();
+        var o = idx.Take(90).Select(r => O(r.EntryId)).ToArray();
+        var p = Plan(o, idx);
+        Assert.Equal(10, p.ToDelete.Count);
+        Assert.False(p.DeletesSuppressed);
+    }
+
+    [Fact]
+    public void Over_half_missing_suppresses_deletes()
+    {
+        var idx = Enumerable.Range(0, 100).Select(n => I("m" + n)).ToArray();
+        var o = idx.Take(40).Select(r => O(r.EntryId)).ToArray();
+        var p = Plan(o, idx);
+        Assert.Empty(p.ToDelete);
+        Assert.True(p.DeletesSuppressed);
+        Assert.Equal(60, p.SuppressedCount);
+    }
+
+    [Fact]
+    public void Many_deletions_below_half_still_delete()
+    {
+        var idx = Enumerable.Range(0, 100).Select(n => I("m" + n)).ToArray();
+        var o = idx.Take(70).Select(r => O(r.EntryId)).ToArray();
+        Assert.Equal(30, Plan(o, idx).ToDelete.Count);
+    }
 }
