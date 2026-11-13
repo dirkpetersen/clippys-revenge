@@ -32,6 +32,15 @@ reference material only.
 - **Reply subjects start with `Re:: `** (double colon) via
   `ReplySubject.Normalize`. This is intentional. Don't "fix" it.
 - **No Graph API**, no Entra app registrations, no OAuth.
+- **Never touch Claude credentials** (AI drafting, SPEC §1.10, §19).
+  Clippy never reads Claude Code's stored credentials (OAuth tokens,
+  `.credentials.json`, the credential store), never calls any API with
+  them, and never offers a claude.ai sign-in inside Clippy. It runs the
+  user's own `claude` CLI headless (never with `--bare`, never through a
+  shell), or uses an Anthropic API key the user typed in (DPAPI-stored).
+  Sign-in state comes only from `claude auth status --json`. AI output
+  only ever becomes a saved reply draft; the model gets no tools. A test
+  scans the source for this.
 - **Attachment content never enters the index.** Only file names.
 - **Localhost-only and token-gated.** Bind `IPAddress.Loopback` only, keep
   `BearerAuth` with a constant-time compare, reject requests with an `Origin`
