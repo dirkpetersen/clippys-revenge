@@ -138,4 +138,73 @@ public class EmailIndexMaintenanceTests : IDisposable
             if (File.Exists(DbFile + ext)) File.Delete(DbFile + ext);
         Assert.False(File.Exists(DbFile));
     }
+
+    // ---- M6.1: meta, sync info, last sync
+
+    [Fact]
+    public void Meta_RoundTrip()
+    {
+        var ix = new EmailIndex(DbFile);
+        Assert.Null(ix.GetMeta("store_id"));
+        ix.SetMeta("store_id", "S");
+        Assert.Equal("S", ix.GetMeta("store_id"));
+        ix.SetMeta("store_id", "T");
+        Assert.Equal("T", ix.GetMeta("store_id"));
+        ix.SetMeta("store_id", null);
+        Assert.Null(ix.GetMeta("store_id"));
+    }
+
+    [Fact]
+    public void Meta_SchemaVersionRefused()
+    {
+        var ix = new EmailIndex(DbFile);
+        Assert.Throws<ArgumentException>(() => ix.SetMeta("schema_version", "9"));
+        Assert.Equal(EmailIndex.SchemaVersion.ToString(), ix.GetMeta("schema_version"));
+    }
+
+    [Fact]
+    public void Meta_BlankKey()
+    {
+        var ix = new EmailIndex(DbFile);
+        Assert.Throws<ArgumentException>(() => ix.GetMeta(""));
+        Assert.Throws<ArgumentException>(() => ix.SetMeta("", "x"));
+    }
+
+    [Fact]
+    public void GetSyncInfo_KnownOnly()
+    {
+        var ix = new EmailIndex(DbFile);
+        var t1 = Base.AddHours(3);
+        ix.UpsertBatch([
+            Mail(1) with { EntryId = "a", LastModified = t1, Unread = true },
+            Mail(2) with { EntryId = "b", LastModified = null },
+        ]);
+        var info = ix.GetSyncInfo(["a", "b", "zzz"]);
+        Assert.Equal(2, info.Count);
+        Assert.Equal(new IndexedRowInfo(t1, true), info["a"]);
+        Assert.Equal(new IndexedRowInfo(null, false), info["b"]);
+    }
+
+    [Fact]
+    public void GetSyncInfo_ChunksLargeLists()
+    {
+        var ix = new EmailIndex(DbFile);
+        ix.UpsertBatch(Enumerable.Range(0, 1200).Select(i => Mail(i) with { LastModified = Base }).ToList());
+        var ids = Enumerable.Range(0, 1200).Select(i => "e" + i).ToList();
+        Assert.Equal(1200, ix.GetSyncInfo(ids).Count);
+    }
+
+    [Fact]
+    public void Status_LastSync_PrefersMeta()
+    {
+        var ix = new EmailIndex(DbFile);
+        var t1 = Base.AddDays(1);
+        var t2 = Base.AddDays(2);
+        ix.SetSyncState(new SyncState("fk", LastReconcile: t1));
+        Assert.Equal(t1, ix.Status().LastSync);
+        ix.SetMeta("last_sync", t2.ToUnixTimeSeconds().ToString());
+        Assert.Equal(t2, ix.Status().LastSync);
+        ix.SetMeta("last_sync", "garbage");
+        Assert.Equal(t1, ix.Status().LastSync);
+    }
 }

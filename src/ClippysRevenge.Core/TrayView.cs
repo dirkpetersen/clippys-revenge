@@ -8,7 +8,7 @@ public enum TrayIconKey
     Backfill0, Backfill1, Backfill2, Backfill3,
 }
 
-/// <summary>Sync facts the hub doesn't hold. Supplied by SyncService later (M6.1); Unknown until then.</summary>
+/// <summary>Sync facts the hub doesn't hold. Supplied by SyncService; Unknown when indexing isn't running.</summary>
 public sealed record TrayStats(long? EmailCount, DateTimeOffset? LastSync, DateTimeOffset? NextSync, bool Paused)
 {
     public static TrayStats Unknown { get; } = new(null, null, null, false);

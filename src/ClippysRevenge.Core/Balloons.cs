@@ -12,6 +12,10 @@ public static class BalloonTexts
     public const string OutlookNotFound = "It looks like I can't find Outlook on this PC. Start it from the Start menu.";
     public const string Copied = "Copied — paste it in WSL";
 
+    public static string BackfillDone(string what, long count) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"It looks like you're trying to find an email. I finished indexing {what}: {count:N0} emails.");
+
     public static string Error(string reason) =>
         string.IsNullOrWhiteSpace(reason)
             ? "It looks like something went wrong. Right-click me and pick Activity… for details."

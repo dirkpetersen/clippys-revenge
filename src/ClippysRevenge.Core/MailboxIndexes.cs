@@ -34,16 +34,24 @@ public sealed class MailboxIndexes : IDisposable
         }
         _dataDir = dataDir;
         Directory.CreateDirectory(dataDir);
-        Open(OwnMailbox);
-        foreach (var key in shared) Open(key);
+        try
+        {
+            Register(OwnMailbox, Create(OwnMailbox));
+            foreach (var key in shared) Register(key, Create(key));
+        }
+        catch
+        {
+            foreach (var ix in _map.Values) ix.Close();
+            throw;
+        }
     }
 
-    private EmailIndex Open(string key)
+    private EmailIndex Create(string key) => new(PathFor(_dataDir, key));
+
+    private void Register(string key, EmailIndex ix)
     {
-        var ix = new EmailIndex(PathFor(_dataDir, key));
         _keys.Add(key);
         _map[key] = ix;
-        return ix;
     }
 
     private static void ValidateShared(string key)
@@ -112,7 +120,7 @@ public sealed class MailboxIndexes : IDisposable
         ArgumentNullException.ThrowIfNull(f);
         var key = Normalize(mailbox);
         if (key != AllMailboxes)
-            return For(key).Search(f).Select(e => new MailboxHit(key, e)).ToList();
+            return For(mailbox).Search(f).Select(e => new MailboxHit(key, e)).ToList();
 
         var limit = f.Limit;
         var offset = Math.Max(f.Offset, 0);
@@ -153,7 +161,67 @@ public sealed class MailboxIndexes : IDisposable
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (_map.TryGetValue(key, out var existing)) return existing;
-            return Open(key);
+        }
+        // Opening runs SQLite, so it stays outside the lock.
+        var created = Create(key);
+        lock (_lock)
+        {
+            if (_disposed)
+            {
+                created.Close();
+                throw new ObjectDisposedException(nameof(MailboxIndexes));
+            }
+            // Another thread won the race: drop ours without Close (both share one connection pool).
+            if (_map.TryGetValue(key, out var existing)) return existing;
+            Register(key, created);
+            return created;
+        }
+    }
+
+    /// <summary>
+    /// Closes the index, deletes its files and opens a fresh one in the same place in the order (Rebuild, SPEC §10).
+    /// If deleting fails, the old file is reopened and the exception propagates.
+    /// </summary>
+    public EmailIndex Reset(string mailbox)
+    {
+        var key = Normalize(mailbox);
+        if (key == AllMailboxes)
+            throw new ArgumentException("\"all\" has no single index to reset.", nameof(mailbox));
+        EmailIndex old;
+        IReadOnlyList<string> keys;
+        lock (_lock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (!_map.TryGetValue(key, out old!))
+            {
+                keys = _keys.ToArray();
+                throw new ArgumentException(Unknown(mailbox, keys).Message, nameof(mailbox));
+            }
+        }
+        old.Close();
+        var path = PathFor(_dataDir, key);
+        try
+        {
+            File.Delete(path);
+            File.Delete(path + "-wal");
+            File.Delete(path + "-shm");
+        }
+        catch
+        {
+            try { Swap(key, Create(key)); }
+            catch { /* the old instance reconnects on its next use */ }
+            throw;
+        }
+        var fresh = Create(key);
+        Swap(key, fresh);
+        return fresh;
+    }
+
+    private void Swap(string key, EmailIndex ix)
+    {
+        lock (_lock)
+        {
+            if (_map.ContainsKey(key)) _map[key] = ix;
         }
     }
 

@@ -52,6 +52,9 @@ public sealed record SyncState(
     DateTimeOffset? LastReconcile = null,
     bool BackfillComplete = false);
 
+/// <summary>What sync needs to know about an indexed row to decide whether to read it again.</summary>
+public sealed record IndexedRowInfo(DateTimeOffset? LastModified, bool Unread);
+
 /// <summary>Index statistics for one mailbox (SPEC §9.2 Status).</summary>
 public sealed record IndexStatus(
     long TotalEmails,

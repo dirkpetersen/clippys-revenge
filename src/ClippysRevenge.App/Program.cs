@@ -50,12 +50,33 @@ internal static class Program
             logger.LogCritical(e.Exception, "Unobserved task exception.");
 
         var balloons = new BalloonCenter();
+
+        // Background indexing (SPEC 10). If the index can't be opened, the tray shows an Error state and indexing stays off.
+        var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClippysRevenge");
+        var stores = new OutlookStores(() => settings);
+        MailboxIndexes? indexes = null;
+        OutlookMail? mail = null;
+        SyncService? sync = null;
+        IDisposable? indexErrorScope = null;
+        try
+        {
+            indexes = new MailboxIndexes(localDir, settings.SharedMailboxes.Where(m => m?.Enabled == true).Select(m => m.Smtp));
+            mail = new OutlookMail(stores, indexes, settings);
+            sync = new SyncService(new OutlookMailSource(worker, stores, mail), indexes, () => settings, hub, balloons,
+                logger: loggerFactory.CreateLogger<SyncService>());
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "The email index could not be opened.");
+            indexErrorScope = hub.Begin(ActivityState.Error, "index can't be opened");
+        }
+
         var tray = new TrayApp(new TrayServices(
             hub,
             balloons,
             tokens,
             () => settings,
-            () => TrayStats.Unknown, // TODO(M6.1): real stats
+            sync is null ? () => TrayStats.Unknown : sync.GetStats,
             enabled =>
             {
                 settings.StartWithWindows = enabled;
@@ -81,7 +102,10 @@ internal static class Program
                     worker.Nudge();
                 }
                 return ok;
-            }));
+            },
+            sync is null ? null : sync.SyncNow,
+            sync is null ? null : () => { if (sync.IsPaused) sync.Resume(); else sync.Pause(); },
+            sync is null ? null : m => sync.RebuildAsync(m)));
 
         instance.StartListening(() =>
         {
@@ -94,10 +118,18 @@ internal static class Program
             Tokens = tokens,
             Hub = hub,
             ConfigureMcp = b => b.WithTools<McpTools>(),
-            ConfigureServices = s => s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(new OutlookStores(() => settings)).AddSingleton<OutlookMail>(),
+            ConfigureServices = s =>
+            {
+                s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(stores);
+                if (indexes is not null && mail is not null && sync is not null)
+                {
+                    s.AddSingleton(indexes).AddSingleton(mail).AddSingleton(sync);
+                }
+            },
             ConfigureLogging = b => b.AddDebug(),
         });
         _ = StartHostAsync(host, settings.Port, logger);
+        _ = sync?.StartAsync(CancellationToken.None);
 
         if (loaded.FirstRun)
         {
@@ -108,8 +140,17 @@ internal static class Program
 
         // Process entry point after the message loop ended: the one allowed blocking wait.
         // Task.Run avoids the WinForms SynchronizationContext.
-        Task.Run(() => host.DisposeAsync().AsTask()).Wait(TimeSpan.FromSeconds(5));
+        Task.Run(async () =>
+        {
+            if (sync is not null)
+            {
+                await sync.StopAsync(CancellationToken.None);
+            }
+            await host.DisposeAsync();
+        }).Wait(TimeSpan.FromSeconds(5));
         worker.Dispose();
+        indexes?.Dispose();
+        indexErrorScope?.Dispose();
         hub.Dispose();
         loggerFactory.Dispose();
         return 0;
