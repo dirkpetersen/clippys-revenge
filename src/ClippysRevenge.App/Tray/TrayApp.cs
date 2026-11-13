@@ -22,7 +22,8 @@ internal sealed record TrayServices(
     Action? TogglePause = null,
     Func<string, Task>? Rebuild = null,
     Func<Task<IReadOnlyList<MailboxStore>>>? ListMounted = null,
-    SharedMailboxToggler? SharedToggler = null);
+    SharedMailboxToggler? SharedToggler = null,
+    Func<SettingsTab, Form>? CreateSettingsForm = null);
 
 /// <summary>Tray icon and menu (SPEC 6.1, 6.2). All UI objects are touched on the UI thread only.</summary>
 internal sealed class TrayApp : ApplicationContext
@@ -54,6 +55,7 @@ internal sealed class TrayApp : ApplicationContext
     private IReadOnlyList<MailboxStore>? _mounted;
     private int _listing;
     private ActivityForm? _activity;
+    private Form? _settingsForm;
 
     public TrayApp(TrayServices services)
     {
@@ -105,10 +107,37 @@ internal sealed class TrayApp : ApplicationContext
         Render();
     }
 
-    /// <summary>Any thread; opens the Settings window on the UI thread (stub until M9.2).</summary>
-    public void ShowSettings() => PostToUi(() =>
+    /// <summary>Any thread; opens (or raises) the single Settings window on the UI thread.</summary>
+    public void ShowSettings(SettingsTab tab = SettingsTab.Connection) => PostToUi(() =>
     {
-        // TODO(M9.2): show SettingsForm.
+        if (_s.CreateSettingsForm is null)
+        {
+            return;
+        }
+        if (_settingsForm is { IsDisposed: false } open)
+        {
+            if (open is SettingsForm sf)
+            {
+                sf.SelectTab(tab);
+            }
+            if (open.WindowState == FormWindowState.Minimized)
+            {
+                open.WindowState = FormWindowState.Normal;
+            }
+            open.Activate();
+            return;
+        }
+        var form = _s.CreateSettingsForm(tab);
+        _settingsForm = form;
+        form.FormClosed += (_, _) =>
+        {
+            if (ReferenceEquals(_settingsForm, form))
+            {
+                _settingsForm = null;
+            }
+            form.Dispose();
+        };
+        form.Show();
     });
 
     /// <summary>Any thread; opens (or raises) the single Activity window on the UI thread.</summary>
@@ -240,7 +269,7 @@ internal sealed class TrayApp : ApplicationContext
         var activity = new ToolStripMenuItem("Activity…");
         activity.Click += (_, _) => ShowActivity();
         var settings = new ToolStripMenuItem("Settings…");
-        settings.Click += (_, _) => ShowSettings(); // TODO(M9.2)
+        settings.Click += (_, _) => ShowSettings();
         var logs = new ToolStripMenuItem("Open log folder");
         logs.Click += (_, _) => OpenFolder(_s.LogFolder);
         var data = new ToolStripMenuItem("Open data folder");
@@ -269,7 +298,7 @@ internal sealed class TrayApp : ApplicationContext
         _rebuild.Enabled = _s.Rebuild is not null;
         _rebuild.Click += (_, _) => AskRebuild();
         _shared.DropDownOpening += (_, _) => RebuildShared();
-        _shared.DropDownItems.Add(new ToolStripMenuItem("Manage in Settings…", null, (_, _) => ShowSettings()));
+        _shared.DropDownItems.Add(new ToolStripMenuItem("Manage in Settings…", null, (_, _) => ShowSettings(SettingsTab.Index)));
         _menu.Opening += (_, _) =>
         {
             _startWithWindows.Checked = _s.GetSettings().StartWithWindows;
@@ -391,7 +420,7 @@ internal sealed class TrayApp : ApplicationContext
         {
             _shared.DropDownItems.Add(new ToolStripSeparator());
         }
-        _shared.DropDownItems.Add(new ToolStripMenuItem("Manage in Settings…", null, (_, _) => ShowSettings()));
+        _shared.DropDownItems.Add(new ToolStripMenuItem("Manage in Settings…", null, (_, _) => ShowSettings(SettingsTab.Index)));
     }
 
     private void ToggleShared(SharedMenuEntry entry)
@@ -492,6 +521,7 @@ internal sealed class TrayApp : ApplicationContext
             _houseTimer.Stop();
             _houseTimer.Dispose();
             _activity?.Dispose();
+            _settingsForm?.Dispose();
             _notify.Visible = false;
             _notify.Dispose();
             _menu.Dispose();

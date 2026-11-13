@@ -72,6 +72,8 @@ internal static class Program
             indexErrorScope = hub.Begin(ActivityState.Error, "index can't be opened");
         }
 
+        SettingsApplier? applier = null;
+        McpHttpHost? hostRef = null;
         var tray = new TrayApp(new TrayServices(
             hub,
             balloons,
@@ -108,7 +110,13 @@ internal static class Program
             sync is null ? null : () => { if (sync.IsPaused) sync.Resume(); else sync.Pause(); },
             sync is null ? null : m => sync.RebuildAsync(m),
             () => worker.RunAsync(app => stores.List(app), WorkPriority.Interactive),
-            indexes is null || sync is null ? null : new SharedMailboxToggler(settings, indexes, store.Save, sync.NotifySettingsChanged)));
+            indexes is null || sync is null ? null : new SharedMailboxToggler(settings, indexes, store.Save, sync.NotifySettingsChanged),
+            tab => new SettingsForm(new SettingsFormServices(
+                () => settings, tokens,
+                applier ?? throw new InvalidOperationException("Settings applier is not ready."),
+                () => hostRef?.Port, worker, stores, indexes,
+                sync is null ? null : m => sync.RebuildAsync(m),
+                () => worker.State == OutlookConnectionState.Unavailable, TimeZoneInfo.Local), tab)));
 
         var inviteQueue = new InviteConfirmQueue(new InviteConfirmPresenter(SynchronizationContext.Current!), hub);
 
@@ -158,6 +166,10 @@ internal static class Program
             },
             ConfigureLogging = b => b.AddDebug(),
         });
+        hostRef = host;
+        applier = new SettingsApplier(new SettingsApplyTargets(settings, store, tokens, p => host.RestartAsync(p), () => host.Port,
+            e => StartupRegistration.Apply(e), indexes,
+            sync is null ? null : sync.NotifySettingsChanged, sync is null ? null : sync.SyncNow), logger);
         _ = StartHostAsync(host, settings.Port, logger);
         _ = sync?.StartAsync(CancellationToken.None);
 
