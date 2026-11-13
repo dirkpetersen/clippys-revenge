@@ -100,7 +100,7 @@ v0.0.1 release.
 - [x] M10.4 Final review of the whole branch by `reviewer`, CI green on the PR, then hand to the user to merge (→ v0.0.1 release) `{arch:skip}`
 
 ## M11 AI drafting (SPEC §19, §1.10; user-approved 2026-11-13) — deps: M10
-- Review: [ ] pending
+- Review: [x] done (ef4d7e8; 3 parallel reviewers, all APPROVED, non-blocking fixes applied)
 - Parallel tracks: **A** M11.1 → M11.2 · **B** M11.3 (no deps, start any time) · **C** M11.1 → M11.4 → M11.5. M11.6 and M11.7 start when A, B and M11.4 are done (M11.5 can run beside them). M11.8 joins everything; M11.9–M11.11 come last.
 - [x] M11.1 Settings and plumbing: `AiDraftingSettings` in `Settings` with defaults, `Validate()` (incl. the consent rule) and JSON (§19.2, §5.2); `SharedMailbox.AiDrafts`; `SettingsStore.LoadApiKey`/`SaveApiKey` over `ISecretProtector` (`anthropic-key.bin`, §5.1); log redaction of the API key and `sk-ant-…` (§5.1); `DraftMarker` constants (§19.4); `ActivityState.Drafting` (rank, tooltip, `Report`) and `ActivityKind.Ai` (§6.1, §6.4, §7) `{arch:brief}` (deps: none)
 - [x] M11.2 Index schema 2 and the draft marker: migration 1→2, `ai_decisions`, new `EmailIndex` members and 30-day decision purge (§9.1, §9.2); `ReadForIndex` thread properties + marker (§8); Table-only thread-metadata refresh (§10); `ClippyDraft = tool` on `create_draft`/`reply_draft`, marker and work priority on `ReplyPlan`/`OutlookReplyDraftWriter` (§8, §19.9); live draft tests assert the marker `{arch:brief}` (deps: M11.1)
@@ -170,3 +170,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-13 M11.8 AI drafts tray submenu, consent dialog, settings tab, manual draft, balloon action (a1bbaf5); UI not click-tested yet; 2676 tests
 2026-11-13 M11.11 user docs: ai-drafts page, security data flow, tray, FAQ, changelog v0.0.5, README (8bdb69c); zensical strict build passes
 2026-11-13 M11.10 live Claude tests + AI manual-draft round trip, run-live-tests.ps1 -Claude (5f1df1e); not run yet (user runs once); 2706 tests
+2026-11-13 M11 review: 3 reviewers (safety/App, Core drafting, backends/settings/docs) APPROVED; 12 non-blocking fixes (ef4d7e8); 2719 tests; release v0.0.5
