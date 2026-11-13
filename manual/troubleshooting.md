@@ -83,6 +83,33 @@ touched.
   your calendar. Open it in Outlook and send it.
 - If a recipient didn't resolve in Outlook, nothing was created.
 
+## An update failed or was rolled back
+
+Open **About Clippy's Revenge…** from the tray menu. Its status line gives the
+reason, for example `✗ Couldn't check for updates: GitHub didn't answer within
+15 s`. See [Updates](updates.md) for how updating works.
+
+- **Couldn't check or download.** Usually the network, a proxy or GitHub's rate
+  limit. Press **Check for updates** later. Clippy retries by itself.
+- **The checksum or size doesn't match.** The download is deleted and nothing
+  changes. Try again later. If it keeps happening, install with `install.ps1`.
+- **The previous version is still in use.** Restart Windows and try again.
+- **"v... didn't start on this PC, so Clippy's Revenge went back to v...".** The
+  new version didn't start, so Clippy put the old one back. It won't install that
+  version again by itself. Look in the log folder for the reason and wait for a
+  newer release, or press **Update now** to try again.
+- **Clippy shows "Update Clippy's Revenge or rebuild the index" after a
+  rollback.** The failed version had already upgraded the index. Choose
+  **Rebuild index…** in the tray.
+- **Clippy doesn't start and `ClippysRevenge.exe` is missing.** Run the install
+  line again, which puts a good copy back:
+
+  ```powershell
+  irm https://github.com/dirkpetersen/clippys-revenge/releases/latest/download/install.ps1 | iex
+  ```
+
+  Your settings, token and index are kept.
+
 ## Logs
 
 Logs are in `%LOCALAPPDATA%\ClippysRevenge\logs`, one file per day

@@ -106,7 +106,21 @@ Yes by default. Turn it off with the **Start with Windows** item in the tray men
 
 ## How do I update?
 
-Run the install one-liner again. See [Install](install.md).
+By default Clippy checks GitHub once a week and installs a newer version at its
+next start. To update at once, open **About Clippy's Revenge…** in the tray and
+press **Update now**, or run the install one-liner again. See
+[Updates](updates.md) and [Install](install.md).
+
+## How do I turn updates off?
+
+Settings, General, **Updates**: choose **Don't check** (no automatic checks) or
+**Only tell me** (a balloon, no download). See [Updates](updates.md#turn-updates-off).
+
+## Does Clippy send anything to GitHub?
+
+Only the weekly update check and the download, as plain requests that carry just
+the version number. No mail, no settings, no telemetry. See
+[what is sent](updates.md#what-is-sent-to-github).
 
 ## How do I uninstall?
 

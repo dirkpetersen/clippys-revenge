@@ -41,6 +41,10 @@ User documentation: <https://dirkpetersen.github.io/clippys-revenge/>.
 
 Turn on [AI drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/) and Clippy writes reply drafts to new mail in your own style, using your signed-in Claude Code or an Anthropic API key. Off by default, asks for consent, saves drafts only (never sends), and the model gets no tools.
 
+## Updates
+
+The installed copy checks GitHub once a week and installs a newer release at its next start, with a SHA-256 check and automatic rollback. Choose **Install automatically**, **Only tell me** or **Don't check** in Settings. See [Updates](https://dirkpetersen.github.io/clippys-revenge/updates/).
+
 ## Install
 
 Requirements: Windows 11 with classic Outlook (not the new Outlook), signed in.

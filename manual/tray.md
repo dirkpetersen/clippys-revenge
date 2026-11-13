@@ -39,6 +39,7 @@ Right-click the icon.
 | **Open log folder** | Opens `%LOCALAPPDATA%\ClippysRevenge\logs` |
 | **Open data folder** | Opens the data folder |
 | **Start with Windows** | Toggles starting at logon |
+| **About Clippy's Revenge…** | Opens the About window: version, update status, **Update now** and links to the documentation and release notes. See [Updates](updates.md#the-about-window) |
 | **Exit** | Quits the app |
 
 ## Activity window
@@ -113,6 +114,7 @@ These are the defaults for [`find_free_times`](tools.md#find_free_times) and
 - **Start with Windows** (default on).
 - **Notify on errors** (default on).
 - **Log level** (default Information). Applies at once.
+- **Updates**: **Install automatically** (default), **Only tell me** or **Don't check**. **Check now** opens the About window and checks for a new version at once. See [Updates](updates.md).
 
 Settings are stored in `%APPDATA%\ClippysRevenge\settings.json`.
 
@@ -122,3 +124,5 @@ The app shows a short balloon for the first run, when an initial index finishes,
 when Outlook has been unavailable for more than two minutes, for errors lasting
 more than two minutes (if **Notify on errors** is on), and when an invite is sent
 or saved as a draft after a timeout. After an AI drafting pass it says how many replies are in your Drafts folder; click it to open Drafts. Balloons are limited to one per minute.
+
+Updates add four more balloons: a newer version is available, a newer version is downloaded and waits for the next start, Clippy was just updated, and an update didn't start so Clippy went back to the old version. See [Updates](updates.md).
