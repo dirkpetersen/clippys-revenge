@@ -122,6 +122,9 @@ internal static class Program
             ConfigureServices = s =>
             {
                 s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(stores);
+                s.AddSingleton(new Signatures(SignatureRegistry.Name, Signatures.DefaultDirectory()))
+                    .AddSingleton<IDraftWriter>(new OutlookDraftWriter(worker, stores))
+                    .AddSingleton<CreateDraftTool>();
                 if (indexes is not null && mail is not null && sync is not null)
                 {
                     s.AddSingleton(indexes).AddSingleton(mail).AddSingleton(sync);

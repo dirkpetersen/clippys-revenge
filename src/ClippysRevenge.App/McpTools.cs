@@ -5,7 +5,7 @@ using ModelContextProtocol.Server;
 namespace ClippysRevenge.App;
 
 [McpServerToolType]
-internal sealed class McpTools(ActivityHub hub, MailboxIndexes indexes, OutlookMail mail, OutlookWorker worker)
+internal sealed partial class McpTools(ActivityHub hub, MailboxIndexes indexes, OutlookMail mail, OutlookWorker worker)
 {
     [McpServerTool(Name = "search_emails", ReadOnly = true, Idempotent = true)]
     [Description("Searches the local email index (fast, works while Outlook is busy). All filters are optional and combine with AND; results are newest first. Each result has id, mailbox, folder, date (local time), from, sender_email, to, subject, has_attachments, attachments[] (name, size, inline flag) and snippet. Pass a result's id to get_message to read the full body. Only synced mail is indexed; use index_status to check coverage if something seems missing.")]
