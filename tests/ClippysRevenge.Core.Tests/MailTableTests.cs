@@ -77,12 +77,35 @@ public class MailTableTests
     }
 
     [Fact]
+    public void ParseEntryId_prefers_long_term_and_falls_back()
+    {
+        Assert.Equal("00AB01FF", MailTable.ParseEntryId(new byte[] { 0x00, 0xAB, 0x01, 0xFF }, "EF00"));
+        Assert.Equal("00AB01FF", MailTable.ParseEntryId("00ab01ff", "EF00"));
+        Assert.Equal("EF00", MailTable.ParseEntryId(null, " EF00 "));
+        Assert.Equal("EF00", MailTable.ParseEntryId(DBNull.Value, "EF00"));
+        Assert.Equal("EF00", MailTable.ParseEntryId(Array.Empty<byte>(), "EF00"));
+        Assert.Equal("EF00", MailTable.ParseEntryId("  ", "EF00"));
+        Assert.Null(MailTable.ParseEntryId(null, null));
+        Assert.Null(MailTable.ParseEntryId(Array.Empty<byte>(), ""));
+    }
+
+    [Fact]
+    public void ToRow_uses_long_term_id_when_present()
+    {
+        var evt = new DateTime(2026, 3, 1, 8, 0, 0);
+        var raw = Raw("EF00", evt, evt).Append(new byte[] { 0x0A, 0xBC }).ToArray();
+        Assert.Equal("0ABC", MailTable.ToRow(raw)!.EntryId);
+        Assert.Equal("EF00", MailTable.ToRow(Raw("EF00", evt, evt))!.EntryId);
+    }
+
+    [Fact]
     public void Columns_and_sorts()
     {
         Assert.Equal(new[]
         {
             "EntryID", "http://schemas.microsoft.com/mapi/proptag/0x30080040", "http://schemas.microsoft.com/mapi/proptag/0x0E060040",
             "UnRead", "http://schemas.microsoft.com/mapi/proptag/0x1035001F", "http://schemas.microsoft.com/mapi/proptag/0x001A001F",
+            "http://schemas.microsoft.com/mapi/proptag/0x66700102",
         }, MailTable.Columns(EventTimeField.Received));
         Assert.Equal("http://schemas.microsoft.com/mapi/proptag/0x00390040", MailTable.Columns(EventTimeField.Sent)[2]);
         Assert.Throws<ArgumentOutOfRangeException>(() => MailTable.EventTimeProp((EventTimeField)9));

@@ -18,6 +18,7 @@ public sealed record MailTablePage(IReadOnlyList<MailTableRow> Rows, bool HasMor
 public static class MailTable
 {
     public const string EntryIdColumn = "EntryID";
+    public const string LongTermEntryIdProp = "http://schemas.microsoft.com/mapi/proptag/0x66700102";   // PR_LONGTERM_ENTRYID_FROM_TABLE
     public const string UnreadColumn = "UnRead";
     public const string LastModifiedProp = "http://schemas.microsoft.com/mapi/proptag/0x30080040";      // PR_LAST_MODIFICATION_TIME
     public const string ReceivedProp = "http://schemas.microsoft.com/mapi/proptag/0x0E060040";          // PR_MESSAGE_DELIVERY_TIME
@@ -44,7 +45,7 @@ public static class MailTable
 
     /// <summary>EntryID, LastModified, event time, UnRead, InternetMessageId, MessageClass.</summary>
     public static IReadOnlyList<string> Columns(EventTimeField field) =>
-        [EntryIdColumn, LastModifiedProp, EventTimeProp(field), UnreadColumn, InternetMessageIdProp, MessageClassProp];
+        [EntryIdColumn, LastModifiedProp, EventTimeProp(field), UnreadColumn, InternetMessageIdProp, MessageClassProp, LongTermEntryIdProp];
 
     /// <summary>True for "IPM.Note" or "IPM.Note.&lt;anything&gt;".</summary>
     public static bool IsIndexedClass(string? messageClass) =>
@@ -52,13 +53,30 @@ public static class MailTable
         (messageClass.Equals("IPM.Note", StringComparison.OrdinalIgnoreCase) ||
          messageClass.StartsWith("IPM.Note.", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Row id as MailItem.EntryID would give it: the long-term id (byte[] or hex string) from
+    /// PR_LONGTERM_ENTRYID_FROM_TABLE, else the Table's EntryID column. Null when both are empty.
+    /// </summary>
+    public static string? ParseEntryId(object? longTerm, object? shortTerm)
+    {
+        var id = longTerm switch
+        {
+            byte[] { Length: > 0 } bytes => Convert.ToHexString(bytes),
+            string s => s.Trim().ToUpperInvariant(),
+            _ => null,
+        };
+        if (!string.IsNullOrEmpty(id)) return id;
+        var fallback = (shortTerm as string)?.Trim();
+        return string.IsNullOrEmpty(fallback) ? null : fallback;
+    }
+
     /// <summary>Maps one GetArray row (values in Columns() order). Null when the row is not indexable.</summary>
     public static MailTableRow? ToRow(IReadOnlyList<object?> values)
     {
         ArgumentNullException.ThrowIfNull(values);
-        if (values.Count != 6) throw new ArgumentException("A Table row has 6 values.", nameof(values));
+        if (values.Count is not (6 or 7)) throw new ArgumentException("A Table row has 7 values (6 without the long-term id).", nameof(values));
 
-        var id = (values[0] as string)?.Trim();
+        var id = ParseEntryId(values.Count == 7 ? values[6] : null, values[0]);
         if (string.IsNullOrEmpty(id)) return null;
         if (!IsIndexedClass(values[5] as string)) return null;
         var evt = OutlookDates.FromTableValue(values[2]);

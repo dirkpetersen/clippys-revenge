@@ -552,6 +552,7 @@ internal sealed partial class OutlookMail
                 {
                     cols.RemoveAll();
                     cols.Add(MailTable.EntryIdColumn);
+                    cols.Add(MailTable.LongTermEntryIdProp);
                 }
                 finally
                 {
@@ -561,7 +562,7 @@ internal sealed partial class OutlookMail
                 var row = table.GetNextRow();
                 try
                 {
-                    return row[1] as string;
+                    return MailTable.ParseEntryId(row[2], row[1]);
                 }
                 finally
                 {
