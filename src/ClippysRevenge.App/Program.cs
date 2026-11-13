@@ -118,13 +118,16 @@ internal static class Program
         {
             Tokens = tokens,
             Hub = hub,
-            ConfigureMcp = b => b.WithTools<McpTools>(),
+            ConfigureMcp = b => b.WithTools<McpTools>().WithTools<AttachmentTools>(),
             ConfigureServices = s =>
             {
                 s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(stores);
                 if (indexes is not null && mail is not null && sync is not null)
                 {
                     s.AddSingleton(indexes).AddSingleton(mail).AddSingleton(sync);
+                    s.AddSingleton<IAttachmentSaver, OutlookAttachmentSaver>()
+                        .AddSingleton(sp => new AttachmentExport(sp.GetRequiredService<IAttachmentSaver>(),
+                            sp.GetRequiredService<MailboxIndexes>(), () => settings, hub));
                 }
             },
             ConfigureLogging = b => b.AddDebug(),
