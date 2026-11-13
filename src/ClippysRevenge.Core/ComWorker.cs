@@ -806,7 +806,6 @@ public class ComWorker<TApp> : IDisposable where TApp : class
             {
                 return;
             }
-            _state = (int)next;
             _scope?.Dispose();
             _scope = null;
             if (!_disposed)
@@ -820,6 +819,8 @@ public class ComWorker<TApp> : IDisposable where TApp : class
                     _scope = _hub.Begin(ActivityState.OutlookUnavailable, OutlookConnection.NotRespondingLabel);
                 }
             }
+            // Publish the state only after the hub reflects it, so a caller that sees the state also sees the hub.
+            _state = (int)next;
             _log?.LogInformation("Outlook connection: {State}", next);
 
             var handler = StateChanged;
