@@ -60,15 +60,15 @@ public static class CalendarEvents
     }
 
     /// <summary>
-    /// A DASL date literal in local wall-clock time, always the same shape whatever the machine culture
-    /// (never the user's short-date format).
+    /// A DASL date literal in UTC (Outlook compares calendar DASL dates in UTC), always the same shape
+    /// whatever the machine culture (never the user's short-date format).
     /// </summary>
-    public static string DaslDate(DateTimeOffset value, TimeZoneInfo tz) =>
-        TimeZoneInfo.ConvertTime(value, tz).DateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+    public static string DaslDate(DateTimeOffset value) =>
+        value.UtcDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
     /// <summary>Overlap filter for Items.Restrict: ends after the window start and starts before its end.</summary>
-    public static string BuildFilter(EventWindow w, TimeZoneInfo tz) =>
-        $"@SQL=\"urn:schemas:calendar:dtend\" > '{DaslDate(w.Start, tz)}' AND \"urn:schemas:calendar:dtstart\" < '{DaslDate(w.End, tz)}'";
+    public static string BuildFilter(EventWindow w) =>
+        $"@SQL=\"urn:schemas:calendar:dtend\" > '{DaslDate(w.Start)}' AND \"urn:schemas:calendar:dtstart\" < '{DaslDate(w.End)}'";
 
     /// <summary>Converts a COM local DateTime (Kind ignored) to an offset in tz.</summary>
     public static DateTimeOffset FromLocal(DateTime local, TimeZoneInfo tz)

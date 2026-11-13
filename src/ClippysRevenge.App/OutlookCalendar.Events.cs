@@ -26,7 +26,7 @@ internal static partial class OutlookCalendar
             items = folder.Items;
             items.IncludeRecurrences = true;
             items.Sort("[Start]");
-            restricted = items.Restrict(CalendarEvents.BuildFilter(window, tz));
+            restricted = items.Restrict(CalendarEvents.BuildFilter(window));
 
             var result = new List<CalendarEventInfo>();
             // Never use Count: an open-ended recurrence makes it huge. Walk and stop at the cap.

@@ -1516,6 +1516,8 @@ Decided (2026-11-12):
 - Table rows use the long-term EntryID (`PR_LONGTERM_ENTRYID_FROM_TABLE`,
   fallback to the `EntryID` column) so they match `MailItem.EntryID` in the
   index.
+- Calendar DASL bounds are UTC, verified live 2026-11-13. Free/busy code
+  `5` (no information, past the published horizon) counts as not busy.
 
 - Shared mailboxes are picked from the stores mounted in Outlook, from the
   tray or Settings. Each has its own database, folders and retention.

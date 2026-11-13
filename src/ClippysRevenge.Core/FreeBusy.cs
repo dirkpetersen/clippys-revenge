@@ -27,6 +27,7 @@ public static class FreeBusy
             {
                 case '0':
                 case '4':
+                case '5':
                     busy = false;
                     break;
                 case '1':
