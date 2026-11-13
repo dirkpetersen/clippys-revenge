@@ -27,7 +27,7 @@ jobs:
       - id: check
         shell: bash
         run: |
-          if ls *.sln *.slnx >/dev/null 2>&1; then
+          if compgen -G "*.sln" >/dev/null || compgen -G "*.slnx" >/dev/null; then
             echo "has_code=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_code=false" >> "$GITHUB_OUTPUT"

@@ -36,7 +36,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! ls *.sln *.slnx >/dev/null 2>&1; then
+          if ! compgen -G "*.sln" >/dev/null && ! compgen -G "*.slnx" >/dev/null; then
             echo "::notice::No solution file yet; nothing to release."
             echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
