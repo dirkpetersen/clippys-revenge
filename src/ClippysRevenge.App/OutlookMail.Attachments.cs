@@ -90,13 +90,20 @@ internal sealed partial class OutlookMail
     }
 }
 
-internal sealed class OutlookAttachmentSaver(OutlookWorker worker, OutlookMail mail) : IAttachmentSaver
+internal sealed class OutlookAttachmentSaver(OutlookWorker worker, OutlookMail mail, OutlookStores stores) : IAttachmentSaver
 {
-    public Task<SavedAttachment> SaveOneAsync(string id, string? filename, int? position, string dir, CancellationToken ct) =>
-        worker.RunAsync(app => mail.SaveAttachment(app, id, filename, position, dir), WorkPriority.Interactive, ct);
+    public async Task<SavedAttachment> SaveOneAsync(string id, string? filename, int? position, string dir, CancellationToken ct)
+    {
+        await stores.EnsureResolvedAsync(WorkPriority.Interactive, ct).ConfigureAwait(false);
+        return await worker.RunAsync(app => mail.SaveAttachment(app, id, filename, position, dir), WorkPriority.Interactive, ct,
+            OutlookStores.AttachmentTimeout).ConfigureAwait(false);
+    }
 
     public async Task<IReadOnlyList<AttachmentSaveOutcome>> SaveManyAsync(
-        string id, IReadOnlyList<AttachmentInfo> wanted, string dir, CancellationToken ct) =>
-        await worker.RunAsync(app => mail.SaveAttachments(app, id, wanted, dir), WorkPriority.Interactive, ct)
-            .ConfigureAwait(false);
+        string id, IReadOnlyList<AttachmentInfo> wanted, string dir, CancellationToken ct)
+    {
+        await stores.EnsureResolvedAsync(WorkPriority.Interactive, ct).ConfigureAwait(false);
+        return await worker.RunAsync(app => mail.SaveAttachments(app, id, wanted, dir), WorkPriority.Interactive, ct,
+            OutlookStores.AttachmentTimeout).ConfigureAwait(false);
+    }
 }

@@ -37,8 +37,20 @@ internal sealed class OutlookMailSource : IMailSource, IReconcileSource
         }
     }
 
-    public Task<SourceMailbox?> OpenMailboxAsync(string mailbox, CancellationToken ct) =>
-        Run<SourceMailbox?>(app =>
+    public async Task<SourceMailbox?> OpenMailboxAsync(string mailbox, CancellationToken ct)
+    {
+        if (MailboxIndexes.Normalize(mailbox).Length > 0)
+        {
+            try
+            {
+                await _stores.EnsureResolvedAsync(WorkPriority.Background, ct).ConfigureAwait(false);
+            }
+            catch (OutlookUnavailableException ex)
+            {
+                throw new MailSourceUnavailableException(ex.Message, ex);
+            }
+        }
+        return await Run<SourceMailbox?>(app =>
         {
             var key = MailboxIndexes.Normalize(mailbox);
             MailboxStore? found;
@@ -51,7 +63,8 @@ internal sealed class OutlookMailSource : IMailSource, IReconcileSource
                 return null;
             }
             return found is null ? null : new SourceMailbox(key, found.Smtp, found.StoreId, found.DisplayName);
-        }, ct);
+        }, ct).ConfigureAwait(false);
+    }
 
     public Task<SourceFolder?> GetFolderAsync(SourceMailbox mailbox, string folderPath, CancellationToken ct) =>
         Run<SourceFolder?>(app =>

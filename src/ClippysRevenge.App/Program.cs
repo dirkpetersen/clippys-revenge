@@ -19,19 +19,30 @@ internal static class Program
             return 0;
         }
 
-        var loggerFactory = LoggerFactory.Create(b => b.AddDebug());
-        var logger = loggerFactory.CreateLogger("ClippysRevenge");
-        var hub = new ActivityHub();
-        var worker = new OutlookWorker(hub, loggerFactory.CreateLogger("OutlookWorker"));
-        worker.Start();
         var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClippysRevenge");
         var store = new SettingsStore(dataDir, new DpapiProtector());
         var loaded = store.Load();
+        var settings = loaded.Settings;
+        var tokens = new TokenHolder(loaded.Token);
+
+        // Rolling file log (SPEC 5.1); level is live from the LogLevel setting, the token is masked.
+        var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClippysRevenge", "logs");
+        var fileLog = new RollingFileLoggerProvider(new RollingFileLogOptions
+        {
+            Directory = logDir,
+            MinLevel = () => settings.LogLevel,
+            Secrets = () => [tokens.Current],
+        });
+        var loggerFactory = LoggerFactory.Create(b => b.AddDebug().AddProvider(fileLog));
+        var logger = loggerFactory.CreateLogger("ClippysRevenge");
+        logger.LogInformation("Clippy's Revenge starting.");
+        var hub = new ActivityHub();
+        var worker = new OutlookWorker(hub, loggerFactory.CreateLogger("OutlookWorker"));
+        worker.Start();
         foreach (var w in loaded.Warnings)
         {
             logger.LogWarning("{Warning}", w);
         }
-        var settings = loaded.Settings;
         try
         {
             StartupRegistration.Apply(settings.StartWithWindows);
@@ -40,8 +51,6 @@ internal static class Program
         {
             logger.LogWarning(ex, "Could not update the Run key.");
         }
-        var tokens = new TokenHolder(loaded.Token);
-
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (_, e) => logger.LogCritical(e.Exception, "Unhandled UI thread exception.");
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
@@ -53,7 +62,7 @@ internal static class Program
 
         // Background indexing (SPEC 10). If the index can't be opened, the tray shows an Error state and indexing stays off.
         var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClippysRevenge");
-        var stores = new OutlookStores(() => settings);
+        var stores = new OutlookStores(worker, () => settings);
         MailboxIndexes? indexes = null;
         OutlookMail? mail = null;
         SyncService? sync = null;
@@ -72,6 +81,23 @@ internal static class Program
             indexErrorScope = hub.Begin(ActivityState.Error, "index can't be opened");
         }
 
+        // After Outlook stops hanging, resume sync at once instead of waiting for the next interval (SPEC 4).
+        var stateLock = new Lock();
+        var previousState = OutlookConnectionState.Unknown;
+        worker.StateChanged += next =>
+        {
+            bool resumed;
+            lock (stateLock)
+            {
+                resumed = previousState == OutlookConnectionState.NotResponding && next == OutlookConnectionState.Available;
+                previousState = next;
+            }
+            if (resumed) sync?.SyncNow();
+        };
+
+
+        SettingsApplier? applier = null;
+        McpHttpHost? hostRef = null;
         var tray = new TrayApp(new TrayServices(
             hub,
             balloons,
@@ -92,7 +118,7 @@ internal static class Program
             },
             dataDir,
             // Logs live under %LOCALAPPDATA% (SPEC 5.1). "Open data folder" opens %APPDATA% on purpose: settings.json and token.bin.
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClippysRevenge", "logs"),
+            logDir,
             () => worker.State == OutlookConnectionState.Unavailable,
             () =>
             {
@@ -106,7 +132,26 @@ internal static class Program
             },
             sync is null ? null : sync.SyncNow,
             sync is null ? null : () => { if (sync.IsPaused) sync.Resume(); else sync.Pause(); },
-            sync is null ? null : m => sync.RebuildAsync(m)));
+            sync is null ? null : m => sync.RebuildAsync(m),
+            async () =>
+            {
+                try
+                {
+                    await stores.EnsureResolvedAsync(WorkPriority.Interactive, CancellationToken.None, includeUnconfigured: true);
+                }
+                catch (OutlookNotRespondingException)
+                {
+                    // Lookups that time out are recorded; list what is known.
+                }
+                return await worker.RunAsync(app => stores.List(app), WorkPriority.Interactive);
+            },
+            indexes is null || sync is null ? null : new SharedMailboxToggler(settings, indexes, store.Save, sync.NotifySettingsChanged),
+            tab => new SettingsForm(new SettingsFormServices(
+                () => settings, tokens,
+                applier ?? throw new InvalidOperationException("Settings applier is not ready."),
+                () => hostRef?.Port, worker, stores, indexes,
+                sync is null ? null : m => sync.RebuildAsync(m),
+                () => worker.State == OutlookConnectionState.Unavailable, TimeZoneInfo.Local), tab)));
 
         var inviteQueue = new InviteConfirmQueue(new InviteConfirmPresenter(SynchronizationContext.Current!), hub);
 
@@ -135,7 +180,7 @@ internal static class Program
                 if (indexes is not null && mail is not null && sync is not null)
                 {
                     s.AddSingleton(indexes).AddSingleton(mail).AddSingleton(sync);
-                    s.AddSingleton<IReplyDraftWriter>(new OutlookReplyDraftWriter(worker, mail))
+                    s.AddSingleton<IReplyDraftWriter>(new OutlookReplyDraftWriter(worker, mail, stores))
                         .AddSingleton<ReplyDraftTool>();
                     s.AddSingleton<IAttachmentSaver, OutlookAttachmentSaver>()
                         .AddSingleton(sp => new AttachmentExport(sp.GetRequiredService<IAttachmentSaver>(),
@@ -154,8 +199,12 @@ internal static class Program
                         .AddSingleton(new Optional<AttachmentExport>(null));
                 }
             },
-            ConfigureLogging = b => b.AddDebug(),
+            ConfigureLogging = b => b.AddDebug().AddProvider(fileLog),
         });
+        hostRef = host;
+        applier = new SettingsApplier(new SettingsApplyTargets(settings, store, tokens, p => host.RestartAsync(p), () => host.Port,
+            e => StartupRegistration.Apply(e), indexes,
+            sync is null ? null : sync.NotifySettingsChanged, sync is null ? null : sync.SyncNow), logger);
         _ = StartHostAsync(host, settings.Port, logger);
         _ = sync?.StartAsync(CancellationToken.None);
 
@@ -182,6 +231,7 @@ internal static class Program
         indexErrorScope?.Dispose();
         hub.Dispose();
         loggerFactory.Dispose();
+        fileLog.Dispose();
         return 0;
     }
 

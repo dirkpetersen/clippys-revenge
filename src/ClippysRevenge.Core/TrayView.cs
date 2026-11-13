@@ -140,7 +140,9 @@ public sealed class TrayPresenter
                 break;
             case ActivityState.OutlookUnavailable:
                 icon = TrayIconKey.Unavailable;
-                tip = p + "Outlook is not running";
+                tip = label == OutlookConnection.NotRespondingLabel
+                    ? p + "Outlook is not responding"
+                    : p + "Outlook is not running";
                 break;
             case ActivityState.Backfilling:
                 icon = TrayIconKey.Backfill0;
@@ -169,10 +171,10 @@ public sealed class TrayPresenter
                 tip = status + (stats.LastSync is { } ls ? " · synced " + TrayText.RelativePast(ls, now) : "");
                 break;
         }
-        return Build(icon, animated, tip, status ?? tip, stats, state, now);
+        return Build(icon, animated, tip, status ?? tip, stats, state, now, label);
     }
 
-    private static TrayView Build(TrayIconKey k, bool anim, string tooltip, string statusLine, TrayStats s, ActivityState st, DateTimeOffset now)
+    private static TrayView Build(TrayIconKey k, bool anim, string tooltip, string statusLine, TrayStats s, ActivityState st, DateTimeOffset now, string label = "")
     {
         var sync = "Last sync: " + (s.LastSync is { } l ? TrayText.RelativePast(l, now) : "never");
         if (s.Paused)
@@ -189,7 +191,7 @@ public sealed class TrayPresenter
             TrayText.Truncate(tooltip),
             TrayText.Truncate(statusLine),
             sync,
-            st == ActivityState.OutlookUnavailable,
+            st == ActivityState.OutlookUnavailable && label != OutlookConnection.NotRespondingLabel,
             s.Paused ? "Resume indexing" : "Pause indexing");
     }
 

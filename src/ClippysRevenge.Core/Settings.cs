@@ -39,6 +39,13 @@ public sealed class Settings
     public const string AttachmentFolderName = "Clippy's Revenge";
     public static IReadOnlyList<string> DefaultIndexedFolders { get; } = ["Inbox", "Sent Items"];
 
+    /// <summary>
+    /// Serializes every writer of the live instance (tray toggler, settings applier). Not part of the
+    /// settings data: never serialized, never copied.
+    /// </summary>
+    [JsonIgnore]
+    public SemaphoreSlim Gate { get; } = new(1, 1);
+
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
     private static JsonSerializerOptions CreateJsonOptions()
@@ -245,6 +252,35 @@ public sealed class Settings
 
     /// <summary>Deep copy (new lists, new SharedMailbox instances).</summary>
     public Settings Clone() => FromJson(ToJson());
+
+    /// <summary>
+    /// Overwrites every settable property with a deep copy of source's value. Lists and SharedMailbox
+    /// instances are new objects; the existing list objects of this instance are never mutated
+    /// (other threads may be enumerating them). Does not validate.
+    /// </summary>
+    /// <exception cref="ArgumentNullException">source is null.</exception>
+    public void CopyFrom(Settings source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var c = source.Clone();
+        Port = c.Port;
+        RetentionMonths = c.RetentionMonths;
+        SyncIntervalSeconds = c.SyncIntervalSeconds;
+        IndexedFolders = c.IndexedFolders;
+        SharedMailboxes = c.SharedMailboxes;
+        WorkStartHour = c.WorkStartHour;
+        WorkEndHour = c.WorkEndHour;
+        BusinessDaysOnly = c.BusinessDaysOnly;
+        TimeZoneLabel = c.TimeZoneLabel;
+        TentativeIsBusy = c.TentativeIsBusy;
+        MeetingInviteMode = c.MeetingInviteMode;
+        InviteConfirmTimeoutSeconds = c.InviteConfirmTimeoutSeconds;
+        AttachmentDir = c.AttachmentDir;
+        AllowedFolders = c.AllowedFolders;
+        StartWithWindows = c.StartWithWindows;
+        NotifyOnErrors = c.NotifyOnErrors;
+        LogLevel = c.LogLevel;
+    }
 
     public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
 

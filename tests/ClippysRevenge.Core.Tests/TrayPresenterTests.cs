@@ -87,6 +87,17 @@ public class TrayPresenterTests
         Assert.True(v.ShowStartOutlook);
     }
 
+    [Fact]
+    public void OutlookNotResponding()
+    {
+        var (p, _) = Make();
+        var v = p.Update(ActivityState.OutlookUnavailable, Lbl("not responding"), TrayStats.Unknown, null);
+        Assert.Equal("Clippy — Outlook is not responding", v.Tooltip);
+        Assert.Equal("Clippy — Outlook is not responding", v.StatusLine);
+        Assert.Equal(TrayIconKey.Unavailable, v.Icon);
+        Assert.False(v.ShowStartOutlook);
+    }
+
     [Theory]
     [InlineData(ActivityState.Idle)]
     [InlineData(ActivityState.Serving)]

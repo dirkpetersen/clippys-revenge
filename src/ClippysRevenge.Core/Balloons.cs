@@ -9,6 +9,7 @@ public static class BalloonTexts
     public const string Title = "Clippy's Revenge";
     public const string FirstRun = "Clippy's Revenge is running — right-click to copy the Claude setup command";
     public const string OutlookUnavailable = "It looks like Outlook isn't running. I'll wait — or right-click me and pick Start Outlook.";
+    public const string OutlookNotResponding = "It looks like Outlook isn't responding. I'll keep trying — check Outlook for an open dialog box.";
     public const string OutlookNotFound = "It looks like I can't find Outlook on this PC. Start it from the Start menu.";
     public const string Copied = "Copied — paste it in WSL";
 
@@ -111,7 +112,10 @@ public sealed class StateBalloonPolicy
         if (u && !_unavailable.Notified && now - _unavailable.Start >= Threshold)
         {
             _unavailable.Notified = true;
-            return new Balloon(BalloonTexts.OutlookUnavailable, BalloonKind.Warning);
+            var text = progress.Label == OutlookConnection.NotRespondingLabel
+                ? BalloonTexts.OutlookNotResponding
+                : BalloonTexts.OutlookUnavailable;
+            return new Balloon(text, BalloonKind.Warning);
         }
         if (e && notifyOnErrors && !_error.Notified && now - _error.Start >= Threshold)
         {
