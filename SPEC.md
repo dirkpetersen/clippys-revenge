@@ -48,12 +48,12 @@ artwork.
 | Runtime | .NET 10 (LTS), `net10.0-windows` for the app and `net10.0` for the core library |
 | MCP | `ModelContextProtocol.AspNetCore` (official C# SDK), `WithHttpTransport()` + `MapMcp("/mcp")` |
 | HTTP | Kestrel, `Listen(IPAddress.Loopback, port)`, never `Any`/`IPv6Any` |
-| Outlook | `Microsoft.Office.Interop.Outlook` (early-bound COM) |
-| Database | `Microsoft.Data.Sqlite` (bundled SQLite with FTS5) + `Dapper` |
+| Outlook | `Microsoft.Office.Interop.Outlook` 15.0.4797.1004 (early-bound COM; NuGet package, not a `COMReference`, so it builds without Office; interop types embedded, the DLL is not shipped) |
+| Database | `Microsoft.Data.Sqlite` 10.0.x (bundled SQLite with FTS5) + `Dapper` |
 | Tray UI | WinForms `NotifyIcon` + `ContextMenuStrip`, plus three small forms |
-| Secrets | DPAPI (`ProtectedData`, `DataProtectionScope.CurrentUser`) |
+| Secrets | DPAPI (`ProtectedData`, `DataProtectionScope.CurrentUser`; comes with the Windows Desktop framework, no package) |
 | Logging | `Microsoft.Extensions.Logging` → rolling file + the in-memory activity feed |
-| Tests | xUnit |
+| Tests | xUnit v3 (`xunit.v3.mtp-off` + `xunit.runner.visualstudio`), run by VSTest `dotnet test`, so `--filter "live!=outlook"` works |
 | Packaging | `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true` |
 | CI / release | GitHub Actions (§16). The version lives in `Directory.Build.props` |
 
@@ -902,6 +902,11 @@ Decided (2026-11-12):
 - External attendees: reported in `unknown_attendees` and ignored for
   availability.
 - New Outlook (`olk.exe`) has no COM API and is not supported.
+- Build (M0.1): no central package management; each project pins exact
+  versions in its own `.csproj`. Core has a `FrameworkReference` to
+  `Microsoft.AspNetCore.App` because `BearerAuth` is ASP.NET Core
+  middleware; that shared framework is cross-platform, so Core still
+  builds and tests on Linux.
 
 Open:
 

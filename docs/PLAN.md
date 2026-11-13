@@ -13,7 +13,7 @@ PR, and a merge to `main` with `<Version>0.0.1</Version>` publishes the
 v0.0.1 release.
 
 ## M0 Scaffold
-- [ ] M0.1 Solution `ClippysRevenge.slnx` with the three projects (SPEC §3), package references from SPEC §2, one placeholder test. `dotnet build` and `dotnet test` pass with zero warnings. Core builds and tests on Linux.
+- [x] M0.1 Solution `ClippysRevenge.slnx` with the three projects (SPEC §3), package references from SPEC §2, one placeholder test. `dotnet build` and `dotnet test` pass with zero warnings. Core builds and tests on Linux.
 
 ## M1 Core helpers (SPEC §12) — deps: M0
 - [ ] M1.1 `ReplySubject`, `FileNames`, `Recipients` + tests
@@ -76,3 +76,4 @@ v0.0.1 release.
 ## Log
 
 Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
+2026-11-12 M0.1 Solution scaffold: slnx, Core/App/Tests projects, pinned packages, 2 tests (review: approve, 0 fix rounds)
