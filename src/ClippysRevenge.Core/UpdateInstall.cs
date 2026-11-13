@@ -165,12 +165,12 @@ public static class UpdateInstall
         var pending = new PendingInstall(running.ToString(), v.ToString(), time.GetUtcNow(), false);
         try
         {
-            store.Update(s =>
+            await UpdateFiles.RetryAsync(() => store.Update(s =>
             {
                 s.Pending = pending;
                 s.Staged = null;
                 s.LastError = null;
-            });
+            }), RetryFor, RetryEvery, time, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex) when (UpdateFiles.IsIo(ex))
         {

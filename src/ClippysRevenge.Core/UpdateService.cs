@@ -538,10 +538,6 @@ public sealed class UpdateService : BackgroundService
                 }
             }
 
-            SetActivity(UpdateActivity.Installing, staged.Version);
-            _o.Hub.Event(ActivityKind.Update, UpdateTexts.EventInstalling(staged.Version));
-            _log?.LogInformation("Installing update {Version}", staged.Version);
-
             // Re-check right before the install: the user may have become busy meanwhile (automatic installs only).
             if (manual || !isBusy())
             {
@@ -549,19 +545,17 @@ public sealed class UpdateService : BackgroundService
             }
         }
 
+        SetActivity(UpdateActivity.Installing, staged.Version);
+        _o.Hub.Event(ActivityKind.Update, UpdateTexts.EventInstalling(staged.Version));
+        _log?.LogInformation("Installing update {Version}", staged.Version);
+
         string? err;
+        // Marker stored before RequestInstall starts, so StopAsync can't miss a swap that is just beginning.
+        var swap = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_lock) _installTask = swap.Task;
         try
         {
-            var install = _o.RequestInstall(staged, ct);
-            lock (_lock) _installTask = install;
-            try
-            {
-                err = await install.ConfigureAwait(false);
-            }
-            finally
-            {
-                lock (_lock) _installTask = null;
-            }
+            err = await _o.RequestInstall(staged, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -571,6 +565,11 @@ public sealed class UpdateService : BackgroundService
         catch (Exception ex)
         {
             err = UpdateTexts.ReasonReplaceFailed(ex.GetType().Name);
+        }
+        finally
+        {
+            lock (_lock) _installTask = null;
+            swap.TrySetResult();
         }
         if (err is null)
         {

@@ -305,14 +305,20 @@ public sealed class UpdateStateStore
         File.Move(tmp, Path, overwrite: true);
     }
 
-    /// <summary>In-process lock; Load, change, Save; returns a copy of the saved state.</summary>
-    /// <exception cref="IOException">and UnauthorizedAccessException from Save, unchanged.</exception>
+    /// <summary>In-process lock; load, change, Save; returns a copy of the saved state. A missing file starts from
+    /// an empty state; an existing file that can't be read or parsed is never overwritten.</summary>
+    /// <exception cref="IOException">The existing file couldn't be read or parsed; also from Save, unchanged
+    /// (plus UnauthorizedAccessException).</exception>
     public UpdateState Update(Action<UpdateState> change)
     {
         ArgumentNullException.ThrowIfNull(change);
         lock (_lock)
         {
-            var state = Load();
+            if (!LoadCore(out var state, out var failure))
+            {
+                _log?.LogWarning("update-state.json could not be read ({Type}); not overwriting it.", failure);
+                throw new IOException("update-state.json exists but could not be read (" + failure + ").");
+            }
             change(state);
             Save(state);
             return Sanitize(state.Clone());

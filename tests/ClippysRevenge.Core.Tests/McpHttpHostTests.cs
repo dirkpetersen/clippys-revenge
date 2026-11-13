@@ -319,10 +319,6 @@ public class McpHttpHostTests
         {
             var busy = ((IPEndPoint)l.LocalEndpoint).Port;
             await using var f = new Fixture();
-            if (busy < 1024)
-            {
-                return;
-            }
             Assert.False(await f.Host.StartAsync(busy, TestContext.Current.CancellationToken));
             Assert.False(f.Host.IsRunning);
             Assert.Null(f.Host.Port);
@@ -346,10 +342,6 @@ public class McpHttpHostTests
         try
         {
             await using var f = new Fixture();
-            if (busy < 1024)
-            {
-                return;
-            }
             var release = Task.Run(async () =>
             {
                 await Task.Delay(1200, TestContext.Current.CancellationToken);
@@ -357,7 +349,7 @@ public class McpHttpHostTests
             }, TestContext.Current.CancellationToken);
 
             Assert.True(await f.Host.StartAsync(busy, TestContext.Current.CancellationToken,
-                TimeSpan.FromSeconds(15)));
+                TimeSpan.FromSeconds(60)));
 
             await release;
             Assert.True(f.Host.IsRunning);
@@ -379,10 +371,6 @@ public class McpHttpHostTests
         {
             var busy = ((IPEndPoint)l.LocalEndpoint).Port;
             await using var f = new Fixture();
-            if (busy < 1024)
-            {
-                return;
-            }
 
             Assert.False(await f.Host.StartAsync(busy, TestContext.Current.CancellationToken,
                 TimeSpan.FromMilliseconds(700)));

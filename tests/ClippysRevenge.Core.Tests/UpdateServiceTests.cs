@@ -507,14 +507,25 @@ public sealed class UpdateServiceTests : IDisposable
     {
         ScriptLatest();
         var calls = 0;
-        var svc = Make(isBusy: () => Interlocked.Increment(ref calls) == 2);
+        var installingAtRecheck = -1;
+        var svc = Make(isBusy: () =>
+        {
+            var n = Interlocked.Increment(ref calls);
+            if (n == 2)
+            {
+                installingAtRecheck = Events().Count(e => e.StartsWith("installing update", StringComparison.Ordinal));
+            }
+            return n == 2;
+        });
         var task = svc.RunAutomaticAsync(TestContext.Current.CancellationToken);
         await WaitUntil(() => task.IsCompleted || _time.TimerCount >= 1);
 
         while (!task.IsCompleted) await Step(task, TimeSpan.FromSeconds(5));
 
         Assert.True(await task);
+        Assert.Equal(0, installingAtRecheck);
         Assert.Single(_installs);
+        Assert.Single(Events(), e => e.StartsWith("installing update", StringComparison.Ordinal));
         Assert.True(Volatile.Read(ref calls) >= 4, "the idle test must run again before the install");
     }
 

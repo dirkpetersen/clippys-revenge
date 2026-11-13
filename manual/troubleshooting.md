@@ -109,6 +109,11 @@ within 15 s`. See [Updates](updates.md) for how updating works.
   ```
 
   Your settings, token and index are kept.
+- **Updates keep rolling back and another program permanently uses Clippy's
+  port.** A new version confirms itself by starting its server on the port. If
+  that port is taken for good, the update can't confirm and rolls back. Choose a
+  different port in **Settings, Connection**, then run the new `claude mcp add`
+  command.
 
 ## Logs
 

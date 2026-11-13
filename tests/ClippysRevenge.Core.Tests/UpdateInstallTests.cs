@@ -137,12 +137,40 @@ public sealed class UpdateInstallTests : IDisposable
         Directory.CreateDirectory(dirStore);
 
         var ex = await Assert.ThrowsAsync<UpdateInstallException>(() =>
-            Begin(store: new UpdateStateStore(dirStore)));
+            _h.Drive(Begin(store: new UpdateStateStore(dirStore)), TimeSpan.FromMilliseconds(500)));
 
         Assert.StartsWith("the installed program couldn't be replaced", ex.Message);
         Assert.Equal(UpdateHarness.OldBytes, File.ReadAllBytes(_h.Paths.ExePath));
         Assert.False(File.Exists(_h.Paths.OldExePath));
         Assert.Equal(_h.NewBytes, File.ReadAllBytes(_h.Paths.StagedExePath(UpdateHarness.V06)));
+    }
+
+    [Fact]
+    [Trait("os", "windows")]
+    public async Task Pending_write_failing_twice_is_retried_without_undoing_the_swap()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        // The state writer's temp file is locked, so the first writes fail; it is released after two retries.
+        Directory.CreateDirectory(Path.GetDirectoryName(_h.Store.Path)!);
+        var hold = new FileStream(_h.Store.Path + ".tmp", FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+        try
+        {
+            var pending = await _h.Drive(Begin(), TimeSpan.FromMilliseconds(250), i =>
+            {
+                if (i == 2)
+                {
+                    hold.Dispose();
+                }
+            });
+
+            Assert.Equal(_h.NewBytes, File.ReadAllBytes(_h.Paths.ExePath));
+            Assert.Equal(UpdateHarness.OldBytes, File.ReadAllBytes(_h.Paths.OldExePath));
+            Assert.Equal(pending, _h.Store.Load().Pending);
+        }
+        finally
+        {
+            hold.Dispose();
+        }
     }
 
     [Fact]

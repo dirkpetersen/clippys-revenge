@@ -205,6 +205,42 @@ public class UpdateStateTests : IDisposable
         Assert.Equal("0.0.9", again.FailedVersion);
     }
 
+    [Theory]
+    [InlineData("{")]
+    [InlineData("null")]
+    public void Store_Update_never_overwrites_an_unreadable_file(string content)
+    {
+        WriteRaw(content);
+        var called = false;
+
+        Assert.Throws<IOException>(() => Store().Update(s => called = true));
+
+        Assert.False(called);
+        Assert.Equal(content, File.ReadAllText(StatePath));
+    }
+
+    [Fact]
+    [Trait("os", "windows")]
+    public void Store_Update_never_overwrites_a_locked_file()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        Store().Update(s => s.LatestTag = "v0.0.9");
+        var before = File.ReadAllBytes(StatePath);
+        using (new FileStream(StatePath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Throws<IOException>(() => Store().Update(s => s.LatestTag = "v1.0.0"));
+        }
+        Assert.Equal(before, File.ReadAllBytes(StatePath));
+    }
+
+    [Fact]
+    public void Store_Update_on_a_missing_file_starts_empty()
+    {
+        var saved = Store().Update(s => s.FailedVersion = "0.0.9");
+        Assert.Equal("0.0.9", saved.FailedVersion);
+        Assert.Equal("0.0.9", Store().Load().FailedVersion);
+    }
+
     [Fact]
     public void Store_Clone_IsDeep()
     {
