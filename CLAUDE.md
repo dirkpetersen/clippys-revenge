@@ -75,7 +75,11 @@ Defined in `.claude/agents/`:
 |---|---|---|
 | `architect` | Opus | Turns a `docs/PLAN.md` task into a brief in `docs/briefs/`: files, types, signatures, test cases, spec references. Owns `SPEC.md`, but hard rules change only with user approval. Writes no product code. |
 | `coder` | Sonnet | Implements exactly one brief, with tests. Builds and tests before handing back. Doesn't edit `SPEC.md`. |
-| `reviewer` | Opus, high effort | Reviews the diff against the brief, `SPEC.md` and the hard rules. Read-only. Returns blocking and non-blocking findings. |
+| `reviewer` | Opus, medium effort | Runs **once per milestone**, over the milestone's whole commit range, against the briefs, `SPEC.md` and the hard rules. Read-only. Returns blocking and non-blocking findings, which the coder fixes in one more commit. |
+
+Each task in `docs/PLAN.md` carries an `{arch:brief}` or `{arch:skip}`
+tag. `arch:skip` tasks go straight to the coder, which works from the
+task line and the SPEC sections it cites.
 
 The loop that ties them together is `/dev-cycle` (`.claude/commands/dev-cycle.md`).
 Run it once, or repeatedly with `/loop /dev-cycle`.

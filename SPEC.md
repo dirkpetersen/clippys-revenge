@@ -188,6 +188,25 @@ Each `SharedMailboxes` entry is:
 `Settings.Validate()` lives in Core. Invalid values are rejected in the
 form, with the reason shown next to the field.
 
+Bounds not given in the table: `Port` 1024–65535; `WorkStartHour` 0–23,
+`WorkEndHour` 1–24 and later than the start; `TimeZoneLabel` empty or at
+most 16 printable characters; `IndexedFolders` needs at least one
+folder, without duplicates. `AttachmentDir` and every `AllowedFolders`
+entry must be a fully qualified local path (no UNC or device paths). An
+empty `AllowedFolders` list is valid. `SharedMailboxes` entries need a
+valid, unique `Smtp`. `Validate()` returns every error as (field,
+message) and never throws.
+
+`IndexedFolders` entries are folder paths relative to the mailbox root,
+`\`-separated (e.g. `Inbox\Projects`). `Inbox` and `Sent Items` always
+mean the mailbox's default Inbox and Sent Items folders, whatever
+Outlook's display language.
+
+`settings.json` uses the names in this table (PascalCase), with enums as
+names. Missing or `null` values take their defaults, and unknown
+properties are ignored. The model and its JSON shape live in Core
+(`Settings`). `SettingsStore` only reads and writes the file.
+
 ## 6. System tray
 
 ### 6.1 Icon states
@@ -389,6 +408,21 @@ sent.
   appends to a ring buffer of 500 events.
 - `event Action Changed` fires on changes and is throttled to at most 10 Hz.
   The tray subscribes and re-posts to the UI thread.
+- `State` is the highest state (§6.1 order) among active `Begin` scopes,
+  or `Idle` when none. `Begin(Idle, …)` is rejected. Disposing a scope
+  twice has no effect.
+- `Progress` is that of the newest active scope in the winning state;
+  `(0, 0, "")` when idle. `Report(done, total)` updates the newest active
+  `Backfilling`, `Syncing` or `Purging` scope and is a no-op when there is
+  none, so a tool call or invite dialog never captures sync progress.
+- Events carry an increasing `Id` and a UTC `Time`; `GetEvents()` returns
+  a snapshot, oldest first.
+- `Changed` is throttled leading + trailing edge over a 100 ms window: the
+  first change fires at once on the caller's thread, later ones within the
+  window coalesce into one call at the window's end (timer thread), so the
+  final state is always delivered. Subscriber exceptions are swallowed.
+- The hub takes a `TimeProvider` (default `TimeProvider.System`) for
+  testability.
 - Every MCP tool call is wrapped by a filter that runs
   `using (hub.Begin(Serving, toolName))` and records a `Tool` event with the
   call's duration.
@@ -535,10 +569,16 @@ connection; the library pools them.
 - `GetSyncState`/`SetSyncState(folderKey, …)`.
 - `Close()` → `SqliteConnection.ClearPool(…)` so the file can be deleted
   (rebuild, mailbox removal).
-- `FtsQuery.Build(string userText)`: quotes every token, so input like
-  `budget-2026`, `C++` or `O'Brien` never causes an FTS syntax error. It
-  ANDs the tokens, keeps a trailing `*` as a prefix match, and turns
-  `OR` between tokens into an FTS `OR`.
+- `FtsQuery.Build(string? userText)` → `string?`: quotes every token, so
+  input like `budget-2026`, `C++` or `O'Brien` never causes an FTS syntax
+  error. It ANDs the tokens, keeps a trailing `*` as a prefix match, and
+  turns `OR` between tokens into an FTS `OR`. Details: only uppercase `OR`
+  is an operator, and OR binds tighter than AND (`a b OR c` → `"a" AND ("b" OR "c")`).
+  A balanced `"…"` is kept as one phrase, and an unbalanced `"` is a separator.
+  `AND`, `NOT`, `NEAR`, `-`, `:` and the like are literal text. Tokens
+  with no letter or digit are dropped. It returns `null` when nothing
+  searchable remains, and the caller then omits the `MATCH` clause. The
+  result is always bound as a parameter. It never throws.
 
 ### 9.3 `MailboxIndexes`
 
@@ -683,7 +723,7 @@ capped at 60.
 Returns:
 
 ```json
-{"suggestions":[{"n":1,"label":"1. Tue 10/15 1-3 PT","start":"2026-10-15T13:00:00-07:00","end":"2026-10-15T15:00:00-07:00"}],
+{"suggestions":[{"n":1,"label":"1. Tue 10/15 1-3 PT","start":"2024-10-15T13:00:00-07:00","end":"2024-10-15T15:00:00-07:00"}],
  "text":"1. Tue 10/15 1-3 PT\n2. Wed 10/16 9:30-11 PT",
  "unknown_attendees":["someone@external.org"],
  "attendees":[{"name":"Petersen, Dirk","email":"dirk.petersen@oregonstate.edu"}]}
@@ -707,7 +747,8 @@ What it does depends on `MeetingInviteMode`:
   - **Cancel** → nothing is created. Result `{status: "cancelled"}` with
     "The user declined this invite. Do not retry unless they ask."
 - **`DraftOnly`**: saves the meeting in the calendar without sending, and
-  says so in the result.
+  says so in the result. Result
+  `{status: "saved_as_draft", reason: "draft_only_mode", …}`.
 - **`Disabled`**: returns an error that tells the model to ask the user to
   enable invites in the tray settings.
 
@@ -733,71 +774,144 @@ progress.
 - `Recipients.Parse(string raw)` → `IReadOnlyList<Recipient(Name, Email)>`:
   - Split on `;` **only**, never on `,`, because names are written
     `Last, First Middle`.
-  - Accept `Name <email>`, a bare `email`, and `"Name" <email>`.
+  - Accept `Name <email>`, a bare `email`, and `"Name" <email>`. `Name` is
+    `""` for a bare email or `<email>`.
+  - An email is valid when it has exactly one `@`, text on both sides, and
+    no whitespace or `< > " , ;`.
   - Trim whitespace, skip empty entries, and de-duplicate case-insensitively
-    by email while keeping the original case.
-  - Throw, quoting the bad entry, when an entry has no email.
-- `Recipients.Format(list)`: the inverse, `Name <email>; ...`.
-- `FreeBusy.BusyIntervals(string fb, DateTime start, int intervalMinutes, bool tentativeIsBusy)`:
+    by email while keeping the original case. The first occurrence wins.
+    Empty input returns an empty list.
+  - When an entry has no valid email, throw `FormatException` with
+    `Recipient "<entry>" has no valid email address. Use "Name <email>" or a bare email, and separate recipients with ";".`
+- `Recipients.Format(list)`: the inverse, `Name <email>; ...`. A recipient
+  with an empty name is written as the bare email.
+- `FreeBusy.BusyIntervals(string fb, DateTime start, int intervalMinutes, bool tentativeIsBusy)` → `IReadOnlyList<TimeRange>`:
   - Codes: `0` free, `1` tentative, `2` busy, `3` out of office, `4`
     working elsewhere.
   - Busy means `2` or `3`, plus `1` when `tentativeIsBusy` is set. `4`
     counts as free.
   - Adjacent busy intervals are merged.
-- `FreeBusy.FreeSlots(busyPerAttendee, from, to, startHour, endHour, businessDaysOnly, minMinutes, now)`:
+  - Any other character throws `FormatException`. The caller treats that
+    attendee as unknown, and unknown data is never treated as free.
+- `FreeBusy.FreeSlots(busyPerAttendee, from, to, startHour, endHour, businessDaysOnly, minMinutes, now, intervalMinutes = 30)`:
   - For each day, take the working-hours window and remove the busy time.
-  - Keep gaps of at least `minMinutes`.
-  - Drop anything that starts before `now` rounded up to the next interval.
-- `SlotFormatter.Format(n, start, end, tzLabel)` → `"1. Tue 10/15 1-3 PT"`:
+  - Free time before `now` rounded up to the next `intervalMinutes`
+    boundary is clipped off. Then gaps of at least `minMinutes` are kept,
+    each as one maximal block.
+  - `find_free_times` fetches free/busy at 30-minute intervals
+    (`FreeBusy.DefaultIntervalMinutes`).
+- `FreeBusy.ChunkStarts(from, to)` / `FreeBusy.JoinChunks(chunks, intervalMinutes)`:
+  free/busy is fetched from midnight of `from` in 28-day chunks. Every chunk
+  but the last is cut to exactly 28 days before joining. A non-last chunk
+  shorter than 28 days is an error, and that attendee is reported as unknown.
+- `SlotFormatter.Format(n, start, end, tzLabel, windowStartHour, windowEndHour)` → `"1. Tue 10/15 1-3 PT"`:
   - Weekday as 3 letters, date as `M/d`.
   - 12-hour times with `:mm` only when the minutes are not zero
     (`9:30-11`).
   - am/pm is added only when the work window is wider than 7am–7pm.
     Otherwise the time can't be ambiguous.
-- `TimeZoneLabels.For(TimeZoneInfo)`: `PT`, `MT`, `CT`, `ET`, `AKT`, `HT`
-  for the US Windows zones (both the Windows and IANA ids); otherwise the
-  standard abbreviation when .NET has one, else `UTC±hh:mm`. The setting
-  overrides it. All scheduling math uses the local Windows time zone.
+  - The window is the search's working hours (`earliest_hour`/`latest_hour`
+    or `WorkStartHour`/`WorkEndHour`); "wider than 7am–7pm" means
+    start < 7 or end > 19. Suffixes are lowercase `am`/`pm`, written once
+    on the end time when both times share it (`9-11am`, `11am-1pm`).
+  - Formatting uses the invariant culture and the wall-clock values as
+    given. A blank `tzLabel` omits the label.
+- `TimeZoneLabels.For(TimeZoneInfo, DateTime? at = null)`: `PT`, `MT`, `CT`,
+  `ET`, `AKT`, `HT` for the US zones (a fixed table of Windows and IANA ids,
+  no Mexican/Canadian/Aleutian variants); `UTC` for UTC itself; otherwise
+  the standard name when it is an abbreviation (2–5 capital letters), else
+  `UTC±hh:mm` using the offset at `at` (base offset when null).
+  `TimeZoneLabels.Resolve(override, tz, at)`: the `TimeZoneLabel` setting,
+  trimmed, wins when non-blank. All scheduling math uses the local Windows
+  time zone.
 - `ReplySubject.Normalize(string?)`:
-  - Repeatedly strip leading `re`, `fw`, `fwd`, `aw` or `wg` followed by one
-    or more colons, in any case.
-  - Return `"Re:: " + rest`. An empty subject becomes `"Re::"`.
-- `HtmlBody.FromPlainText(string)`: HTML-encodes the text; blank lines
-  become paragraphs, single newlines become `<br>`, and URLs stay plain
-  text. `HtmlBody.InsertAtTop(string html, string fragment)`: inserts right
-  after the opening `<body…>` tag (case-insensitive, attributes allowed),
-  or prepends when there is no body tag.
-- `FileNames.SafeFileName` replaces `\ / : * ? " < > |` and control
-  characters with `_`, and returns `"attachment"` if nothing is left.
-  `FileNames.UniquePath(dir, name)` returns a path that doesn't exist yet,
-  using `name (n).ext`.
-- `PathPolicy.Check(path, allowedRoots, mode)` → full path, or throws
-  `PathNotAllowedException`:
+  - Trim, then repeatedly strip a leading `re`, `fw`, `fwd`, `aw` or `wg`
+    followed directly by one or more colons, in any case, and the
+    whitespace after it.
+  - Return `"Re:: " + rest` (rest trimmed). An empty subject becomes `"Re::"`.
+- `HtmlBody.FromPlainText(string)`: normalizes `\r\n` and `\r` to `\n`,
+  then encodes exactly `&` `<` `>` `"` `'` (as `&amp;` `&lt;` `&gt;`
+  `&quot;` `&#39;`); other characters, including non-ASCII, pass through.
+  One or more blank (empty or whitespace-only) lines separate paragraphs;
+  each paragraph becomes `<p>…</p>` and single newlines inside it become
+  `<br>`. Leading and trailing blank lines are dropped, the output has no
+  whitespace between tags, and text that is empty or all blank gives `""`.
+  URLs stay plain text (no `<a>`). Spaces and tabs are not converted to
+  `&nbsp;`.
+  `HtmlBody.InsertAtTop(string html, string fragment)`: inserts the
+  fragment right after the first opening `<body…>` tag (case-insensitive,
+  attributes allowed, including quoted values that contain `>`; `<tbody>`
+  and `<bodyx>` don't count), or prepends it when there is no complete body
+  tag. Nothing else in `html` changes.
+- `FileNames.SafeFileName(string?)` replaces `\ / : * ? " < > |` and
+  control characters with `_` (the same set on every OS), trims whitespace
+  and trailing dots, prefixes `_` when the part before the first `.` is a
+  Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`,
+  `LPT0`–`LPT9`), and shortens names longer than 200 characters while
+  keeping the extension. It returns `"attachment"` if nothing is left.
+  `FileNames.UniquePath(dir, name)` sanitizes `name` the same way and
+  returns a path in `dir` that doesn't exist yet, as a file or a directory,
+  using `name (n).ext` with n = 2, 3, …
+- `PathPolicy.Check(path, allowedRoots, mode, relativeTo?)` → full path, or
+  throws `PathNotAllowedException` (with a `Reason`; the message names the
+  allowed folders):
+  - Relative paths resolve against `relativeTo` (the tools pass
+    `AttachmentDir`); without it they are refused. Drive-relative (`C:x`)
+    and root-relative (`\x`) paths are always refused. The current
+    directory is never used.
   - `Path.GetFullPath` first, then the path must be equal to or under one
     root, compared case-insensitively on a **separator boundary**
-    (`C:\Docs2` is not under `C:\Docs`).
-  - Reject device and UNC forms (`\\?\`, `\\.\`, `\\server\share`) and
-    alternate data streams (`:` after the drive).
+    (`C:\Docs2` is not under `C:\Docs`). When roots overlap, the longest
+    match is used.
+  - Reject device and UNC forms (`\\?\`, `\\.\`, `\\server\share`),
+    alternate data streams (`:` after the drive), control characters, and
+    reserved device names (`CON`, `PRN`, `AUX`, `NUL`, `COM0-9`, `LPT0-9`)
+    in any component.
   - Reject when any existing component of the path below the root is a
-    reparse point (junction or symlink), so a link can't escape the root.
-  - `mode` is `Read` (draft attachments, must exist and be a file) or
-    `Write` (save directories, created if missing).
-- `InviteGate.Decide(mode, userChoice?, timedOut)` → `Send`, `SaveDraft`,
-  `Cancel` or `Refuse(reason)`. It is the only place that maps these
-  inputs, so it is fully unit-tested.
+    junction or symbolic link (including dangling links), so a link can't
+    escape the root. The root itself may be a link. Other reparse points
+    (OneDrive Files-On-Demand placeholders, dedup) are not links and are
+    allowed. If a component can't be inspected, the path is refused.
+  - `mode` is `Read` (draft attachments, must exist and be a file;
+    otherwise `FileNotFoundException`) or `Write` (save directories,
+    created if missing; `IOException` if the path is an existing file).
+    Only policy refusals are `PathNotAllowedException`, so only they record
+    a `Blocked` event.
+- `InviteGate.Decide(mode, userChoice?, timedOut)` → `Send`,
+  `SaveDraft(reason)`, `Cancel` or `Refuse(reason)`. It is the only place
+  that maps these inputs, so it is fully unit-tested. The most restrictive
+  input wins:
+  - `Disabled` → `Refuse` with "Meeting invites are disabled in
+    Clippy's Revenge. Ask the user to enable them in the tray settings
+    (Meeting invite mode: Send or Draft only), then try again."
+  - A user **Cancel** → `Cancel`, in any mode other than `Disabled`,
+    even if the timeout fired at the same moment.
+  - `DraftOnly` → `SaveDraft(draft_only_mode)` for any other input.
+  - `Send` mode: timeout → `SaveDraft(timeout)`, even if a Send click
+    raced with it; **Send** → `Send`; **Save as draft** →
+    `SaveDraft(user_choice)`; dialog closed with no choice and no
+    timeout → `Cancel`.
+  - `Send` is returned only for (`Send` mode, Send click, no timeout).
+    Undefined enum values throw instead of falling through.
 
 ## 13. HTTP host, auth and WSL networking
 
 - Kestrel listens on `IPAddress.Loopback:Port` only. On startup it checks
   that no other binding exists.
 - `BearerAuth` middleware runs before `MapMcp`:
-  - It reads the expected token from a holder that the tray updates
+  - It reads the expected token from a `TokenHolder` that the tray updates
     directly, so a regenerated token takes effect without a restart.
-  - The comparison is constant-time (`CryptographicOperations.FixedTimeEquals`).
-  - Anything other than a matching `Authorization: Bearer` header gets a
-    401 with an empty body.
-  - Requests that carry an `Origin` header also get a 401, which blocks
-    browser pages from calling the server.
+  - The comparison is constant-time: both tokens are hashed with SHA-256
+    and compared with `CryptographicOperations.FixedTimeEquals`, so the
+    length doesn't leak either.
+  - Anything other than exactly one `Authorization: Bearer <token>` header
+    with a matching token gets a 401 with an empty body. The scheme is
+    case-insensitive; the token is case-sensitive and is not trimmed.
+  - Requests that carry an `Origin` header (any value, even empty) also get a
+    401, which blocks browser pages from calling the server. CORS preflights
+    fail the same way.
+  - The 401 carries no `WWW-Authenticate` header, so MCP clients don't start
+    OAuth discovery.
 - **WSL networking requirement.** In WSL2's default **NAT** mode, WSL
   cannot reach the Windows host's `127.0.0.1`. Use **mirrored networking**
   (Windows 11 22H2+), set in `%USERPROFILE%\.wslconfig`:
@@ -907,6 +1021,10 @@ Decided (2026-11-12):
   `Microsoft.AspNetCore.App` because `BearerAuth` is ASP.NET Core
   middleware; that shared framework is cross-platform, so Core still
   builds and tests on Linux.
+- Settings (M1.7): `MeetingInviteMode` is its own Core file, shared by
+  `Settings` and `InviteGate`. Unchecking a shared mailbox sets
+  `Enabled = false` and keeps the entry, so its folders and retention
+  survive re-checking it.
 
 Open:
 

@@ -1,16 +1,18 @@
 ---
 name: reviewer
-description: Strict code reviewer for Clippy's Revenge. Use after the coder finishes a task to review the uncommitted diff against the brief, SPEC.md and the hard rules. Read-only; returns blocking and non-blocking findings.
+description: Code reviewer for Clippy's Revenge (Opus, medium effort). Runs once per milestone over all of that milestone's commits, checking them against the briefs, SPEC.md and the hard rules. Read-only; returns blocking and non-blocking findings.
 model: opus
-effort: high
+effort: medium
 tools: Read, Grep, Glob, Bash
 ---
 
-You review one task's uncommitted changes in the Clippy's Revenge repo
+You review one milestone's changes in the Clippy's Revenge repo
 (C#/.NET 10 Windows tray app; classic Outlook via COM; MCP over localhost
-HTTP). You don't edit files. Use `git diff` and `git status` to see the
-changes, and read the brief in `docs/briefs/`, the SPEC.md sections it
-cites, and `CLAUDE.md`.
+HTTP). You don't edit files. You get a commit range (`<base>..<head>`); review
+`git diff <base>..<head>` and `git log <base>..<head>`. For each task in
+the range, read its brief in `docs/briefs/` if it has one (tasks tagged
+`arch:skip` have none; the task line in `docs/PLAN.md` and the SPEC
+sections it cites are the brief), plus `CLAUDE.md`.
 
 Check, in order:
 1. **Hard rules** (always blocking): any `.Send()` other than the one in
