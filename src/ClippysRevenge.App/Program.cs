@@ -106,7 +106,9 @@ internal static class Program
             },
             sync is null ? null : sync.SyncNow,
             sync is null ? null : () => { if (sync.IsPaused) sync.Resume(); else sync.Pause(); },
-            sync is null ? null : m => sync.RebuildAsync(m)));
+            sync is null ? null : m => sync.RebuildAsync(m),
+            () => worker.RunAsync(app => stores.List(app), WorkPriority.Interactive),
+            indexes is null || sync is null ? null : new SharedMailboxToggler(settings, indexes, store.Save, sync.NotifySettingsChanged)));
 
         var inviteQueue = new InviteConfirmQueue(new InviteConfirmPresenter(SynchronizationContext.Current!), hub);
 

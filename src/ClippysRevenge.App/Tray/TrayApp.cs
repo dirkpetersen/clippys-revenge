@@ -20,7 +20,9 @@ internal sealed record TrayServices(
     Func<bool>? StartOutlook,
     Action? SyncNow = null,
     Action? TogglePause = null,
-    Func<string, Task>? Rebuild = null);
+    Func<string, Task>? Rebuild = null,
+    Func<Task<IReadOnlyList<MailboxStore>>>? ListMounted = null,
+    SharedMailboxToggler? SharedToggler = null);
 
 /// <summary>Tray icon and menu (SPEC 6.1, 6.2). All UI objects are touched on the UI thread only.</summary>
 internal sealed class TrayApp : ApplicationContext
@@ -49,6 +51,8 @@ internal sealed class TrayApp : ApplicationContext
     private int _frame;
     private int _renderQueued;
     private volatile bool _disposed;
+    private IReadOnlyList<MailboxStore>? _mounted;
+    private int _listing;
 
     public TrayApp(TrayServices services)
     {
@@ -311,20 +315,112 @@ internal sealed class TrayApp : ApplicationContext
         }
     }
 
+    private static readonly TimeSpan ListTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Fills the submenu from settings and the last known store list at once, then refreshes the store list on
+    /// the Outlook worker; the UI thread never waits for COM.
+    /// </summary>
     private void RebuildShared()
     {
-        _shared.DropDownItems.Clear();
-        var boxes = _s.GetSettings().SharedMailboxes;
-        foreach (var m in boxes)
+        var outlookUp = !_s.IsOutlookUnavailable();
+        FillShared(outlookUp ? _mounted : null);
+        if (!outlookUp || _s.ListMounted is null || Interlocked.Exchange(ref _listing, 1) == 1)
         {
-            // TODO(M9.1): toggling.
-            _shared.DropDownItems.Add(new ToolStripMenuItem(m.MenuLabel) { Checked = m.Enabled, Enabled = false });
+            return;
         }
-        if (boxes.Count > 0)
+        _ = RefreshMountedAsync();
+    }
+
+    private async Task RefreshMountedAsync()
+    {
+        try
+        {
+            var list = await _s.ListMounted!().WaitAsync(ListTimeout).ConfigureAwait(false);
+            PostToUi(() =>
+            {
+                _mounted = list;
+                if (_shared.DropDown.Visible)
+                {
+                    FillShared(_mounted);
+                }
+            });
+        }
+        catch (Exception)
+        {
+            // Outlook is slow or gone: keep what the menu shows. The next opening tries again.
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _listing, 0);
+        }
+    }
+
+    private void FillShared(IReadOnlyList<MailboxStore>? mounted)
+    {
+        _shared.DropDownItems.Clear();
+        var model = SharedMailboxMenu.Build(mounted, _s.GetSettings().SharedMailboxes);
+        foreach (var e in model.Entries)
+        {
+            var entry = e;
+            var item = new ToolStripMenuItem(entry.Label) { Checked = entry.Checked, CheckOnClick = false, Enabled = _s.SharedToggler is not null };
+            item.Click += (_, _) => ToggleShared(entry);
+            _shared.DropDownItems.Add(item);
+        }
+        if (model.StartOutlookHint)
+        {
+            _shared.DropDownItems.Add(new ToolStripMenuItem(SharedMailboxMenu.StartOutlookHintText) { Enabled = false });
+        }
+        if (model.Entries.Count > 0 || model.StartOutlookHint)
         {
             _shared.DropDownItems.Add(new ToolStripSeparator());
         }
         _shared.DropDownItems.Add(new ToolStripMenuItem("Manage in Settings…", null, (_, _) => ShowSettings()));
+    }
+
+    private void ToggleShared(SharedMenuEntry entry)
+    {
+        var toggler = _s.SharedToggler;
+        if (toggler is null)
+        {
+            return;
+        }
+        try
+        {
+            if (!entry.Checked)
+            {
+                toggler.Check(entry.Smtp, entry.DisplayName);
+                return;
+            }
+            var name = string.IsNullOrWhiteSpace(entry.DisplayName) ? entry.Smtp : entry.DisplayName;
+            var delete = new TaskDialogButton("Delete its index");
+            var keep = new TaskDialogButton("Keep index file");
+            var cancel = new TaskDialogButton("Cancel");
+            var page = new TaskDialogPage
+            {
+                Caption = BalloonTexts.Title,
+                Heading = $"Stop indexing {name}?",
+                Text = "The mailbox is switched off either way. Deleting the index frees disk space; checking it again later starts from scratch.",
+                AllowCancel = true,
+                DefaultButton = keep,
+            };
+            page.Buttons.Add(delete);
+            page.Buttons.Add(keep);
+            page.Buttons.Add(cancel);
+            var choice = TaskDialog.ShowDialog(page);
+            if (choice == delete)
+            {
+                toggler.Uncheck(entry.Smtp, true);
+            }
+            else if (choice == keep)
+            {
+                toggler.Uncheck(entry.Smtp, false);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or ObjectDisposedException)
+        {
+            _s.Balloons.PostUserFeedback("Couldn't change that mailbox: " + ex.Message);
+        }
     }
 
     private void CopyToClipboard(Func<string> text, bool announce)
