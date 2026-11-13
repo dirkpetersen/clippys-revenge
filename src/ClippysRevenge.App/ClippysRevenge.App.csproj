@@ -15,6 +15,9 @@
     <PackageReference Include="Microsoft.Office.Interop.Outlook" Version="15.0.4797.1004" ExcludeAssets="runtime" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Tray\Icons\*.ico" LogicalName="ClippysRevenge.Icons.%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\ClippysRevenge.Core\ClippysRevenge.Core.csproj" />
   </ItemGroup>
   <!-- PackageReference can't set EmbedInteropTypes directly. -->
