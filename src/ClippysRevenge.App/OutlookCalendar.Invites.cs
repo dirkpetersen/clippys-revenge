@@ -8,8 +8,13 @@ namespace ClippysRevenge.App;
 /// <summary>Worker wrappers for <see cref="IMeetingCalendar"/> (M8.4).</summary>
 internal sealed class OutlookMeetingCalendar(OutlookWorker worker, OutlookStores stores, Func<Settings> settings) : IMeetingCalendar
 {
-    public Task<ResolvedInvite> ResolveAsync(MeetingRequest request, CancellationToken ct) =>
-        worker.RunAsync(app => OutlookCalendar.ResolveInvite(app, stores, settings(), request), WorkPriority.Interactive, ct);
+    public async Task<ResolvedInvite> ResolveAsync(MeetingRequest request, CancellationToken ct)
+    {
+        if (request.Mailbox.Length > 0)
+            await stores.EnsureResolvedAsync(WorkPriority.Interactive, ct).ConfigureAwait(false);
+        return await worker.RunAsync(app => OutlookCalendar.ResolveInvite(app, stores, settings(), request), WorkPriority.Interactive, ct)
+            .ConfigureAwait(false);
+    }
 
     public Task<CreatedMeeting> CreateAsync(MeetingRequest request, InviteDecision decision, CancellationToken ct) =>
         worker.RunAsync(app => OutlookCalendar.CreateMeeting(app, request, decision), WorkPriority.Interactive, ct);

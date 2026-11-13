@@ -34,6 +34,7 @@ internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker)
     public async Task<MessageDto> GetMessage(
         Optional<MailboxIndexes> index,
         Optional<OutlookMail> outlookMail,
+        OutlookStores stores,
         [Description("The id of an email, as returned by search_emails.")] string id,
         CancellationToken cancellationToken = default)
     {
@@ -43,6 +44,7 @@ internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker)
         {
             return hit;
         }
+        await stores.EnsureResolvedAsync(WorkPriority.Interactive, cancellationToken).ConfigureAwait(false);
         var live = await worker.RunAsync(app => mail.ReadById(app, id), WorkPriority.Interactive, cancellationToken)
             .ConfigureAwait(false);
         return MailQueries.FromLive(live, tz);
@@ -56,7 +58,7 @@ internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker)
     {
         bool? running = worker.State switch
         {
-            OutlookConnectionState.Available => true,
+            OutlookConnectionState.Available or OutlookConnectionState.NotResponding => true,
             OutlookConnectionState.Unavailable => false,
             _ => null,
         };
@@ -75,6 +77,8 @@ internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker)
     {
         var tz = TimeZoneInfo.Local;
         var window = CalendarEvents.ResolveWindow(start, end, days, tz, DateTimeOffset.Now);
+        if (!string.IsNullOrWhiteSpace(mailbox))
+            await stores.EnsureResolvedAsync(WorkPriority.Interactive, ct).ConfigureAwait(false);
         var events = await worker.RunAsync(
             app => OutlookCalendar.ListEvents(app, stores, mailbox, window, tz), WorkPriority.Interactive, ct).ConfigureAwait(false);
         return new ListEventsResult(

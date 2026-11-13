@@ -62,7 +62,7 @@ internal static class Program
 
         // Background indexing (SPEC 10). If the index can't be opened, the tray shows an Error state and indexing stays off.
         var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClippysRevenge");
-        var stores = new OutlookStores(() => settings);
+        var stores = new OutlookStores(worker, () => settings);
         MailboxIndexes? indexes = null;
         OutlookMail? mail = null;
         SyncService? sync = null;
@@ -80,6 +80,20 @@ internal static class Program
             logger.LogError(ex, "The email index could not be opened.");
             indexErrorScope = hub.Begin(ActivityState.Error, "index can't be opened");
         }
+
+        // After Outlook stops hanging, resume sync at once instead of waiting for the next interval (SPEC 4).
+        var stateLock = new Lock();
+        var previousState = OutlookConnectionState.Unknown;
+        worker.StateChanged += next =>
+        {
+            bool resumed;
+            lock (stateLock)
+            {
+                resumed = previousState == OutlookConnectionState.NotResponding && next == OutlookConnectionState.Available;
+                previousState = next;
+            }
+            if (resumed) sync?.SyncNow();
+        };
 
         var tray = new TrayApp(new TrayServices(
             hub,
@@ -144,7 +158,7 @@ internal static class Program
                 if (indexes is not null && mail is not null && sync is not null)
                 {
                     s.AddSingleton(indexes).AddSingleton(mail).AddSingleton(sync);
-                    s.AddSingleton<IReplyDraftWriter>(new OutlookReplyDraftWriter(worker, mail))
+                    s.AddSingleton<IReplyDraftWriter>(new OutlookReplyDraftWriter(worker, mail, stores))
                         .AddSingleton<ReplyDraftTool>();
                     s.AddSingleton<IAttachmentSaver, OutlookAttachmentSaver>()
                         .AddSingleton(sp => new AttachmentExport(sp.GetRequiredService<IAttachmentSaver>(),

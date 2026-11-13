@@ -108,6 +108,23 @@ public class OutlookConnectionTests
         Assert.Equal(expected, OutlookAppPath.Normalize(input));
 
     [Fact]
+    public void CallFailedCountsAsGone()
+    {
+        Assert.True(ComErrors.IsGoneHResult(unchecked((int)0x800706BE)));
+        Assert.True(ComErrors.IsOutlookGone(new COMException("x", unchecked((int)0x800706BE))));
+    }
+
+    [Fact]
+    public void NotRespondingException()
+    {
+        var ex = new OutlookNotRespondingException();
+        Assert.IsAssignableFrom<McpException>(ex);
+        Assert.IsAssignableFrom<OutlookUnavailableException>(ex);
+        Assert.Equal(OutlookNotRespondingException.DefaultMessage, ex.Message);
+        Assert.Equal("Outlook is not running. Ask the user to start Outlook (tray → Start Outlook) and try again.", OutlookUnavailableException.DefaultMessage);
+    }
+
+    [Fact]
     public void OutlookNotFoundText() =>
         Assert.Equal("It looks like I can't find Outlook on this PC. Start it from the Start menu.", BalloonTexts.OutlookNotFound);
 }

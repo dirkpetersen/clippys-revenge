@@ -6,8 +6,11 @@ namespace ClippysRevenge.App;
 
 internal sealed class OutlookDraftWriter(OutlookWorker worker, OutlookStores stores) : IDraftWriter
 {
-    public Task<CreatedDraft> CreateAsync(DraftPlan plan, CancellationToken ct) =>
-        worker.RunAsync(app =>
+    public async Task<CreatedDraft> CreateAsync(DraftPlan plan, CancellationToken ct)
+    {
+        if (plan.Mailbox.Length > 0)
+            await stores.EnsureResolvedAsync(WorkPriority.Interactive, ct).ConfigureAwait(false);
+        return await worker.RunAsync(app =>
         {
             Outlook.Store? store = plan.Mailbox.Length == 0 ? null : stores.Get(app, plan.Mailbox);
             try
@@ -18,5 +21,6 @@ internal sealed class OutlookDraftWriter(OutlookWorker worker, OutlookStores sto
             {
                 if (store is not null) Marshal.ReleaseComObject(store);
             }
-        }, WorkPriority.Interactive, ct);
+        }, WorkPriority.Interactive, ct).ConfigureAwait(false);
+    }
 }

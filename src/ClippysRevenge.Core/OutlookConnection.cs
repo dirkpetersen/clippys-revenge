@@ -5,7 +5,7 @@ namespace ClippysRevenge.Core;
 
 public enum WorkPriority { Interactive, Background }
 
-public enum OutlookConnectionState { Unknown, Available, Unavailable }
+public enum OutlookConnectionState { Unknown, Available, Unavailable, NotResponding }
 
 /// <summary>How the worker reaches the COM server. Every member is called on the worker thread only.</summary>
 public interface IComAttacher<TApp> where TApp : class
@@ -54,17 +54,24 @@ public sealed class AttachBackoff
     public void Reset() => _current = _initial;
 }
 
+public static class OutlookConnection
+{
+    /// <summary>ActivityHub label of the OutlookUnavailable scope while NotResponding.</summary>
+    public const string NotRespondingLabel = "not responding";
+}
+
 public static class ComErrors
 {
     public const int MK_E_UNAVAILABLE = unchecked((int)0x800401E3);
     public const int RPC_E_DISCONNECTED = unchecked((int)0x80010108);
     public const int RPC_E_SERVERCALL_RETRYLATER = unchecked((int)0x8001010A);
     public const int RPC_S_SERVER_UNAVAILABLE = unchecked((int)0x800706BA);
+    public const int RPC_S_CALL_FAILED = unchecked((int)0x800706BE);
     public const int CO_E_CLASSSTRING = unchecked((int)0x800401F3);
     public const int REGDB_E_CLASSNOTREG = unchecked((int)0x80040154);
 
     public static bool IsGoneHResult(int hr) =>
-        hr is MK_E_UNAVAILABLE or RPC_E_DISCONNECTED or RPC_E_SERVERCALL_RETRYLATER or RPC_S_SERVER_UNAVAILABLE;
+        hr is MK_E_UNAVAILABLE or RPC_E_DISCONNECTED or RPC_E_SERVERCALL_RETRYLATER or RPC_S_SERVER_UNAVAILABLE or RPC_S_CALL_FAILED;
 
     public static bool IsOutlookGone(Exception ex)
     {
@@ -84,7 +91,7 @@ public static class ComErrors
 }
 
 /// <summary>Thrown for work that can't run because Outlook isn't attached (SPEC 4).</summary>
-public sealed class OutlookUnavailableException : McpException
+public class OutlookUnavailableException : McpException
 {
     public const string DefaultMessage =
         "Outlook is not running. Ask the user to start Outlook (tray → Start Outlook) and try again.";
@@ -94,6 +101,25 @@ public sealed class OutlookUnavailableException : McpException
     }
 
     public OutlookUnavailableException(Exception? inner) : base(DefaultMessage, inner)
+    {
+    }
+
+    protected OutlookUnavailableException(string message, Exception? inner) : base(message, inner)
+    {
+    }
+}
+
+/// <summary>A COM call missed its deadline, or the worker is NotResponding (SPEC 4).</summary>
+public sealed class OutlookNotRespondingException : OutlookUnavailableException
+{
+    public new const string DefaultMessage =
+        "Outlook isn't responding. It may be busy, offline or showing a dialog box. Ask the user to check Outlook, then try again. If this call was creating a draft or a meeting, check Outlook for it before retrying.";
+
+    public OutlookNotRespondingException() : base(DefaultMessage, null)
+    {
+    }
+
+    public OutlookNotRespondingException(Exception? inner) : base(DefaultMessage, inner)
     {
     }
 }

@@ -13,23 +13,42 @@ internal sealed class OutlookStores
 {
     private const string PrStoreOwnerEntryId = "http://schemas.microsoft.com/mapi/proptag/0x661B0102";
 
-    private readonly Func<Settings> _settings;
+    public static readonly TimeSpan LookupTimeout = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan AttachmentTimeout = TimeSpan.FromSeconds(120);
 
-    public OutlookStores(Func<Settings> settings)
+    private readonly OutlookWorker _worker;
+    private readonly Func<Settings> _settings;
+    private readonly StoreListCache _cache = new();
+
+    public OutlookStores(OutlookWorker worker, Func<Settings> settings)
     {
+        ArgumentNullException.ThrowIfNull(worker);
         ArgumentNullException.ThrowIfNull(settings);
+        _worker = worker;
         _settings = settings;
     }
 
-    /// <summary>Mounted Exchange mailboxes (own first as Outlook lists them). Releases every COM object it touches.</summary>
+    /// <summary>
+    /// Mounted Exchange mailboxes (own first as Outlook lists them), cached per worker connection.
+    /// Local properties only: SMTPs come from Session.Accounts and earlier lookups, never from the GAL.
+    /// Releases every COM object it touches. Worker thread.
+    /// </summary>
     public IReadOnlyList<MailboxStore> List(Outlook.Application app)
     {
+        var connection = _worker.ConnectionId;
+        if (_cache.TryGet(connection, out var cached))
+            return cached;
+
         var candidates = new List<StoreCandidate>();
-        var session = app.Session;
-        var stores = session.Stores;
+        var accountSmtp = new Dictionary<string, string>(StringComparer.Ordinal);
+        Outlook.NameSpace? session = null;
+        Outlook.Stores? stores = null;
         try
         {
+            session = app.Session;
+            stores = session.Stores;
             var defaultId = ReadDefaultStoreId(session);
+            ReadAccountSmtps(session, accountSmtp);
             foreach (Outlook.Store store in stores)
             {
                 try
@@ -40,7 +59,7 @@ internal sealed class OutlookStores
                     if (!StoreCatalog.IsMailboxType(type)) continue;
                     var id = store.StoreID;
                     candidates.Add(new StoreCandidate(
-                        store.DisplayName ?? "", id, ReadOwnerSmtp(session, store),
+                        store.DisplayName ?? "", id, accountSmtp.GetValueOrDefault(id),
                         type, defaultId is not null && string.Equals(id, defaultId, StringComparison.Ordinal)));
                 }
                 finally
@@ -51,10 +70,94 @@ internal sealed class OutlookStores
         }
         finally
         {
-            Marshal.ReleaseComObject(stores);
-            Marshal.ReleaseComObject(session);
+            if (stores is not null) Marshal.ReleaseComObject(stores);
+            if (session is not null) Marshal.ReleaseComObject(session);
         }
-        return StoreCatalog.Filter(candidates);
+        return _cache.Set(connection, candidates);
+    }
+
+    /// <summary>The GAL owner lookup for one store. Its own work item, never part of List or Get. Worker thread.</summary>
+    public string? LookupOwnerSmtp(Outlook.Application app, string storeId)
+    {
+        var connection = _worker.ConnectionId;
+        Outlook.NameSpace? session = null;
+        Outlook.Store? store = null;
+        Outlook.PropertyAccessor? pa = null;
+        Outlook.AddressEntry? entry = null;
+        Outlook.ExchangeUser? user = null;
+        string? smtp = null;
+        try
+        {
+            session = app.Session;
+            try
+            {
+                store = session.GetStoreFromID(storeId);
+            }
+            catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
+            {
+                store = null;
+            }
+            if (store is not null)
+            {
+                // PR_MAILBOX_OWNER_ENTRYID, then the GAL (the call that can hang offline).
+                try
+                {
+                    pa = store.PropertyAccessor;
+                    var bytes = (byte[])pa.GetProperty(PrStoreOwnerEntryId);
+                    entry = session.GetAddressEntryFromID(pa.BinaryToString(bytes));
+                    user = entry.GetExchangeUser();
+                    smtp = user?.PrimarySmtpAddress;
+                }
+                catch (Exception ex) when (ex is (COMException or InvalidCastException or ArgumentException) && !ComErrors.IsOutlookGone(ex))
+                {
+                    smtp = null;
+                }
+            }
+        }
+        finally
+        {
+            if (user is not null) Marshal.ReleaseComObject(user);
+            if (entry is not null) Marshal.ReleaseComObject(entry);
+            if (pa is not null) Marshal.ReleaseComObject(pa);
+            if (store is not null) Marshal.ReleaseComObject(store);
+            if (session is not null) Marshal.ReleaseComObject(session);
+        }
+        _cache.RecordLookup(connection, storeId, smtp);
+        return smtp;
+    }
+
+    /// <summary>
+    /// Thread pool. Makes sure every enabled shared mailbox is matched to a mounted store (or has been tried)
+    /// on the current connection. No work item at all when nothing is pending.
+    /// </summary>
+    public async Task EnsureResolvedAsync(WorkPriority priority, CancellationToken ct, bool includeUnconfigured = false)
+    {
+        var shared = ConfiguredKeys().Where(k => k.Length > 0).ToList();
+        if (shared.Count == 0 && !includeUnconfigured)
+            return;
+        if (_cache.IsSettled(_worker.ConnectionId, shared, includeUnconfigured))
+            return;
+
+        var pending = await _worker.RunAsync(app =>
+        {
+            List(app);
+            return _cache.PendingLookups(_worker.ConnectionId, shared, includeUnconfigured);
+        }, priority, ct).ConfigureAwait(false);
+
+        foreach (var id in pending)
+        {
+            try
+            {
+                await _worker.RunAsync(app => LookupOwnerSmtp(app, id), priority, ct, LookupTimeout).ConfigureAwait(false);
+            }
+            catch (OutlookNotRespondingException)
+            {
+                _cache.RecordTimeout(id);
+                throw;
+            }
+            if (_cache.IsSettled(_worker.ConnectionId, shared, includeUnconfigured))
+                break;
+        }
     }
 
     /// <summary>
@@ -104,6 +207,44 @@ internal sealed class OutlookStores
         return keys;
     }
 
+    private static void ReadAccountSmtps(Outlook.NameSpace session, Dictionary<string, string> map)
+    {
+        Outlook.Accounts? accounts = null;
+        try
+        {
+            accounts = session.Accounts;
+            foreach (Outlook.Account account in accounts)
+            {
+                Outlook.Store? delivery = null;
+                try
+                {
+                    delivery = account.DeliveryStore;
+                    var id = delivery?.StoreID;
+                    var smtp = account.SmtpAddress;
+                    if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(smtp))
+                        map.TryAdd(id, smtp);
+                }
+                catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
+                {
+                    // Skip this account.
+                }
+                finally
+                {
+                    if (delivery is not null) Marshal.ReleaseComObject(delivery);
+                    Marshal.ReleaseComObject(account);
+                }
+            }
+        }
+        catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
+        {
+            // No account data: SMTPs stay unknown.
+        }
+        finally
+        {
+            if (accounts is not null) Marshal.ReleaseComObject(accounts);
+        }
+    }
+
     private static string? ReadDefaultStoreId(Outlook.NameSpace session)
     {
         Outlook.Store? def = null;
@@ -119,32 +260,6 @@ internal sealed class OutlookStores
         finally
         {
             if (def is not null) Marshal.ReleaseComObject(def);
-        }
-    }
-
-    /// <summary>Owner SMTP via PR_MAILBOX_OWNER_ENTRYID, then AddressEntry.GetExchangeUser().PrimarySmtpAddress.</summary>
-    private static string? ReadOwnerSmtp(Outlook.NameSpace session, Outlook.Store store)
-    {
-        Outlook.PropertyAccessor? pa = null;
-        Outlook.AddressEntry? entry = null;
-        Outlook.ExchangeUser? user = null;
-        try
-        {
-            pa = store.PropertyAccessor;
-            var bytes = (byte[])pa.GetProperty(PrStoreOwnerEntryId);
-            entry = session.GetAddressEntryFromID(pa.BinaryToString(bytes));
-            user = entry.GetExchangeUser();
-            return user?.PrimarySmtpAddress;
-        }
-        catch (Exception ex) when (ex is (COMException or InvalidCastException or ArgumentException) && !ComErrors.IsOutlookGone(ex))
-        {
-            return null;
-        }
-        finally
-        {
-            if (user is not null) Marshal.ReleaseComObject(user);
-            if (entry is not null) Marshal.ReleaseComObject(entry);
-            if (pa is not null) Marshal.ReleaseComObject(pa);
         }
     }
 }

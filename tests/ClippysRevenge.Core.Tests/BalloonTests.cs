@@ -126,6 +126,20 @@ public class BalloonTests
     }
 
     [Fact]
+    public void NotRespondingEpisode()
+    {
+        var clock = new ManualTimeProvider();
+        var p = new StateBalloonPolicy(clock);
+        var s = ActivityState.OutlookUnavailable;
+        var progress = new ActivityProgress(0, 0, "not responding");
+        Assert.Null(p.Observe(s, progress, true));
+        clock.Advance(TimeSpan.FromMinutes(2));
+        Assert.Equal(new Balloon(BalloonTexts.OutlookNotResponding, BalloonKind.Warning), p.Observe(s, progress, true));
+        clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.Null(p.Observe(s, progress, true));
+    }
+
+    [Fact]
     public void EpisodeReset()
     {
         var clock = new ManualTimeProvider();
