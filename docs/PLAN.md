@@ -115,7 +115,7 @@ v0.0.1 release.
 - [x] M11.11 User docs: `manual/ai-drafts.md` (setup, consent, what is sent, rules, style skill, limits, troubleshooting), data flow in `manual/security.md`, `tray.md`, `faq.md`, `changelog.md`, `zensical.toml` nav, README; `zensical build --clean --strict` passes (§19, CLAUDE.md docs rule) `{arch:skip}` (deps: M11.8)
 
 ## M12 Auto-update and About window (SPEC §20, §6.7, §6.2, §5.2; user request 2026-11-13) — deps: M11
-- Review: [ ] pending
+- Review: [x] done (e117079, 4eb4b96; 2 reviewers: 2 blocking fixed, re-review APPROVED)
 - Parallel tracks: **A** M12.1 → M12.2 · **B** M12.1 → M12.3 (M12.2 and M12.3 run side by side; neither uses the other's types). M12.4 joins A and B. M12.5 comes after M12.4. M12.6 is the user's check after the next release.
 - [x] M12.1 Core update primitives: `SemVersion`, `AppVersionInfo` (§20.2); `UpdateEndpoints`, `ReleaseParser`, `Sha256Sums`, `UpdateHash` (§20.3–§20.5); `UpdateMode`, `UpdatePaths`, `UpdatePolicy`, `UpdateState` + `UpdateStateStore` (§20.6–§20.8); `UpdateTexts`, `UpdateStatus`, `AboutView` (§6.7, §20.10); `Settings.Updates` (§5.2); `ActivityKind.Update` (§6.4); `ActivityHub.IsActive` (§7); update balloons (§6.5) + tests `{arch:brief}` (deps: none)
 - [x] M12.2 `UpdateClient` (GitHub lookup, verified download, redirect allow-list, caps, stall timeout) and `UpdateService` (weekly due check, notify/stage, start-up-window install when idle, Check for updates, Update now, `Status`/`Changed`) + fake-handler and fake-clock tests, opt-in live GitHub lookup test (§20.3–§20.5, §20.8) `{arch:brief}` (deps: M12.1)
@@ -185,3 +185,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-13 M12.3 exe swap, handover with rollback, start-up decision (e10ebd6); 2869 tests
 2026-11-13 M12.2 UpdateClient (lookup, verified download) + UpdateService (weekly check, stage, notify, manual) (4112011); 2939 tests
 2026-11-13 M12.4 About window, UpdateRestarter, start-up install + handover wiring, Settings Updates (9716735); M12.5 user docs (6c59282); 2944 tests
+2026-11-13 M12 review: updater-security + App-wiring reviewers; blocking B1 port handover, B2 confirm write race fixed (e117079); re-review APPROVED; follow-ups (4eb4b96); 2961 tests; release v0.0.6
