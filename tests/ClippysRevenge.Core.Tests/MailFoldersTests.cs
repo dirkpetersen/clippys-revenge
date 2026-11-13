@@ -68,13 +68,13 @@ public class MailFoldersTests
     public void FromOutlook_cases()
     {
         Assert.Equal("Inbox\\Projekte",
-            MailFolderPath.FromOutlook("\\\\Mailbox - Dirk\\Posteingang\\Projekte", "Posteingang", "Gesendete Elemente"));
+            MailFolderPath.FromOutlook("\\\\Mailbox - Bob\\Posteingang\\Projekte", "Posteingang", "Gesendete Elemente"));
         Assert.Equal("Sent Items",
             MailFolderPath.FromOutlook("\\\\team@x.org\\Gesendete Elemente", "Posteingang", "Gesendete Elemente"));
-        Assert.Equal("Archive\\2025", MailFolderPath.FromOutlook("\\\\Dirk\\Archive\\2025", "Inbox", "Sent Items"));
-        Assert.Null(MailFolderPath.FromOutlook("\\\\Dirk", "Inbox", "Sent Items"));
+        Assert.Equal("Archive\\2025", MailFolderPath.FromOutlook("\\\\Bob\\Archive\\2025", "Inbox", "Sent Items"));
+        Assert.Null(MailFolderPath.FromOutlook("\\\\Bob", "Inbox", "Sent Items"));
         Assert.Null(MailFolderPath.FromOutlook(null, "Inbox", "Sent Items"));
-        Assert.Equal("Inbox", MailFolderPath.FromOutlook("\\\\Dirk\\Inbox", null, null));
+        Assert.Equal("Inbox", MailFolderPath.FromOutlook("\\\\Bob\\Inbox", null, null));
     }
 
     [Fact]

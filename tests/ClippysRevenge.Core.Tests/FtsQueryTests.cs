@@ -30,7 +30,7 @@ public class FtsQueryTests
     [InlineData("  budget \t  review  ", "\"budget\" AND \"review\"")]
     [InlineData("budget-2026", "\"budget-2026\"")]
     [InlineData("C++", "\"C++\"")]
-    [InlineData("O'Brien", "\"O'Brien\"")]
+    [InlineData("O'Example", "\"O'Example\"")]
     [InlineData("budg*", "\"budg\"*")]
     [InlineData("budg**", "\"budg\"*")]
     [InlineData("budget-20*", "\"budget-20\"*")]
@@ -74,7 +74,7 @@ public class FtsQueryTests
         var rows = new (int Id, string Subject, string Body)[]
         {
             (1, "Budget 2026 review", "see budget-2026.xlsx"),
-            (2, "C++ meeting", "with O'Brien"),
+            (2, "C++ meeting", "with O'Example"),
             (3, "Invoice", "invoice from Müller"),
             (4, "Cats", "dogs and birds"),
         };
@@ -102,7 +102,7 @@ public class FtsQueryTests
     [Theory]
     [InlineData("budget-2026")]
     [InlineData("C++")]
-    [InlineData("O'Brien")]
+    [InlineData("O'Example")]
     [InlineData("\"")]
     [InlineData("\"\"\"")]
     [InlineData("a\"b")]
@@ -130,7 +130,7 @@ public class FtsQueryTests
 
     [Fact] public void Fts_Hyphenated_FindsRow() => Assert.Equal([1L], Match("budget-2026"));
     [Fact] public void Fts_CPlusPlus_FindsRow() => Assert.Equal([2L], Match("C++"));
-    [Fact] public void Fts_Apostrophe_FindsRow() => Assert.Equal([2L], Match("O'Brien"));
+    [Fact] public void Fts_Apostrophe_FindsRow() => Assert.Equal([2L], Match("O'Example"));
 
     [Fact]
     public void Fts_Prefix()

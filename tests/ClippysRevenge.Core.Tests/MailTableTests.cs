@@ -69,8 +69,8 @@ public class MailTableTests
     {
         Assert.Equal("@SQL=\"http://schemas.microsoft.com/mapi/proptag/0x1035001F\" = '<abc@x.org>'",
             DaslFilter.ByMessageId("<abc@x.org>"));
-        Assert.Equal("@SQL=\"http://schemas.microsoft.com/mapi/proptag/0x1035001F\" = '<o''brien@x.org>'",
-            DaslFilter.ByMessageId("<o'brien@x.org>"));
+        Assert.Equal("@SQL=\"http://schemas.microsoft.com/mapi/proptag/0x1035001F\" = '<o''example@x.org>'",
+            DaslFilter.ByMessageId("<o'example@x.org>"));
         Assert.ThrowsAny<ArgumentException>(() => DaslFilter.ByMessageId(null!));
         Assert.Throws<ArgumentException>(() => DaslFilter.ByMessageId(""));
         Assert.Throws<ArgumentException>(() => DaslFilter.ByMessageId("  "));

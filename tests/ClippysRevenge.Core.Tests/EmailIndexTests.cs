@@ -370,10 +370,10 @@ public class EmailIndexTests : IDisposable
     public void Upsert_QuoteAndApostropheText_Stored()
     {
         var ix = NewIndex();
-        const string subj = "O'Brien \"quoted\"";
+        const string subj = "O'Example \"quoted\"";
         ix.UpsertBatch([Mail("A", subject: subj)]);
         Assert.Equal(subj, ix.Get("A")!.Subject);
-        Assert.Equal([ix.Get("A")!.RowId], Match("O'Brien"));
+        Assert.Equal([ix.Get("A")!.RowId], Match("O'Example"));
     }
 
     [Fact]

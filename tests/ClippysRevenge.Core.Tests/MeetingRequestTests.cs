@@ -6,7 +6,7 @@ public class MeetingRequestTests
 {
     private static readonly TimeZoneInfo Tz = TimeZoneInfo.CreateCustomTimeZone("Test-7", TimeSpan.FromHours(-7), "Test-7", "Test-7");
     private static readonly DateTimeOffset Now = new(2026, 11, 12, 9, 0, 0, TimeSpan.FromHours(-7));
-    private const string R2 = "Petersen, Dirk <dirk@osu.edu>; ext@other.org";
+    private const string R2 = "Sample, Bob <bob@example.edu>; ext@other.org";
     private const string StartHint = "2026-03-01T14:30";
 
     private static MeetingRequest Make(string? recipients = R2, string? subject = "Sync", string? start = "2026-11-17T13:00",
@@ -19,7 +19,7 @@ public class MeetingRequestTests
     public void Valid_input()
     {
         var r = Make(subject: " Sync ");
-        Assert.Equal([new Recipient("Petersen, Dirk", "dirk@osu.edu"), new Recipient("", "ext@other.org")], r.Recipients);
+        Assert.Equal([new Recipient("Sample, Bob", "bob@example.edu"), new Recipient("", "ext@other.org")], r.Recipients);
         Assert.Equal("Sync", r.Subject);
         Assert.Equal(new DateTime(2026, 11, 17, 13, 0, 0), r.Start);
         Assert.Equal(DateTimeKind.Unspecified, r.Start.Kind);
@@ -99,8 +99,8 @@ public class MeetingRequestTests
 
     [Fact]
     public void Recipient_without_email() =>
-        Assert.Equal("Recipient \"Dirk Petersen\" has no valid email address. Use \"Name <email>\" or a bare email, and separate recipients with \";\".",
-            Err(() => Make(recipients: "Dirk Petersen")));
+        Assert.Equal("Recipient \"Bob Sample\" has no valid email address. Use \"Name <email>\" or a bare email, and separate recipients with \";\".",
+            Err(() => Make(recipients: "Bob Sample")));
 
     [Fact]
     public void Duplicates_collapse() => Assert.Single(Make(recipients: "a@x.org; A@X.org").Recipients);

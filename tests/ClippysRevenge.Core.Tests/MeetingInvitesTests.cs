@@ -6,7 +6,7 @@ namespace ClippysRevenge.Core.Tests;
 public class MeetingInvitesTests
 {
     private static readonly TimeZoneInfo Tz = TimeZoneInfo.CreateCustomTimeZone("Test-7", TimeSpan.FromHours(-7), "Test-7", "Test-7");
-    private const string R2 = "Petersen, Dirk <dirk@osu.edu>; ext@other.org";
+    private const string R2 = "Sample, Bob <bob@example.edu>; ext@other.org";
 
     private sealed class FixedTime : TimeProvider
     {
@@ -17,8 +17,8 @@ public class MeetingInvitesTests
     {
         public List<MeetingRequest> Resolves { get; } = [];
         public List<(MeetingRequest Req, InviteDecision Decision, bool Cancelable)> Creates { get; } = [];
-        public ResolvedInvite Resolved { get; set; } = new("Me", "me@osu.edu",
-            [new InviteAttendee("Petersen, Dirk", "dirk@osu.edu", false), new InviteAttendee("ext@other.org", "ext@other.org", true)],
+        public ResolvedInvite Resolved { get; set; } = new("Me", "me@example.edu",
+            [new InviteAttendee("Sample, Bob", "bob@example.edu", false), new InviteAttendee("ext@other.org", "ext@other.org", true)],
             [], false);
         public bool TeamsAdded { get; set; }
         public Exception? ResolveThrows { get; set; }
@@ -139,8 +139,8 @@ public class MeetingInvitesTests
         Assert.Equal("2026-11-17T13:00:00-07:00", r.Start);
         Assert.Equal("2026-11-17T14:30:00-07:00", r.End);
         Assert.Equal("", r.Mailbox);
-        Assert.Equal("Me <me@osu.edu>", r.Organizer);
-        Assert.Equal("Petersen, Dirk <dirk@osu.edu>; ext@other.org <ext@other.org>", r.Recipients);
+        Assert.Equal("Me <me@example.edu>", r.Organizer);
+        Assert.Equal("Sample, Bob <bob@example.edu>; ext@other.org <ext@other.org>", r.Recipients);
         Assert.False(r.Teams);
         Assert.Null(r.Note);
         Assert.Equal("It looks like you're trying to schedule a meeting. I sent 2 invites.", Assert.Single(t.Shown).Text);
@@ -154,7 +154,7 @@ public class MeetingInvitesTests
         await t.Send();
         var (p, timeout) = Assert.Single(t.Conf.Calls);
         Assert.Equal("Me", p.OrganizerName);
-        Assert.Equal("me@osu.edu", p.OrganizerEmail);
+        Assert.Equal("me@example.edu", p.OrganizerEmail);
         Assert.Equal("", p.Mailbox);
         Assert.Equal("Sync", p.Subject);
         Assert.Equal(new DateTime(2026, 11, 17, 13, 0, 0), p.Start);

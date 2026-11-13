@@ -55,7 +55,7 @@ public class EmailIndexSearchTests : IDisposable
                 "Smith, Carol <carol@fabrikam.com>", "Dan <dan@contoso.com>", "Café at noon?", false, ("logo.png", true)),
             Build("a3", T(3), "Inbox\\Projects", "Re:: Project plan", "Bob Jones", "bob@contoso.com",
                 "Me <me@contoso.com>", "", "See attached plan", false, ("Plan.PDF", false), ("sig.png", true)),
-            Build("a4", T(4), "Inbox", "O'Brien's notes", "Eve O'Brien", "eve@example.org",
+            Build("a4", T(4), "Inbox", "O'Example's notes", "Eve O'Example", "eve@example.org",
                 "Me <me@contoso.com>", "alice@example.com", "100% done_now", true),
         ]);
     }
@@ -90,7 +90,7 @@ public class EmailIndexSearchTests : IDisposable
     {
         SeedA();
         Assert.Equal(A("a1"), Ids(new SearchFilter { Query = "budget-2026" }));
-        Assert.Equal(A("a4"), Ids(new SearchFilter { Query = "O'Brien" }));
+        Assert.Equal(A("a4"), Ids(new SearchFilter { Query = "O'Example" }));
         Assert.Empty(Ids(new SearchFilter { Query = "C++" }));
     }
 

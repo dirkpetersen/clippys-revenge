@@ -65,10 +65,10 @@ public sealed class CreateDraftToolTests : IDisposable
     [Fact]
     public async Task Happy_own()
     {
-        var r = await _tool.RunAsync(Args("Petersen, Dirk <dirk@x.edu>; b@x.edu", subject: "Budget"), CancellationToken.None);
+        var r = await _tool.RunAsync(Args("Sample, Bob <bob@x.edu>; b@x.edu", subject: "Budget"), CancellationToken.None);
         Assert.Equal(new CreateDraftResult("ENTRY1", "Budget", "", false), r);
         var plan = Assert.Single(_writer.Calls).Plan;
-        Assert.Equal([new Recipient("Petersen, Dirk", "dirk@x.edu"), new Recipient("", "b@x.edu")], plan.To);
+        Assert.Equal([new Recipient("Sample, Bob", "bob@x.edu"), new Recipient("", "b@x.edu")], plan.To);
         Assert.Empty(plan.Cc);
         Assert.Empty(plan.Bcc);
         Assert.Equal("<p>Hi</p>", plan.HtmlFragment);
@@ -103,7 +103,7 @@ public sealed class CreateDraftToolTests : IDisposable
     public async Task No_to(string? to)
     {
         var m = Msg(() => _tool.RunAsync(Args(to), CancellationToken.None));
-        Assert.Equal("create_draft needs at least one recipient in \"to\", like \"Petersen, Dirk <dirk.petersen@example.org>; someone@example.org\".", m);
+        Assert.Equal("create_draft needs at least one recipient in \"to\", like \"Sample, Bob <bob.sample@example.org>; someone@example.org\".", m);
         Assert.Empty(_writer.Calls);
         Assert.Empty(_hub.GetEvents());
         await Task.CompletedTask;
