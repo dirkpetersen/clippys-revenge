@@ -1,3 +1,4 @@
+using ClippysRevenge.App.Tray;
 using ClippysRevenge.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -46,19 +47,50 @@ internal static class Program
         TaskScheduler.UnobservedTaskException += (_, e) =>
             logger.LogCritical(e.Exception, "Unobserved task exception.");
 
-        instance.StartListening(() => logger.LogInformation("Second launch asked to open Settings."));
+        var balloons = new BalloonCenter();
+        var tray = new TrayApp(new TrayServices(
+            hub,
+            balloons,
+            tokens,
+            () => settings,
+            () => TrayStats.Unknown, // TODO(M6.1): real stats
+            enabled =>
+            {
+                settings.StartWithWindows = enabled;
+                store.Save(settings);
+                StartupRegistration.Apply(enabled);
+            },
+            () =>
+            {
+                var fresh = AuthToken.Generate();
+                store.SaveToken(fresh);
+                return fresh;
+            },
+            dataDir,
+            Path.Combine(dataDir, "logs")));
+
+        instance.StartListening(() =>
+        {
+            logger.LogInformation("Second launch asked to open Settings.");
+            tray.ShowSettings();
+        });
 
         var host = new McpHttpHost(new McpHostOptions
         {
             Tokens = tokens,
             Hub = hub,
             ConfigureMcp = b => b.WithTools<McpTools>(),
-            ConfigureServices = s => s.AddSingleton(settings),
+            ConfigureServices = s => s.AddSingleton(settings).AddSingleton(balloons),
             ConfigureLogging = b => b.AddDebug(),
         });
         _ = StartHostAsync(host, settings.Port, logger);
 
-        Application.Run(new ApplicationContext()); // M4.3: new TrayApp(...)
+        if (loaded.FirstRun)
+        {
+            balloons.Post(BalloonTexts.FirstRun);
+        }
+
+        Application.Run(tray);
 
         // Process entry point after the message loop ended: the one allowed blocking wait.
         // Task.Run avoids the WinForms SynchronizationContext.
