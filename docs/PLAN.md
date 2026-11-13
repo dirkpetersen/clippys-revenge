@@ -30,7 +30,7 @@ v0.0.1 release.
 - [x] M0.1 Solution `ClippysRevenge.slnx` with the three projects (SPEC §3), package references from SPEC §2, one placeholder test. `dotnet build` and `dotnet test` pass with zero warnings. Core builds and tests on Linux.
 
 ## M1 Core helpers (SPEC §12) — deps: M0
-- Review: [ ] pending
+- Review: [x] done (fbe093e, approve, 0 fix rounds)
 - [x] M1.1 `ReplySubject`, `FileNames`, `Recipients` + tests `{arch:brief}`
 - [x] M1.2 `FtsQuery` + tests `{arch:brief}`
 - [x] M1.3 `SlotFormatter`, `TimeZoneLabels` + tests `{arch:brief}`
@@ -49,7 +49,7 @@ v0.0.1 release.
 - [ ] M2.5 Perf check: 50k synthetic emails, `search_emails` p95 < 20 ms (opt-in benchmark test, not in CI) `{arch:skip}`
 
 ## M3 Host plumbing (SPEC §7, §13) — deps: M0
-- Review: [ ] pending
+- Review: [x] done (fbe093e, approve, 0 fix rounds)
 - [x] M3.1 `BearerAuth` middleware + tests (Origin → 401, live token swap) `{arch:brief}`
 - [x] M3.2 `ActivityHub` (ref-counted states, ring buffer, 10 Hz throttle) + tests `{arch:brief}`
 
@@ -97,6 +97,13 @@ v0.0.1 release.
 - [ ] M10.3 `install.ps1` (install, Start menu shortcut, `-Uninstall`) and README (install, WSL mirrored networking, security model, index at rest) `{arch:skip}`
 - [ ] M10.4 Final review of the whole branch by `reviewer`, CI green on the PR, then hand to the user to merge (→ v0.0.1 release) `{arch:skip}`
 
+## Carry-forward notes from reviews
+
+- M4.3: `ActivityHub.Changed` can fire on the caller's thread and on the timer thread at the same time, so the tray handler must only `BeginInvoke` to the UI thread. (M1/M3 review)
+- M4.1, M4.2: `TokenHolder.Current` exposes the raw token by design; make sure it never reaches a log line or exception message. (M1/M3 review)
+- M5.2: `Recipients.IsValidEmail` and `Settings.IsValidAddress` have different rules; unify them when SMTP addresses for shared mailboxes are resolved. (M1/M3 review)
+- M10.1: add PathPolicy tests with junction path components written as `link.` and 8.3 short names (`LINK~1`). (M1/M3 review)
+
 ## Log
 
 Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
@@ -111,3 +118,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-12 M1.8 implemented in parallel worktree, merged to dev (391f309)
 2026-11-12 M3.1 implemented in parallel worktree, merged to dev (bfa56cb)
 2026-11-12 M3.2 ActivityHub: states, ring buffer, throttled Changed, 27 tests
+2026-11-12 M1+M3 milestone review: approve, 590 tests, 6 non-blocking notes (see carry-forward)
