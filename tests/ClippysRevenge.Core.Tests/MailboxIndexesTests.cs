@@ -455,4 +455,16 @@ public class MailboxIndexesTests : IDisposable
         mi.Dispose();
         Assert.Throws<ObjectDisposedException>(() => mi.For(""));
     }
+
+    [Fact]
+    public void MailboxError_messages()
+    {
+        string[] keys = ["", "help@x.org"];
+        Assert.Equal(
+            "Mailbox \"Nobody@X.org\" is not configured or not enabled. Available mailboxes: \"\" (your own mailbox), \"help@x.org\". To use another shared mailbox, ask the user to enable it in the Clippy tray menu under Shared mailboxes.",
+            MailboxIndexes.MailboxError(" Nobody@X.org ", keys).Message);
+        Assert.Equal(
+            "Mailbox \"all\" only works with search tools. Use one mailbox: \"\" (your own mailbox), \"help@x.org\".",
+            MailboxIndexes.MailboxError(" ALL ", keys).Message);
+    }
 }

@@ -33,6 +33,31 @@ internal sealed class McpTools(ActivityHub hub)
             window.Start, window.End, events.Count, events.Count >= CalendarEvents.MaxEvents,
             events.Select(e => new EventResult(e.Id, e.Subject, e.Start, e.End, e.AllDay, e.Location, e.Organizer, e.IsRecurring, e.BusyStatus)).ToList());
     }
+
+    private const string FindFreeTimesDescription =
+        "Finds meeting times when everyone is free, from Outlook free/busy. Paste recipients as \"Last, First <email>; ...\" (separate with \";\"). Returns numbered suggestions with start/end (local time, ISO with offset) and a ready-to-show \"text\". People whose free/busy can't be read (e.g. outside the organization) are listed in unknown_attendees and ignored. Nothing is booked. To book suggestion N, pass its start and end to send_meeting_invite.";
+
+#pragma warning disable IDE1006
+    [McpServerTool(Name = "find_free_times", ReadOnly = true, Idempotent = true)]
+    [Description(FindFreeTimesDescription)]
+    public Task<FreeTimesResult> FindFreeTimes(
+        FreeTimeFinder finder,
+        Settings settings,
+        [Description("Attendees as \"Name <email>; Name <email>\". Split on \";\" only.")] string recipients,
+        [Description("Minimum free block length, 1-1440.")] int duration_minutes = 60,
+        [Description("Calendar days to search, starting with date_from's day (max 60).")] int days_ahead = 10,
+        [Description("Start date or date-time, local time (ISO). Default: now.")] string? date_from = null,
+        [Description("Working-hours window, 0-23. Default: tray settings.")] int? earliest_hour = null,
+        [Description("Working-hours window, 1-24. Default: tray settings.")] int? latest_hour = null,
+        [Description("Skip Saturdays and Sundays. Default: tray settings.")] bool? business_days_only = null,
+        [Description("Also check the calendar owner (you, or the shared mailbox).")] bool include_me = true,
+        [Description("1-20.")] int max_suggestions = 5,
+        [Description("Empty = your calendar; or the SMTP address of an enabled shared mailbox.")] string? mailbox = null,
+        CancellationToken cancellationToken = default)
+        => finder.FindAsync(new FreeTimeRequest(recipients, duration_minutes, days_ahead, date_from,
+               earliest_hour, latest_hour, business_days_only, include_me, max_suggestions, mailbox),
+               settings, cancellationToken);
+#pragma warning restore IDE1006
 }
 
 public sealed record ListEventsResult(

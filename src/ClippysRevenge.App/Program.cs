@@ -94,7 +94,9 @@ internal static class Program
             Tokens = tokens,
             Hub = hub,
             ConfigureMcp = b => b.WithTools<McpTools>(),
-            ConfigureServices = s => s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(new OutlookStores(() => settings)),
+            ConfigureServices = s => s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(new OutlookStores(() => settings))
+                .AddSingleton<IFreeBusySource>(new OutlookFreeBusySource(worker))
+                .AddSingleton(sp => new FreeTimeFinder(sp.GetRequiredService<IFreeBusySource>(), TimeProvider.System, TimeZoneInfo.Local)),
             ConfigureLogging = b => b.AddDebug(),
         });
         _ = StartHostAsync(host, settings.Port, logger);

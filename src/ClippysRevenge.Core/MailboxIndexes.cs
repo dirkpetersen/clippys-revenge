@@ -93,9 +93,15 @@ public sealed class MailboxIndexes : IDisposable
             if (key != AllMailboxes && _map.TryGetValue(key, out var ix)) return ix;
             keys = _keys.ToArray();
         }
-        if (key == AllMailboxes)
-            throw new McpException($"Mailbox \"all\" only works with search tools. Use one mailbox: {KeyList(keys)}.");
-        throw Unknown(mailbox, keys);
+        throw MailboxError(mailbox, keys);
+    }
+
+    /// <summary>The error for a key that isn't usable as a single mailbox ("all" or unknown).</summary>
+    public static McpException MailboxError(string? input, IReadOnlyList<string> keys)
+    {
+        if (Normalize(input) == AllMailboxes)
+            return new McpException($"Mailbox \"all\" only works with search tools. Use one mailbox: {KeyList(keys)}.");
+        return Unknown(input, keys);
     }
 
     private (string Key, EmailIndex Index)[] Snapshot()
