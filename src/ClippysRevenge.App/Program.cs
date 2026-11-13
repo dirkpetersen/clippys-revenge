@@ -62,8 +62,9 @@ internal static class Program
         {
             indexes = new MailboxIndexes(localDir, settings.SharedMailboxes.Where(m => m?.Enabled == true).Select(m => m.Smtp));
             mail = new OutlookMail(stores, indexes, settings);
-            sync = new SyncService(new OutlookMailSource(worker, stores, mail), indexes, () => settings, hub, balloons,
-                logger: loggerFactory.CreateLogger<SyncService>());
+            var mailSource = new OutlookMailSource(worker, stores, mail);
+            sync = new SyncService(mailSource, indexes, () => settings, hub, balloons,
+                logger: loggerFactory.CreateLogger<SyncService>(), reconcile: mailSource);
         }
         catch (Exception ex)
         {

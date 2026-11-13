@@ -366,6 +366,38 @@ public sealed class EmailIndex
         public long? Unread { get; set; }
     }
 
+    /// <summary>
+    /// Every row whose folder equals <paramref name="folder"/> (COLLATE NOCASE), any event time.
+    /// Order: event_time DESC, id DESC.
+    /// </summary>
+    public IReadOnlyList<IndexedEntry> ListEntries(string folder)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(folder);
+        using var conn = OpenConnection();
+        return conn.Query<EntryRow>(
+                "SELECT entry_id AS EntryId, unread AS Unread, event_time AS T FROM emails WHERE folder = @f COLLATE NOCASE ORDER BY event_time DESC, id DESC",
+                new { f = folder })
+            .Select(r => new IndexedEntry(r.EntryId, (r.Unread ?? 0) != 0, DateTimeOffset.FromUnixTimeSeconds(r.T)))
+            .ToList();
+    }
+
+    private sealed class EntryRow
+    {
+        public string EntryId { get; set; } = "";
+        public long? Unread { get; set; }
+        public long T { get; set; }
+    }
+
+    /// <summary>Every sync_state row, ordered by folder_key.</summary>
+    public IReadOnlyList<SyncState> ListSyncStates()
+    {
+        using var conn = OpenConnection();
+        return conn.Query<SyncRow>(
+                "SELECT folder_key AS FolderKey, folder_path AS FolderPath, modified_watermark AS W, oldest_synced AS O, last_reconcile AS L, backfill_complete AS B FROM sync_state ORDER BY folder_key")
+            .Select(r => new SyncState(r.FolderKey, r.FolderPath, FromUnix(r.W), FromUnix(r.O), FromUnix(r.L), (r.B ?? 0) != 0))
+            .ToList();
+    }
+
     public SyncState? GetSyncState(string folderKey)
     {
         ArgumentException.ThrowIfNullOrEmpty(folderKey);

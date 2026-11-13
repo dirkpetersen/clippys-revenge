@@ -35,7 +35,8 @@ public sealed class SyncService : BackgroundService
     private int _rebuilds;
 
     public SyncService(IMailSource source, MailboxIndexes indexes, Func<Settings> settings,
-        ActivityHub hub, BalloonCenter balloons, TimeProvider? time = null, ILogger<SyncService>? logger = null)
+        ActivityHub hub, BalloonCenter balloons, TimeProvider? time = null, ILogger<SyncService>? logger = null,
+        IReconcileSource? reconcile = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(indexes);
@@ -49,7 +50,7 @@ public sealed class SyncService : BackgroundService
         _balloons = balloons;
         _time = time ?? TimeProvider.System;
         _log = logger;
-        _engine = new SyncEngine(source, hub, _time, logger);
+        _engine = new SyncEngine(source, hub, _time, logger, reconcile);
     }
 
     /// <summary>Test hook; raised at the end of every cycle.</summary>
@@ -73,6 +74,38 @@ public sealed class SyncService : BackgroundService
     public void NotifySettingsChanged()
     {
         if (!IsPaused) Wake();
+        else _ = Task.Run(ApplyRetentionWhilePausedAsync);
+    }
+
+    /// <summary>A smaller RetentionMonths purges at once, even while paused (needs no COM).</summary>
+    private async Task ApplyRetentionWhilePausedAsync()
+    {
+        try
+        {
+            await _gate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                foreach (var plan in SyncPlanner.Build(_settings().Clone()))
+                {
+                    try
+                    {
+                        _engine.ApplyRetention(plan, _indexes.Add(plan.Mailbox));
+                    }
+                    catch (Exception ex)
+                    {
+                        _log?.LogWarning(ex, "Applying a RetentionMonths change failed.");
+                    }
+                }
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            _log?.LogWarning(ex, "Applying a RetentionMonths change failed.");
+        }
     }
 
     private void Wake() => _wake.Writer.TryWrite(true);

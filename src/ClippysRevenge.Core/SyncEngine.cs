@@ -12,8 +12,11 @@ public sealed class SyncEngine
     private readonly ActivityHub _hub;
     private readonly TimeProvider _time;
     private readonly ILogger? _log;
+    private readonly MailboxReconciler? _reconciler;
+    private readonly RetentionApplier _retention;
 
-    public SyncEngine(IMailSource source, ActivityHub hub, TimeProvider? time = null, ILogger? logger = null)
+    public SyncEngine(IMailSource source, ActivityHub hub, TimeProvider? time = null, ILogger? logger = null,
+        IReconcileSource? reconcile = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(hub);
@@ -21,6 +24,16 @@ public sealed class SyncEngine
         _hub = hub;
         _time = time ?? TimeProvider.System;
         _log = logger;
+        _reconciler = reconcile is null ? null : new MailboxReconciler(reconcile, hub, _time);
+        _retention = new RetentionApplier(hub, _time);
+    }
+
+    /// <summary>Applies a changed RetentionMonths (needs no COM). Callers must not run it concurrently with a cycle.</summary>
+    public RetentionChange ApplyRetention(MailboxPlan plan, EmailIndex index)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(index);
+        return _retention.Apply(plan.Mailbox, index, Math.Clamp(plan.RetentionMonths, 1, 120));
     }
 
     private sealed class FolderRun(string path)
@@ -45,6 +58,8 @@ public sealed class SyncEngine
         var cutoff = now.AddMonths(-plan.RetentionMonths);
         var prefix = SyncLabels.MailboxPrefix(plan.Mailbox);
         var started = _time.GetTimestamp();
+
+        ApplyRetention(plan, index);
 
         var mb = await _source.OpenMailboxAsync(plan.Mailbox, ct).ConfigureAwait(false);
         if (mb is null)
@@ -84,6 +99,7 @@ public sealed class SyncEngine
 
             state = await ChangesPassAsync(plan, prefix, f, path, state, index, cutoff, run, ct).ConfigureAwait(false);
             await BackfillPassAsync(plan, prefix, f, path, state, index, cutoff, now, run, ct).ConfigureAwait(false);
+            await ReconcileAsync(plan, f, path, index, cutoff, ct).ConfigureAwait(false);
             runs.Add(run);
             results.Add(new FolderSyncResult(path, false, run.Upserted, run.UnreadUpdated, run.Complete));
         }
@@ -116,6 +132,24 @@ public sealed class SyncEngine
         _log?.LogDebug("Sync of mailbox {Mailbox} done: {Folders} folders, {Purged} purged.",
             plan.Mailbox.Length == 0 ? "(own)" : plan.Mailbox, runs.Count, purged);
         return new MailboxSyncResult(plan.Mailbox, false, results, purged, finished, elapsed);
+    }
+
+    /// <summary>Step 5. A source failure is logged and the next folder carries on.</summary>
+    private async Task ReconcileAsync(MailboxPlan plan, SourceFolder f, string path, EmailIndex index,
+        DateTimeOffset cutoff, CancellationToken ct)
+    {
+        if (_reconciler is null) return;
+        try
+        {
+            await _reconciler.ReconcileIfDueAsync(plan.Mailbox, index, new ReconcileFolder(f.FolderKey, path), cutoff, ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not MailSourceUnavailableException)
+        {
+            _log?.LogWarning(ex, "Reconcile of folder {Folder} failed.", path);
+            _hub.Event(ActivityKind.Error, $"reconcile of \"{path}\" failed: " + (ex.Message.Length <= 200 ? ex.Message : ex.Message[..200]),
+                mailbox: plan.Mailbox.Length == 0 ? null : plan.Mailbox);
+        }
     }
 
     private static string Num(long n) => n.ToString(CultureInfo.InvariantCulture);

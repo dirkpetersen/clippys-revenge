@@ -7,7 +7,7 @@ namespace ClippysRevenge.App;
 /// The COM side of sync (<see cref="IMailSource"/>): every call is one Background work item on the Outlook worker.
 /// Read only. Nothing is saved, sent or modified.
 /// </summary>
-internal sealed class OutlookMailSource : IMailSource
+internal sealed class OutlookMailSource : IMailSource, IReconcileSource
 {
     private const int MaxPages = 10_000;
 
@@ -113,5 +113,31 @@ internal sealed class OutlookMailSource : IMailSource
         var rf = ToResolved(folder);
         var batch = await Run(app => _mail.ReadBatch(app, rf, entryIds), ct).ConfigureAwait(false);
         return batch.Emails;
+    }
+
+    // ---- IReconcileSource (daily reconcile, SPEC §10 step 5) ----
+
+    public Task<IReadOnlyList<OutlookEntry>> ListEntryIdsAsync(string mailbox, ReconcileFolder folder,
+        DateTimeOffset since, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+        return Run<IReadOnlyList<OutlookEntry>>(app =>
+        {
+            var rf = _mail.ResolveFolder(app, mailbox, folder.FolderPath);
+            return _mail.ListEntryIds(app, rf, since).Select(e => new OutlookEntry(e.EntryId, e.Unread)).ToList();
+        }, ct);
+    }
+
+    public Task<IReadOnlyList<IndexedEmail>> ReadForIndexAsync(string mailbox, ReconcileFolder folder,
+        IReadOnlyList<string> entryIds, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+        ArgumentNullException.ThrowIfNull(entryIds);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(entryIds.Count, OutlookMail.MaxReadBatch);
+        return Run<IReadOnlyList<IndexedEmail>>(app =>
+        {
+            var rf = _mail.ResolveFolder(app, mailbox, folder.FolderPath);
+            return _mail.ReadBatch(app, rf, entryIds).Emails;
+        }, ct);
     }
 }
