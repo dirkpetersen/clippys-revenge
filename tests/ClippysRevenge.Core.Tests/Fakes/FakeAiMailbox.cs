@@ -18,6 +18,7 @@ internal sealed class FakeAiMailbox : IAiMailbox
     public SelectedEmail? Selected { get; set; }
     public Exception? SelectedThrow { get; set; }
     public LiveEmail? Live { get; set; }
+    public Exception? ReadThrow { get; set; }
     public bool ShowResult { get; set; } = true;
     public int IdentityCalls { get; private set; }
     public int TotalCalls { get; private set; }
@@ -57,6 +58,7 @@ internal sealed class FakeAiMailbox : IAiMailbox
     public Task<LiveEmail?> ReadEmailAsync(string entryId, CancellationToken ct)
     {
         lock (_lock) TotalCalls++;
+        if (ReadThrow is not null) throw ReadThrow;
         return Task.FromResult(Live);
     }
 

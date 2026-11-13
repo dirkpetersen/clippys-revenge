@@ -70,6 +70,7 @@ public static class DraftTexts
     public const string ManualDone = "It looks like you want a reply. It's in your Drafts folder.";
     public const string ManualNoSelection = "Select one email in Outlook first.";
     public const string ManualNotInMailbox = "That email isn't in your mailbox or an enabled shared mailbox.";
+    public const string ManualUnexpected = "something went wrong while talking to Outlook or Claude";
     public const string NotSignedInScope = "AI drafts: Claude isn't signed in";
     public const string SaveFailed = "AI drafts: a reply draft couldn't be saved in Outlook. I'll try again later.";
 
@@ -314,6 +315,22 @@ public sealed class DraftWorker : BackgroundService
     /// <summary>One automatic pass, serialized with the loop and the manual path. Exposed for tests.</summary>
     internal async Task<DraftPassResult> RunPassAsync(CancellationToken ct)
     {
+        // Cheap start checks and style generation (can take minutes) run before the gate, so a manual draft never
+        // waits behind them. The checks run again once the gate is held.
+        if (StartCheck() is { } early) return Ended(early);
+        try
+        {
+            await _s.Style.BeforePassAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return Ended(DraftPassEnd.Cancelled);
+        }
+        catch (Exception ex)
+        {
+            _log?.LogWarning("AI drafts: the style guide hook failed ({Type}).", ex.GetType().Name);
+        }
+
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         DraftPassResult result;
         try
@@ -330,30 +347,25 @@ public sealed class DraftWorker : BackgroundService
 
     private static DraftPassResult Ended(DraftPassEnd end) => new(end, 0, 0, 0, 0, 0);
 
-    private async Task<DraftPassResult> PassCoreAsync(CancellationToken ct)
+    /// <summary>The cheap reasons a pass doesn't start. Null = go on.</summary>
+    private DraftPassEnd? StartCheck()
     {
         var ai = _s.Settings().AiDrafting;
         if (!ai.Enabled || !ai.HasConsent)
         {
             ReleaseHold();
-            return Ended(DraftPassEnd.Disabled);
+            return DraftPassEnd.Disabled;
         }
-        if (_s.SyncPaused()) return Ended(DraftPassEnd.Paused);
-        if (!_s.OutlookAvailable()) return Ended(DraftPassEnd.OutlookUnavailable);
-        if (Held) return Ended(DraftPassEnd.NotSignedIn);
+        if (_s.SyncPaused()) return DraftPassEnd.Paused;
+        if (!_s.OutlookAvailable()) return DraftPassEnd.OutlookUnavailable;
+        if (Held) return DraftPassEnd.NotSignedIn;
+        return null;
+    }
 
-        try
-        {
-            await _s.Style.BeforePassAsync(ct).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            return Ended(DraftPassEnd.Cancelled);
-        }
-        catch (Exception ex)
-        {
-            _log?.LogWarning("AI drafts: the style guide hook failed ({Type}).", ex.GetType().Name);
-        }
+    private async Task<DraftPassResult> PassCoreAsync(CancellationToken ct)
+    {
+        if (StartCheck() is { } stopped) return Ended(stopped);
+        var ai = _s.Settings().AiDrafting;
 
         AiIdentity identity;
         try
@@ -722,6 +734,24 @@ public sealed class DraftWorker : BackgroundService
 
     /// <summary>The manual path (SPEC 19.7). Never throws except OperationCanceledException for ct.</summary>
     public async Task<ManualDraftResult> DraftSelectedAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await DraftSelectedCoreAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Type only: messages can hold mail text, addresses or paths.
+            _log?.LogWarning("AI drafts: the manual draft failed ({Type}, HResult {HResult}).", ex.GetType().Name, ex.HResult);
+            return new ManualDraftResult(false, DraftTexts.ManualFailed(DraftTexts.ManualUnexpected));
+        }
+    }
+
+    private async Task<ManualDraftResult> DraftSelectedCoreAsync(CancellationToken ct)
     {
         static ManualDraftResult Fail(string text) => new(false, text);
         static ManualDraftResult Failed(string why) => new(false, DraftTexts.ManualFailed(why));
