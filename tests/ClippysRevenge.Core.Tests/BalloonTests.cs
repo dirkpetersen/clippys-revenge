@@ -27,6 +27,17 @@ public class BalloonTests
     }
 
     [Fact]
+    public void Post_carries_its_action_and_feedback_has_none()
+    {
+        var (c, _, seen) = Make();
+        Assert.True(c.Post("x", BalloonKind.Info, BalloonAction.ShowDrafts));
+        c.PostUserFeedback("y");
+        Assert.Equal(new Balloon("x", BalloonKind.Info, BalloonAction.ShowDrafts), seen[0]);
+        Assert.Equal(BalloonAction.None, seen[1].Action);
+        Assert.Equal(new Balloon("y", BalloonKind.Info), seen[1]);
+    }
+
+    [Fact]
     public void FirstPost()
     {
         var (c, _, seen) = Make();

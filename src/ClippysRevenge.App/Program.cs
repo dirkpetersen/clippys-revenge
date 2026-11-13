@@ -96,6 +96,8 @@ internal static class Program
         IDraftModel? draftModel = null;
         OutlookAiMailbox? aiMailbox = null;
         IDraftModel? apiModel = null;
+        ClaudeCliModel? cliModel = null;
+        StyleSkill? styleSkill = null;
         try
         {
             indexes = new MailboxIndexes(localDir, settings.SharedMailboxes.Where(m => m?.Enabled == true).Select(m => m.Smtp));
@@ -108,7 +110,7 @@ internal static class Program
             var cliRunner = new ClaudeCliRunner(Path.Combine(localDir, ClaudeCliRunner.WorkDirName),
                 logger: loggerFactory.CreateLogger<ClaudeCliRunner>());
             cliRunner.CleanupStaleFiles();   // SPEC 19.3 start-up cleanup
-            var cliModel = new ClaudeCliModel(() => settings.AiDrafting, ClaudeCliLocator.Default, cliRunner,
+            cliModel = new ClaudeCliModel(() => settings.AiDrafting, ClaudeCliLocator.Default, cliRunner,
                 logger: loggerFactory.CreateLogger<ClaudeCliModel>());
             apiModel = new AnthropicApiModel(() => settings.AiDrafting, store.LoadApiKey,
                 logger: loggerFactory.CreateLogger<AnthropicApiModel>());
@@ -120,16 +122,13 @@ internal static class Program
             var draftModelRef = draftModel;
             var aiMailboxRef = aiMailbox;
             // Writing-style skill (SPEC 19.6): own mailbox only; shared mailboxes use the same skill (SPEC 18 Q7).
-            var styleSkill = new StyleSkill(
+            styleSkill = new StyleSkill(
                 new StyleSkillFiles(StylePaths.Default(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), dataDir)),
                 () => indexesRef.For(null), () => draftModelRef, () => settings.AiDrafting,
                 () => StyleCorpus.SignatureTexts(kind => signatures.Default(kind)), hub,
                 logger: loggerFactory.CreateLogger<StyleSkill>());
-            var styleGuide = new StyleGuideSource(styleSkill, async ct =>
-            {
-                var id = await aiMailboxRef.GetIdentityAsync(WorkPriority.Background, ct).ConfigureAwait(false);
-                return new Recipient(id.DisplayName, id.OwnSmtp);
-            });
+            var styleGuide = new StyleGuideSource(styleSkill,
+                ct => AiOwner.ResolveAsync(aiMailboxRef, indexesRef, WorkPriority.Background, ct));
             drafts = new DraftWorker(new DraftWorkerServices(() => settings, indexes, aiMailbox, replyWriter, draftModel,
                 styleGuide,
                 () => signatures.Default(SignatureKind.Reply), hub, balloons,
@@ -158,6 +157,21 @@ internal static class Program
             if (resumed) sync?.SyncNow();
         };
 
+
+        // AI drafts UI (SPEC 19.10). The key is saved and removed through the one SettingsStore above.
+        var aiToggler = new AiDraftingToggler(settings, store.Save, () => drafts?.NotifySettingsChanged());
+        AiStatusChecker? aiChecker = draftModel is null ? null
+            : new AiStatusChecker(draftModel, () => cliModel?.InvalidateStatus(), s => drafts?.ReportStatus(s),
+                loggerFactory.CreateLogger<AiStatusChecker>());
+        AiTrayServices? aiTray = drafts is null || aiMailbox is null || aiChecker is null ? null
+            : new AiTrayServices(drafts.DraftSelectedAsync, aiMailbox.ShowDraftsAsync, aiToggler, aiChecker);
+        var aiMailboxForUi = aiMailbox;
+        var indexesForUi = indexes;
+        var aiSettings = new AiSettingsServices(aiToggler, () => store.LoadApiKey() is not null, store.SaveApiKey,
+            TrayApp.ShellOpen, aiChecker, styleSkill,
+            aiMailboxForUi is null || indexesForUi is null ? null
+                : ct => AiOwner.ResolveAsync(aiMailboxForUi, indexesForUi, WorkPriority.Interactive, ct),
+            drafts is null ? null : drafts.Today);
 
         SettingsApplier? applier = null;
         McpHttpHost? hostRef = null;
@@ -214,7 +228,8 @@ internal static class Program
                 applier ?? throw new InvalidOperationException("Settings applier is not ready."),
                 () => hostRef?.Port, worker, stores, indexes,
                 sync is null ? null : m => sync.RebuildAsync(m),
-                () => worker.State == OutlookConnectionState.Unavailable, TimeZoneInfo.Local), tab)));
+                () => worker.State == OutlookConnectionState.Unavailable, TimeZoneInfo.Local, aiSettings), tab),
+            aiTray));
 
         var inviteQueue = new InviteConfirmQueue(new InviteConfirmPresenter(SynchronizationContext.Current!), hub);
 

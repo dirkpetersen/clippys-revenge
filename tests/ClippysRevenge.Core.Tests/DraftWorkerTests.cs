@@ -43,7 +43,9 @@ public class DraftWorkerTests
         Assert.Null(d.ConversationTopic);
         Assert.Equal("AI reply draft created: Re:: Budget", Assert.Single(h.Events(ActivityKind.Draft)).Summary);
         Assert.StartsWith("AI drafts: 1 drafted (", Assert.Single(AiTexts(h)));
-        Assert.Equal(BalloonTexts.AiDrafted(1), Assert.Single(h.Shown).Text);
+        var balloon = Assert.Single(h.Shown);
+        Assert.Equal(BalloonTexts.AiDrafted(1), balloon.Text);
+        Assert.Equal(BalloonAction.ShowDrafts, balloon.Action);
     }
 
     [Fact]
@@ -757,6 +759,20 @@ public class DraftWorkerTests
         SeedCalls(h, "", "X1", 1, DraftHarness.Now.AddMinutes(-5));
         SeedCalls(h, DraftHarness.Shared, "X2", 2, DraftHarness.Now.AddMinutes(-5));
         Assert.Equal(3, h.Worker.ModelCallsToday());
+    }
+
+    [Fact]
+    public void Today_counts_drafts_since_local_midnight_over_all_indexes()
+    {
+        using var h = new DraftHarness();
+        Assert.Equal(new AiDraftsToday(0, 0), h.Worker.Today());
+        var now = DraftHarness.Now;
+        // Zone is UTC-8, so local midnight is 08:00Z. 07:59Z is yesterday 23:59 local.
+        h.Indexes.For("").UpsertDecision(new AiDecision("A", null, null, now.AddMinutes(-5), AiOutcome.Drafted, ModelCalls: 1, DraftCreated: now.AddMinutes(-5)));
+        h.Indexes.For(DraftHarness.Shared).UpsertDecision(new AiDecision("B", null, null, now.AddMinutes(-4), AiOutcome.Drafted, ModelCalls: 2, DraftCreated: now.AddMinutes(-4)));
+        var yesterday = DateTimeOffset.Parse("2026-11-13T07:59:00Z");
+        h.Indexes.For("").UpsertDecision(new AiDecision("C", null, null, yesterday, AiOutcome.Drafted, ModelCalls: 4, DraftCreated: yesterday));
+        Assert.Equal(new AiDraftsToday(3, 2), h.Worker.Today());
     }
 
     [Fact]
