@@ -714,7 +714,9 @@ All calls run through `OutlookWorker`.
 - `EnumerateChanged(folder, modifiedAfter, cutoff)` and
   `EnumerateRange(folder, from, to)`: both use **`Folder.GetTable(filter)`**
   with columns `EntryID`, `LastModificationTime`, `ReceivedTime`/`SentOn`,
-  `UnRead` and `PR_INTERNET_MESSAGE_ID`. Table reads are much faster than
+  `UnRead`, `PR_INTERNET_MESSAGE_ID` and `PR_LONGTERM_ENTRYID_FROM_TABLE`
+  (`0x66700102`; the row id, because the `EntryID` column can be a short-term
+  id on cached Exchange stores). Table reads are much faster than
   iterating `Items`. Open the full `MailItem` only for rows that are new or
   changed, to read the body and attachments. DASL date literals are built
   by a single helper, never with a hard-coded locale format, and a live
@@ -1510,6 +1512,10 @@ mode, the DASL date helper, and whether marking a message read changes
 ## 18. Decisions and open questions
 
 Decided (2026-11-12):
+
+- Table rows use the long-term EntryID (`PR_LONGTERM_ENTRYID_FROM_TABLE`,
+  fallback to the `EntryID` column) so they match `MailItem.EntryID` in the
+  index.
 
 - Shared mailboxes are picked from the stores mounted in Outlook, from the
   tray or Settings. Each has its own database, folders and retention.
