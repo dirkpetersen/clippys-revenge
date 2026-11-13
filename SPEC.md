@@ -404,8 +404,8 @@ Sync now
 Pause indexing / Resume indexing
 Rebuild index…                                (confirm dialog; own mailbox or all)
 Shared mailboxes                           ▸
-    ✓ Helpdesk <helpdesk@oregonstate.edu>     (checkable, one per mailbox)
-      Research Office <ro@oregonstate.edu>
+    ✓ Shared Lab <shared-lab@example.edu>     (checkable, one per mailbox)
+      Research Office <research@example.edu>
     ─────────
     Manage in Settings…
 ────────────────────────────
@@ -750,9 +750,15 @@ All calls run through `OutlookWorker`.
     a group of equal times, plus `HasMore`. The next changes page uses
     `last + 1 s`; the next backfill page uses `to = last`.
   - `To`/`CC` are stored as `Name <smtp>; …` (at most 500 recipients
-    per field). SMTP addresses come from `PR_SMTP_ADDRESS` /
-    `PR_SENDER_SMTP_ADDRESS`, the address itself, or the Exchange
-    user, in that order (sender: Exchange user first for `EX`).
+    per field). Recipient SMTP addresses come from `PR_SMTP_ADDRESS`,
+    the address itself, or the Exchange user, in that order. The
+    sender (`MailAddresses.ChooseSenderSmtp`, M9.6) takes the first
+    valid SMTP address of: for `EX` senders, `PR_SENDER_SMTP_ADDRESS`
+    (`0x5D01001F`), then `PR_SENT_REPRESENTING_SMTP_ADDRESS`
+    (`0x5D02001F`), then the GAL (`GetExchangeUser().PrimarySmtpAddress`,
+    called only when both properties are empty or invalid); for other
+    address types, the raw `SenderEmailAddress`, then those two
+    properties.
   - `IsInline` image test: MIME type `image/*` or an image file
     extension, and `cid:<content id>` appears in the HTML body as a
     whole token. `HTMLBody` is read only when needed.
@@ -1164,7 +1170,7 @@ capped at 60.
 
 1. Parse `recipients` with `Recipients.Parse`. It is the raw pasted list,
    for example:
-   `Thompson, Christopher Scott <chris.thompson@oregonstate.edu>; Petersen, Dirk <dirk.petersen@oregonstate.edu>; ...`
+   `Example, Alice Marie <alice@example.edu>; Example, Bob <bob@example.edu>; ...`
 2. When `include_me` is true, add the calendar owner: the current user, or
    the shared mailbox when `mailbox` is set.
 3. Get free/busy for each attendee (§8). Turn it into busy intervals with
@@ -1179,7 +1185,7 @@ Returns:
 {"suggestions":[{"n":1,"label":"1. Tue 10/15 1-3 PT","start":"2024-10-15T13:00:00-07:00","end":"2024-10-15T15:00:00-07:00"}],
  "text":"1. Tue 10/15 1-3 PT\n2. Wed 10/16 9:30-11 PT",
  "unknown_attendees":["someone@external.org"],
- "attendees":[{"name":"Petersen, Dirk","email":"dirk.petersen@oregonstate.edu"}]}
+ "attendees":[{"name":"Example, Bob","email":"bob@example.edu"}]}
 ```
 
 `unknown_attendees` are people with no readable free/busy, such as people
@@ -1565,6 +1571,12 @@ Decided (2026-11-12):
   in-repo class in Core, tested on Linux.
 - Watchdog (M9.5): see §4 Details (M9.5), §6.1, §6.5, §8 and §11.10.
   Timeouts are constants, not settings.
+- Sender SMTP (M9.6): for `EX` senders the local MAPI properties
+  (`PR_SENDER_SMTP_ADDRESS`, then `PR_SENT_REPRESENTING_SMTP_ADDRESS`)
+  win over the GAL lookup, because in offline cached mode
+  `GetExchangeUser()` can hang and trip the watchdog every sync cycle
+  (§8). Trade-off: when `PR_SENDER_SMTP_ADDRESS` is empty, mail sent by a
+  delegate may be attributed to the principal it was sent on behalf of.
 
 Open:
 
