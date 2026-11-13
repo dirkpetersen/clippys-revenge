@@ -108,11 +108,16 @@ internal static class Program
             sync is null ? null : () => { if (sync.IsPaused) sync.Resume(); else sync.Pause(); },
             sync is null ? null : m => sync.RebuildAsync(m)));
 
+        var inviteQueue = new InviteConfirmQueue(new InviteConfirmPresenter(SynchronizationContext.Current!), hub);
+
         instance.StartListening(() =>
         {
             logger.LogInformation("Second launch asked to open Settings.");
             tray.ShowSettings();
         });
+
+        var invites = new MeetingInvites(new OutlookMeetingCalendar(worker, stores, () => settings),
+            new QueueInviteConfirmer(inviteQueue, () => settings, TimeZoneInfo.Local), () => settings, hub, balloons, TimeZoneInfo.Local);
 
         var host = new McpHttpHost(new McpHostOptions
         {
@@ -121,7 +126,9 @@ internal static class Program
             ConfigureMcp = b => b.WithTools<McpTools>().WithTools<AttachmentTools>(),
             ConfigureServices = s =>
             {
-                s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(stores);
+                s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(stores).AddSingleton(invites)
+                    .AddSingleton<IFreeBusySource>(new OutlookFreeBusySource(worker))
+                    .AddSingleton(sp => new FreeTimeFinder(sp.GetRequiredService<IFreeBusySource>(), TimeProvider.System, TimeZoneInfo.Local));
                 s.AddSingleton(new Signatures(SignatureRegistry.Name, Signatures.DefaultDirectory()))
                     .AddSingleton<IDraftWriter>(new OutlookDraftWriter(worker, stores))
                     .AddSingleton<CreateDraftTool>();
@@ -158,6 +165,7 @@ internal static class Program
         }
 
         Application.Run(tray);
+        inviteQueue.Dispose();
 
         // Process entry point after the message loop ended: the one allowed blocking wait.
         // Task.Run avoids the WinForms SynchronizationContext.

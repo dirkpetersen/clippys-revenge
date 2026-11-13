@@ -520,4 +520,16 @@ public class MailboxIndexesTests : IDisposable
         File.Delete(Db(_dir, "index-a@x.edu.db"));
         Assert.False(File.Exists(Db(_dir, "index.db")));
     }
+
+    [Fact]
+    public void MailboxError_messages()
+    {
+        string[] keys = ["", "help@x.org"];
+        Assert.Equal(
+            "Mailbox \"Nobody@X.org\" is not configured or not enabled. Available mailboxes: \"\" (your own mailbox), \"help@x.org\". To use another shared mailbox, ask the user to enable it in the Clippy tray menu under Shared mailboxes.",
+            MailboxIndexes.MailboxError(" Nobody@X.org ", keys).Message);
+        Assert.Equal(
+            "Mailbox \"all\" only works with search tools. Use one mailbox: \"\" (your own mailbox), \"help@x.org\".",
+            MailboxIndexes.MailboxError(" ALL ", keys).Message);
+    }
 }

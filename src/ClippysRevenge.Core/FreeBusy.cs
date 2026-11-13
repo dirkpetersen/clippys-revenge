@@ -138,6 +138,33 @@ public static class FreeBusy
         return result;
     }
 
+    /// <summary>Fetches [midnight of from, to) as 28-day chunks and joins them. Null when any chunk is null or a non-last chunk is short.</summary>
+    public static string? FetchChunked(DateTime from, DateTime to, int intervalMinutes, Func<DateTime, string?> fetchChunk)
+    {
+        if (intervalMinutes <= 0 || 1440 % intervalMinutes != 0)
+            throw new ArgumentOutOfRangeException(nameof(intervalMinutes));
+        ArgumentNullException.ThrowIfNull(fetchChunk);
+
+        var starts = ChunkStarts(from, to);
+        if (starts.Count == 0) return "";
+        var chunks = new List<string>(starts.Count);
+        foreach (var s in starts)
+        {
+            var c = fetchChunk(s);
+            if (c is null) return null;
+            chunks.Add(c);
+        }
+
+        try
+        {
+            return JoinChunks(chunks, intervalMinutes);
+        }
+        catch (ArgumentException ex) when (ex.GetType() == typeof(ArgumentException))
+        {
+            return null;
+        }
+    }
+
     public static string JoinChunks(IReadOnlyList<string> chunks, int intervalMinutes)
     {
         if (intervalMinutes <= 0 || 1440 % intervalMinutes != 0)
