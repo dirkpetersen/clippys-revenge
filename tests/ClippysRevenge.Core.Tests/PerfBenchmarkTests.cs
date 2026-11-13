@@ -88,19 +88,6 @@ public class PerfBenchmarkTests : IDisposable
             _ => new SearchFilter { Unread = true, DateFrom = new DateTimeOffset(2025, 6, 1, 0, 0, 0, TimeSpan.Zero) },
         };
 
-        for (var k = 0; k < 4; k++)
-        {
-            var kk = k;
-            var r2 = new Random(7);
-            var v = P95(() => mi.Search(kk switch
-            {
-                0 => new SearchFilter { Query = "w" + r2.Next(100, 3000) },
-                1 => new SearchFilter { Query = "w" + r2.Next(100, 3000) + " w" + r2.Next(100, 3000) },
-                2 => new SearchFilter { Sender = "Person " + r2.Next(500), Folder = "Inbox" },
-                _ => new SearchFilter { Unread = true, DateFrom = new DateTimeOffset(2025, 6, 1, 0, 0, 0, TimeSpan.Zero) },
-            }, ""));
-            File.AppendAllText(Path.Combine(Path.GetTempPath(), "clippy-perf-detail.txt"), $"type{kk}={v:F2}\n");
-        }
         var single = P95(() => mi.Search(Next(), ""));
         var all = P95(() => mi.Search(Next(), MailboxIndexes.AllMailboxes));
         Console.Error.WriteLine($"PERF single p95 = {single:F2} ms (target < 20); all x3 p95 = {all:F2} ms (target < 50); {PerMailbox} emails per mailbox");

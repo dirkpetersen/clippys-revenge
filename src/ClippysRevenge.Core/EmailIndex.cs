@@ -20,7 +20,7 @@ public sealed class EmailIndex
           attachment_names TEXT,
           body TEXT);
         CREATE INDEX ix_emails_time ON emails(event_time);
-        CREATE INDEX ix_emails_folder_time ON emails(folder, event_time);
+        CREATE INDEX ix_emails_folder_time ON emails(folder COLLATE NOCASE, event_time, sender_name, sender_email);
         CREATE INDEX ix_emails_imid ON emails(internet_message_id);
         CREATE INDEX ix_emails_sender ON emails(sender_email);
 
@@ -413,17 +413,15 @@ public sealed class EmailIndex
         var p = new DynamicParameters();
         var where = new List<string>();
         var fts = FtsQuery.Build(filter.Query);
-        string select, from;
+        string from;
         if (fts is not null)
         {
-            select = "snippet(emails_fts, -1, '**', '**', '…', 16) AS Fts, substr(e.body, 1, 1000) AS Body";
             from = "emails_fts JOIN emails e ON e.id = emails_fts.rowid";
             where.Add("emails_fts MATCH @q");
             p.Add("q", fts);
         }
         else
         {
-            select = "NULL AS Fts, substr(e.body, 1, 1000) AS Body";
             from = "emails e";
         }
 
@@ -478,14 +476,23 @@ public sealed class EmailIndex
             p.Add("u", un ? 1 : 0);
         }
 
-        var sql = "SELECT e.entry_id AS EntryId, e.folder AS Folder, e.event_time AS EventTime, " +
+        // Pick the page of ids first; compute snippet/attachments/body only for those rows.
+        var snippetCol = fts is not null
+            ? "snippet(emails_fts, -1, '**', '**', '…', 16)"
+            : "NULL";
+        var outerFrom = fts is not null
+            ? "page JOIN emails e ON e.id = page.id JOIN emails_fts ON emails_fts.rowid = e.id AND emails_fts MATCH @q"
+            : "page JOIN emails e ON e.id = page.id";
+        var sql = "WITH page AS (SELECT e.id AS id, e.event_time AS t FROM " + from +
+                  (where.Count > 0 ? " WHERE " + string.Join(" AND ", where) : "") +
+                  " ORDER BY e.event_time DESC, e.id DESC LIMIT @take OFFSET @skip) " +
+                  "SELECT e.entry_id AS EntryId, e.folder AS Folder, e.event_time AS EventTime, " +
                   "e.sender_name AS SenderName, e.sender_email AS SenderEmail, e.to_addrs AS ToAddrs, " +
                   "e.subject AS Subject, e.has_attachments AS HasAttachments, " +
                   "(SELECT json_group_array(json_object('p', a.position, 'n', a.filename, 's', a.size, 'i', a.is_inline)) " +
                   "FROM attachments a WHERE a.email_id = e.id) AS AttJson, " +
-                  select + " FROM " + from +
-                  (where.Count > 0 ? " WHERE " + string.Join(" AND ", where) : "") +
-                  " ORDER BY e.event_time DESC, e.id DESC LIMIT @take OFFSET @skip";
+                  snippetCol + " AS Fts, substr(e.body, 1, 1000) AS Body FROM " + outerFrom +
+                  " ORDER BY page.t DESC, page.id DESC";
         p.Add("take", take);
         p.Add("skip", skip);
 
