@@ -166,3 +166,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-13 M11.6 writing-style skill: corpus, generation, SKILL.md + copy + state.json, weekly trigger (6e5551d); 2446 tests
 2026-11-13 M11.7 drafting pipeline: DraftRules, DraftPrompt, DraftWorker, DraftModelSwitch, OutlookAiMailbox, wiring (5225e76); StyleGuideSource adapter wires M11.6 into M11.7; 2593 tests
 2026-11-13 M11.9 AI safety scans + live!=claude test filter in CI, release, CLAUDE.md, README, agent files (dd317d8); 2599 tests
+2026-11-13 M11.7 fix: manual draft never throws; style generation outside the pass gate (0e98b40, found by spec sync); 2606 tests
