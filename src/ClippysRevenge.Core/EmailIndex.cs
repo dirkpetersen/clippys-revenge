@@ -273,6 +273,232 @@ public sealed class EmailIndex
         };
     }
 
+    // ---- Search (SPEC §9.2, §11.1) ----
+
+    public IReadOnlyList<EmailSummary> Search(SearchFilter filter)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        return SearchPage(filter,
+            Math.Max(filter.Offset, 0),
+            Math.Clamp(filter.Limit, 1, SearchFilter.MaxLimit));
+    }
+
+    internal IReadOnlyList<EmailSummary> SearchPage(SearchFilter filter, int skip, int take)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        ArgumentOutOfRangeException.ThrowIfNegative(skip);
+        ArgumentOutOfRangeException.ThrowIfNegative(take);
+        if (take == 0) return [];
+
+        var p = new DynamicParameters();
+        var where = new List<string>();
+        var fts = FtsQuery.Build(filter.Query);
+        string select, from;
+        if (fts is not null)
+        {
+            select = "snippet(emails_fts, -1, '**', '**', '…', 16) AS Fts, substr(e.body, 1, 1000) AS Body";
+            from = "emails_fts JOIN emails e ON e.id = emails_fts.rowid";
+            where.Add("emails_fts MATCH @q");
+            p.Add("q", fts);
+        }
+        else
+        {
+            select = "NULL AS Fts, substr(e.body, 1, 1000) AS Body";
+            from = "emails e";
+        }
+
+        if (Trimmed(filter.Sender) is { } sender)
+        {
+            where.Add("(e.sender_name LIKE @s ESCAPE '\\' OR e.sender_email LIKE @s ESCAPE '\\')");
+            p.Add("s", Like(sender));
+        }
+        AddRecipient(filter.Recipient, where, p);
+        if (Trimmed(filter.Subject) is { } subject)
+        {
+            where.Add("e.subject LIKE @subj ESCAPE '\\'");
+            p.Add("subj", Like(subject));
+        }
+        if (filter.DateFrom is { } df)
+        {
+            where.Add("e.event_time >= @from");
+            p.Add("from", df.ToUnixTimeSeconds());
+        }
+        if (filter.DateTo is { } dtTo)
+        {
+            where.Add("e.event_time <= @to");
+            p.Add("to", dtTo.ToUnixTimeSeconds());
+        }
+        if (NormalizeFolder(filter.Folder) is { } folder)
+        {
+            where.Add("e.folder = @folder COLLATE NOCASE");
+            p.Add("folder", folder);
+        }
+        if (filter.HasAttachment is { } ha)
+        {
+            where.Add("COALESCE(e.has_attachments, 0) = @ha");
+            p.Add("ha", ha ? 1 : 0);
+        }
+        if (Trimmed(filter.AttachmentName) is { } an)
+        {
+            where.Add("EXISTS (SELECT 1 FROM attachments a WHERE a.email_id = e.id AND a.filename LIKE @an ESCAPE '\\')");
+            p.Add("an", Like(an));
+        }
+        if (Trimmed(filter.AttachmentExt) is { } rawExt)
+        {
+            var ext = rawExt.StartsWith('.') ? rawExt[1..] : rawExt;
+            if (ext.Length > 0)
+            {
+                where.Add("EXISTS (SELECT 1 FROM attachments a WHERE a.email_id = e.id AND a.filename LIKE @ext ESCAPE '\\')");
+                p.Add("ext", "%." + Escape(ext));
+            }
+        }
+        if (filter.Unread is { } un)
+        {
+            where.Add("COALESCE(e.unread, 0) = @u");
+            p.Add("u", un ? 1 : 0);
+        }
+
+        var sql = "SELECT e.entry_id AS EntryId, e.folder AS Folder, e.event_time AS EventTime, " +
+                  "e.sender_name AS SenderName, e.sender_email AS SenderEmail, e.to_addrs AS ToAddrs, " +
+                  "e.subject AS Subject, e.has_attachments AS HasAttachments, " +
+                  "(SELECT json_group_array(json_object('p', a.position, 'n', a.filename, 's', a.size, 'i', a.is_inline)) " +
+                  "FROM attachments a WHERE a.email_id = e.id) AS AttJson, " +
+                  select + " FROM " + from +
+                  (where.Count > 0 ? " WHERE " + string.Join(" AND ", where) : "") +
+                  " ORDER BY e.event_time DESC, e.id DESC LIMIT @take OFFSET @skip";
+        p.Add("take", take);
+        p.Add("skip", skip);
+
+        using var conn = OpenConnection();
+        var rows = conn.Query<SearchRow>(sql, p).ToList();
+        var result = new List<EmailSummary>(rows.Count);
+        foreach (var r in rows)
+        {
+            var snippet = r.Fts is null ? "" : CollapseWhitespace(r.Fts);
+            if (snippet.Length == 0) snippet = BodySnippet(r.Body);
+            result.Add(new EmailSummary(
+                r.EntryId,
+                r.Folder ?? "",
+                DateTimeOffset.FromUnixTimeSeconds(r.EventTime),
+                r.SenderName ?? "",
+                r.SenderEmail ?? "",
+                r.ToAddrs ?? "",
+                r.Subject ?? "",
+                (r.HasAttachments ?? 0) != 0,
+                ParseAttachments(r.AttJson),
+                snippet));
+        }
+        return result;
+    }
+
+    private static string? Trimmed(string? s)
+    {
+        var t = s?.Trim();
+        return string.IsNullOrEmpty(t) ? null : t;
+    }
+
+    private static string Escape(string s) =>
+        s.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+
+    private static string Like(string s) => "%" + Escape(s) + "%";
+
+    private static void AddRecipient(string? raw, List<string> where, DynamicParameters p)
+    {
+        var value = Trimmed(raw);
+        if (value is null) return;
+
+        IReadOnlyList<Recipient>? parsed = null;
+        if (value.Contains(';') || value.Contains('<'))
+        {
+            try { parsed = Recipients.Parse(value); }
+            catch (FormatException) { }
+            if (parsed is { Count: 0 }) parsed = null;
+        }
+
+        if (parsed is null)
+        {
+            where.Add("(e.to_addrs LIKE @r0 ESCAPE '\\' OR e.cc_addrs LIKE @r0 ESCAPE '\\')");
+            p.Add("r0", Like(value));
+            return;
+        }
+
+        var parts = new List<string>();
+        var i = 0;
+        foreach (var r in parsed.Take(50))
+        {
+            var n = "r" + (i++).ToString(CultureInfo.InvariantCulture);
+            parts.Add($"(e.to_addrs LIKE @{n} ESCAPE '\\' OR e.cc_addrs LIKE @{n} ESCAPE '\\')");
+            p.Add(n, Like(r.Email));
+        }
+        where.Add("(" + string.Join(" OR ", parts) + ")");
+    }
+
+    private static string? NormalizeFolder(string? folder)
+    {
+        var f = folder?.Trim().Replace('/', '\\').Trim('\\');
+        if (string.IsNullOrEmpty(f)) return null;
+        if (f.Equals("inbox", StringComparison.OrdinalIgnoreCase)) return "Inbox";
+        if (f.Equals("sent", StringComparison.OrdinalIgnoreCase) ||
+            f.Equals("sent items", StringComparison.OrdinalIgnoreCase)) return "Sent Items";
+        return f;
+    }
+
+    private static string CollapseWhitespace(string s)
+    {
+        var sb = new System.Text.StringBuilder(s.Length);
+        var pendingSpace = false;
+        foreach (var ch in s)
+        {
+            if (char.IsWhiteSpace(ch)) { pendingSpace = sb.Length > 0; continue; }
+            if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
+            sb.Append(ch);
+        }
+        return sb.ToString();
+    }
+
+    private static string BodySnippet(string? body)
+    {
+        if (string.IsNullOrEmpty(body)) return "";
+        var s = CollapseWhitespace(body);
+        if (s.Length <= 200) return s;
+        var cut = char.IsHighSurrogate(s[199]) ? 199 : 200;
+        return s[..cut];
+    }
+
+    private static IReadOnlyList<AttachmentInfo> ParseAttachments(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return [];
+        var list = new List<AttachmentInfo>();
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        foreach (var el in doc.RootElement.EnumerateArray())
+        {
+            if (el.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+            var size = el.GetProperty("s");
+            var inl = el.GetProperty("i");
+            list.Add(new AttachmentInfo(
+                el.GetProperty("p").GetInt32(),
+                el.GetProperty("n").GetString() ?? "",
+                size.ValueKind == System.Text.Json.JsonValueKind.Number ? size.GetInt64() : 0,
+                inl.ValueKind == System.Text.Json.JsonValueKind.Number && inl.GetInt64() != 0));
+        }
+        return list.OrderBy(a => a.Position).ToList();
+    }
+
+    private sealed class SearchRow
+    {
+        public string EntryId { get; set; } = "";
+        public string? Folder { get; set; }
+        public long EventTime { get; set; }
+        public string? SenderName { get; set; }
+        public string? SenderEmail { get; set; }
+        public string? ToAddrs { get; set; }
+        public string? Subject { get; set; }
+        public long? HasAttachments { get; set; }
+        public string? AttJson { get; set; }
+        public string? Fts { get; set; }
+        public string? Body { get; set; }
+    }
+
     private sealed class EmailRow
     {
         public long Id { get; set; }
