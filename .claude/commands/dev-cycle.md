@@ -19,8 +19,12 @@ Run one development cycle for Clippy's Revenge. Follow these steps exactly.
      agent, then have the `reviewer` re-check just the fix. Allow at most
      **2 fix rounds**. Unresolved findings go into `docs/QUESTIONS.md`.
    - Run step 6, mark the line `Review: [x] done (<commit>)` (or
-     `[!] see Q<n>`), commit as `M<n>: review fixes`, push, report, and
-     end this cycle.
+     `[!] see Q<n>`), commit as `M<n>: review fixes`, push.
+   - **Ship it** (standing rule, CLAUDE.md "Version and release"): bump
+     `<Version>` in `Directory.Build.props` (patch +1), commit, push, open a
+     PR `dev` → `main`, wait for CI to pass, then `gh pr merge --merge`
+     without waiting for the user. Confirm the Release run published the new
+     version as latest. Report, and end this cycle.
 3. **Pick a task.** Read `docs/PLAN.md`. Take the first `[ ]` task whose
    milestone dependencies are all `[x]`. If none is left and only `[!]`
    tasks remain, report the open questions in `docs/QUESTIONS.md` and stop
@@ -45,5 +49,6 @@ Run one development cycle for Clippy's Revenge. Follow these steps exactly.
 8. **Report** in 3–5 lines: task, files changed, test counts, review
    rounds, anything the user should look at (spec changes, new questions).
 
-Never run live Outlook tests, never send anything through Outlook, and
-never merge or push to `main`.
+Never run live Outlook or Claude tests, never send anything through
+Outlook, and never push to `main` directly. `main` changes only by merging
+a green `dev` → `main` PR in the review step above.
