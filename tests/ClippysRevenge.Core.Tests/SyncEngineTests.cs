@@ -422,4 +422,193 @@ public class SyncEngineTests : IDisposable
         await Run(Plan("", 12, "Inbox", "Inbox", "inbox"));
         Assert.Single(_src.CallsOf("GetFolderAsync"));
     }
+
+    // ---- thread-metadata refresh and decision purge (schema 2, SPEC 10) ----
+
+    private static FakeMail Thr(int i, string? topic = "Topic", string? irt = null, string? marker = null) =>
+        new(Id(i), T0.AddHours(-(i + 1)), T0.AddHours(-(i + 1)), false, "s", irt, topic, marker);
+
+    /// <summary>An index migrated from schema 1: rows exist without thread values, the key is unset, backfill is complete.</summary>
+    private void Migrated(string mailbox, string path, params FakeMail[] mails)
+    {
+        _ix.SetMeta(EmailIndex.ThreadMetaCompleteKey, null);
+        foreach (var m in mails)
+        {
+            _src.Put(mailbox, path, m);
+            _ix.UpsertBatch([new IndexedEmail
+            {
+                EntryId = m.EntryId, Folder = path, Subject = m.Subject, EventTime = m.EventTime,
+                LastModified = m.LastModified, Unread = m.Unread, Body = "b",
+            }]);
+        }
+        _ix.SetSyncState(new SyncState(_src.FolderKey(mailbox, path), path, T0, Cutoff, null, true));
+    }
+
+    private (string? Irt, string? Topic, string? Marker) Pick(string id)
+    {
+        var d = _ix.Get(id)!;
+        return (d.InReplyTo, d.ConversationTopic, d.ClippyMarker);
+    }
+
+    [Fact]
+    public async Task Refresh_FreshIndex_DoesNotRun()
+    {
+        AddOld(3);
+        await Run();
+        Assert.Empty(_src.CallsOf("ListThreadMetaAsync"));
+        Assert.Equal("1", _ix.GetMeta(EmailIndex.ThreadMetaCompleteKey));
+    }
+
+    [Fact]
+    public async Task Refresh_MigratedIndex_FillsThreadValues()
+    {
+        Migrated("", "Inbox", Thr(0, "Alpha", "<a>"), Thr(1, "Beta"), Thr(2, "Gamma", null, "tool"));
+        await Run();
+        Assert.Equal(("<a>", "Alpha", null), Pick("m000"));
+        Assert.Equal((null, "Beta", null), Pick("m001"));
+        Assert.Equal((null, "Gamma", "tool"), Pick("m002"));
+        Assert.Equal("1", _ix.GetMeta(EmailIndex.ThreadMetaCompleteKey));
+        var call = Assert.Single(_src.CallsOf("ListThreadMetaAsync"));
+        Assert.Equal(Cutoff, call.Args[1]);
+        Assert.Equal(T0.AddSeconds(1), call.Args[2]);
+        Assert.Empty(_hub.GetEvents());
+        Assert.Empty(_src.CallsOf("ReadAsync"));
+    }
+
+    [Fact]
+    public async Task Refresh_SecondCycle_DoesNotRun()
+    {
+        Migrated("", "Inbox", Thr(0));
+        await Run();
+        await Run();
+        Assert.Single(_src.CallsOf("ListThreadMetaAsync"));
+    }
+
+    [Fact]
+    public async Task Refresh_PagesUntilDone()
+    {
+        _src.ThreadPageSize = 2;
+        Migrated("", "Inbox", Thr(0), Thr(1), Thr(2), Thr(3), Thr(4));
+        await Run();
+        var calls = _src.CallsOf("ListThreadMetaAsync");
+        Assert.Equal(3, calls.Count);
+        Assert.Equal(T0.AddSeconds(1), calls[0].Args[2]);
+        Assert.Equal(T0.AddHours(-2), calls[1].Args[2]);   // m001 is the last row of page 1
+        Assert.Equal(T0.AddHours(-4), calls[2].Args[2]);
+        for (var i = 0; i < 5; i++) Assert.Equal("Topic", _ix.Get(Id(i))!.ConversationTopic);
+        Assert.Equal("1", _ix.GetMeta(EmailIndex.ThreadMetaCompleteKey));
+    }
+
+    [Fact]
+    public async Task Refresh_ScopeLabel()
+    {
+        Migrated("", "Inbox", Thr(0));
+        _src.Folder("helpdesk@x.edu", "Inbox");
+        var seen = new List<(ActivityState, string)>();
+        _src.BeforeCall = (m, _) =>
+        {
+            if (m == "ListThreadMetaAsync") seen.Add((_hub.State, _hub.Progress.Label));
+            return Task.CompletedTask;
+        };
+        await Run();
+        Migrated("helpdesk@x.edu", "Inbox", Thr(5));
+        await Run(Plan("helpdesk@x.edu"));
+        Assert.Equal([(ActivityState.Syncing, "Updating thread data Inbox"),
+            (ActivityState.Syncing, "helpdesk@… Updating thread data Inbox")], seen);
+    }
+
+    [Fact]
+    public async Task Refresh_OneFolderFails_OthersContinue_NextCycleFinishes()
+    {
+        _src.Folder("", "Sent Items");
+        Migrated("", "Inbox", Thr(0, "In"));
+        _src.Put("", "Sent Items", Thr(1, "Out"));
+        _ix.UpsertBatch([new IndexedEmail { EntryId = Id(1), Folder = "Sent Items", EventTime = T0.AddHours(-2), LastModified = T0.AddHours(-2) }]);
+        _ix.SetSyncState(new SyncState(_src.FolderKey("", "Sent Items"), "Sent Items", T0, Cutoff, null, true));
+        _ix.UpsertDecision(new AiDecision("old", null, null, T0.AddDays(-31), AiOutcome.Drafted));
+        _src.ThrowOn("ListThreadMetaAsync", 1, new InvalidOperationException("nope"));
+
+        await Run(Plan("", 12, "Inbox", "Sent Items"));
+        Assert.Equal("Out", _ix.Get(Id(1))!.ConversationTopic);
+        Assert.Null(_ix.Get(Id(0))!.ConversationTopic);
+        Assert.Null(_ix.GetMeta(EmailIndex.ThreadMetaCompleteKey));
+        Assert.DoesNotContain(_hub.GetEvents(), e => e.Kind == ActivityKind.Error);
+        Assert.Null(_ix.GetDecision("old"));
+
+        await Run(Plan("", 12, "Inbox", "Sent Items"));
+        Assert.Equal("In", _ix.Get(Id(0))!.ConversationTopic);
+        Assert.Equal("1", _ix.GetMeta(EmailIndex.ThreadMetaCompleteKey));
+    }
+
+    [Fact]
+    public async Task Refresh_OutlookGone_Propagates_KeyUnset_NoScopeLeft()
+    {
+        Migrated("", "Inbox", Thr(0));
+        _src.ThrowOn("ListThreadMetaAsync", 1, new MailSourceUnavailableException("gone"));
+        await Assert.ThrowsAsync<MailSourceUnavailableException>(() => Run());
+        Assert.Null(_ix.GetMeta(EmailIndex.ThreadMetaCompleteKey));
+        Assert.Equal(ActivityState.Idle, _hub.State);
+    }
+
+    [Fact]
+    public async Task Refresh_Cancelled_Propagates_KeyUnset()
+    {
+        Migrated("", "Inbox", Thr(0));
+        using var cts = new CancellationTokenSource();
+        _src.BeforeCall = (m, _) =>
+        {
+            if (m == "ListThreadMetaAsync") cts.Cancel();
+            return Task.CompletedTask;
+        };
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => RunWith(cts.Token));
+        Assert.Null(_ix.GetMeta(EmailIndex.ThreadMetaCompleteKey));
+    }
+
+    [Fact]
+    public async Task Refresh_MissingFolder_DoesNotBlockKey()
+    {
+        Migrated("", "Inbox", Thr(0));
+        await Run(Plan("", 12, "Inbox", "Nope"));
+        Assert.Equal("1", _ix.GetMeta(EmailIndex.ThreadMetaCompleteKey));
+    }
+
+    [Fact]
+    public async Task Refresh_MisbehavingSource_StopsAndLeavesKeyUnset()
+    {
+        Migrated("", "Inbox", Thr(0));
+        _src.ThreadMetaOverride = (_, _, to) =>
+            new ThreadMetaPage([new ThreadMetaRow(Id(0), to.AddSeconds(1), null, "X", null)], true);
+        await Run();
+        Assert.Single(_src.CallsOf("ListThreadMetaAsync"));
+        Assert.Null(_ix.GetMeta(EmailIndex.ThreadMetaCompleteKey));
+    }
+
+    [Fact]
+    public async Task Refresh_NeverInsertsOrChangesSyncColumns()
+    {
+        Migrated("", "Inbox", Thr(0), Thr(1));
+        _src.Put("", "Inbox", Thr(7));   // in Outlook, not indexed
+        var before = _ix.GetSyncInfo([Id(0), Id(1), Id(7)]);
+        var rows = Rows();
+        await Run();
+        Assert.Equal(rows, Rows());
+        Assert.Null(_ix.Get(Id(7)));
+        Assert.Equal(before, _ix.GetSyncInfo([Id(0), Id(1), Id(7)]));
+    }
+
+    [Fact]
+    public async Task DecisionPurge_RunsEveryCycle_EvenWhenNotMounted()
+    {
+        _ix.UpsertDecision(new AiDecision("old", null, null, T0.AddDays(-31), AiOutcome.Drafted));
+        _ix.UpsertDecision(new AiDecision("new", null, null, T0.AddDays(-1), AiOutcome.Drafted));
+        await Run();
+        Assert.Null(_ix.GetDecision("old"));
+        Assert.NotNull(_ix.GetDecision("new"));
+
+        _ix.UpsertDecision(new AiDecision("old2", null, null, T0.AddDays(-40), AiOutcome.Drafted));
+        _src.Box("").Mounted = false;
+        var r = await Run();
+        Assert.True(r.NotMounted);
+        Assert.Null(_ix.GetDecision("old2"));
+    }
 }

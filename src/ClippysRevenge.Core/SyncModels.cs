@@ -23,7 +23,18 @@ public interface IMailSource
 
     /// <summary>At most <see cref="SyncEngine.BatchSize"/> ids. Items that no longer exist or aren't mail items are omitted.</summary>
     Task<IReadOnlyList<IndexedEmail>> ReadAsync(SourceFolder folder, IReadOnlyList<string> entryIds, CancellationToken ct);
+
+    /// <summary>
+    /// One page for the thread-metadata refresh (SPEC 10): rows with from &lt;= EventTime &lt; toExclusive, newest first,
+    /// at most 500, never splitting a group of equal EventTimes. Next page: toExclusive = last row's EventTime.
+    /// Table-only: no item is opened.
+    /// </summary>
+    Task<ThreadMetaPage> ListThreadMetaAsync(SourceFolder folder, DateTimeOffset from, DateTimeOffset toExclusive, CancellationToken ct);
 }
+
+public sealed record ThreadMetaRow(string EntryId, DateTimeOffset EventTime, string? InReplyTo, string? ConversationTopic, string? ClippyMarker);
+
+public sealed record ThreadMetaPage(IReadOnlyList<ThreadMetaRow> Rows, bool HasMore);
 
 /// <summary>Outlook went away mid-cycle. The engine propagates it; the service aborts the cycle quietly.</summary>
 public sealed class MailSourceUnavailableException(string message, Exception? inner = null) : Exception(message, inner);

@@ -120,6 +120,19 @@ internal sealed class OutlookMailSource : IMailSource, IReconcileSource
         return rows;
     }
 
+    public async Task<ThreadMetaPage> ListThreadMetaAsync(SourceFolder folder, DateTimeOffset from,
+        DateTimeOffset toExclusive, CancellationToken ct)
+    {
+        var rf = ToResolved(folder);
+        var p = await Run(app => _mail.EnumerateThreadMeta(app, rf, from, toExclusive), ct).ConfigureAwait(false);
+        var rows = p.Rows.Select(r =>
+        {
+            var t = r.Thread ?? MailThreadMeta.Empty;
+            return new ThreadMetaRow(r.EntryId, r.EventTime, t.InReplyTo, t.ConversationTopic, t.ClippyMarker);
+        }).ToList();
+        return new ThreadMetaPage(rows, p.HasMore);
+    }
+
     public async Task<IReadOnlyList<IndexedEmail>> ReadAsync(SourceFolder folder, IReadOnlyList<string> entryIds,
         CancellationToken ct)
     {

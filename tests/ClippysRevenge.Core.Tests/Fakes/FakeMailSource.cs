@@ -1,6 +1,7 @@
 namespace ClippysRevenge.Core.Tests;
 
-internal sealed record FakeMail(string EntryId, DateTimeOffset? LastModified, DateTimeOffset EventTime, bool Unread, string Subject);
+internal sealed record FakeMail(string EntryId, DateTimeOffset? LastModified, DateTimeOffset EventTime, bool Unread, string Subject,
+    string? InReplyTo = null, string? Topic = null, string? Marker = null);
 
 internal sealed record FakeCall(string Method, object?[] Args);
 
@@ -30,6 +31,9 @@ internal sealed class FakeMailSource : IMailSource
     public Dictionary<string, FakeMailbox> Boxes { get; } = new(StringComparer.Ordinal);
     public bool Sloppy { get; set; }
     public Func<string, CancellationToken, Task>? BeforeCall { get; set; }
+    public int ThreadPageSize { get; set; } = 500;
+    /// <summary>When set and it returns a page, that page is returned as is (a misbehaving source).</summary>
+    public Func<SourceFolder, DateTimeOffset, DateTimeOffset, ThreadMetaPage?>? ThreadMetaOverride { get; set; }
 
     public IReadOnlyList<FakeCall> Calls
     {
@@ -134,6 +138,29 @@ internal sealed class FakeMailSource : IMailSource
         }
     }
 
+    public async Task<ThreadMetaPage> ListThreadMetaAsync(SourceFolder folder, DateTimeOffset from, DateTimeOffset toExclusive, CancellationToken ct)
+    {
+        await Enter(nameof(ListThreadMetaAsync), [folder.Path, from, toExclusive], ct);
+        var f = Lookup(folder);
+        lock (_lock)
+        {
+            var over = ThreadMetaOverride?.Invoke(folder, from, toExclusive);
+            if (over is not null) return over;
+            var all = f.Mails.Where(m => m.EventTime >= from && m.EventTime < toExclusive)
+                .OrderByDescending(m => m.EventTime).ThenBy(m => m.EntryId, StringComparer.Ordinal).ToList();
+            var take = all;
+            var hasMore = false;
+            if (all.Count > ThreadPageSize)
+            {
+                var edge = all[ThreadPageSize - 1].EventTime;
+                take = all.Where(m => m.EventTime >= edge).ToList();   // never split equal times
+                hasMore = all.Count > take.Count;
+            }
+            return new ThreadMetaPage(
+                take.Select(m => new ThreadMetaRow(m.EntryId, m.EventTime, m.InReplyTo, m.Topic, m.Marker)).ToList(), hasMore);
+        }
+    }
+
     public async Task<IReadOnlyList<IndexedEmail>> ReadAsync(SourceFolder folder, IReadOnlyList<string> entryIds, CancellationToken ct)
     {
         lock (_lock) _readBatches.Add(entryIds.Count);
@@ -154,6 +181,9 @@ internal sealed class FakeMailSource : IMailSource
                     EventTime = m.EventTime,
                     LastModified = m.LastModified,
                     Unread = m.Unread,
+                    InReplyTo = m.InReplyTo,
+                    ConversationTopic = m.Topic,
+                    ClippyMarker = m.Marker,
                 })
                 .ToList();
         }

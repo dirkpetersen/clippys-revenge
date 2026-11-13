@@ -126,7 +126,7 @@ internal sealed partial class OutlookMail
         ArgumentNullException.ThrowIfNull(folder);
         ValidateMaxRows(maxRows);
         return WithTable(app, folder, DaslFilter.Changed(folder.TimeField, modifiedFrom, cutoff), MailTable.SortLastModified, false,
-            rows => MailTableQueries.Changed(rows, modifiedFrom, cutoff, maxRows));
+            MailTable.Columns(folder.TimeField), rows => MailTableQueries.Changed(rows, modifiedFrom, cutoff, maxRows));
     }
 
     /// <summary>
@@ -141,7 +141,19 @@ internal sealed partial class OutlookMail
         ValidateMaxRows(maxRows);
         if (OutlookDates.TruncateToSecond(from) >= OutlookDates.TruncateToSecond(to)) return new MailTablePage([], false);
         return WithTable(app, folder, DaslFilter.Range(folder.TimeField, from, to), MailTable.EventTimeSort(folder.TimeField), true,
-            rows => MailTableQueries.Range(rows, from, to, maxRows));
+            MailTable.Columns(folder.TimeField), rows => MailTableQueries.Range(rows, from, to, maxRows));
+    }
+
+    /// <summary>Like <see cref="EnumerateRange"/> (newest first, from inclusive, to exclusive, pages up to maxRows), with the thread columns.</summary>
+    public MailTablePage EnumerateThreadMeta(Outlook.Application app, ResolvedFolder folder,
+        DateTimeOffset from, DateTimeOffset to, int maxRows = MailTablePager.DefaultPageRows)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(folder);
+        ValidateMaxRows(maxRows);
+        if (OutlookDates.TruncateToSecond(from) >= OutlookDates.TruncateToSecond(to)) return new MailTablePage([], false);
+        return WithTable(app, folder, DaslFilter.Range(folder.TimeField, from, to), MailTable.EventTimeSort(folder.TimeField), true,
+            MailTable.ThreadColumns(folder.TimeField), rows => MailTableQueries.Range(rows, from, to, maxRows));
     }
 
     /// <summary>Every indexable entry id (with unread state) whose event time is at or after <paramref name="since"/>.</summary>
@@ -150,7 +162,7 @@ internal sealed partial class OutlookMail
         ArgumentNullException.ThrowIfNull(app);
         ArgumentNullException.ThrowIfNull(folder);
         return WithTable(app, folder, DaslFilter.Since(folder.TimeField, since), null, false,
-            rows => MailTableQueries.EntryIds(rows, since));
+            MailTable.Columns(folder.TimeField), rows => MailTableQueries.EntryIds(rows, since));
     }
 
     private static void ValidateMaxRows(int maxRows)
@@ -160,24 +172,38 @@ internal sealed partial class OutlookMail
     }
 
     private static T WithTable<T>(Outlook.Application app, ResolvedFolder rf, string filter, string? sort, bool descending,
-        Func<IEnumerable<IReadOnlyList<object?>>, T> consume)
+        IReadOnlyList<string> columns, Func<IEnumerable<IReadOnlyList<object?>>, T> consume)
     {
         var folder = OpenFolder(app, rf);
         try
         {
             var table = folder.GetTable(filter, Outlook.OlTableContents.olUserItems);
             var cols = table.Columns;
+            var markerMissing = false;
             try
             {
                 cols.RemoveAll();
-                foreach (var c in MailTable.Columns(rf.TimeField)) cols.Add(c);
+                foreach (var c in columns)
+                {
+                    if (c == DraftMarker.PropertyName)
+                    {
+                        // Outlook may refuse the named property as a column; then the marker reads as null.
+                        try { cols.Add(c); }
+                        catch (COMException ex) when (!ComErrors.IsOutlookGone(ex)) { markerMissing = true; }
+                    }
+                    else
+                    {
+                        cols.Add(c);
+                    }
+                }
             }
             finally
             {
                 Release(cols);
             }
             if (sort is not null) table.Sort(sort, descending);
-            return consume(ReadTableRows(table));
+            var raw = ReadTableRows(table);
+            return consume(markerMissing ? raw.Select(r => (IReadOnlyList<object?>)[.. r, null]) : raw);
         }
         finally
         {
@@ -292,6 +318,9 @@ internal sealed partial class OutlookMail
 
             var (to, cc) = ReadRecipients(item);
 
+            var values = ComSafe.Try(() => pa.GetProperties(MailTable.ThreadPropertyNames.Cast<object>().ToArray()) as object[]);
+            var meta = values is { Length: 3 } ? MailThreadMeta.FromValues(values[0], values[1], values[2]) : MailThreadMeta.Empty;
+
             return new IndexedEmail
             {
                 EntryId = item.EntryID,
@@ -308,6 +337,9 @@ internal sealed partial class OutlookMail
                 Unread = item.UnRead,
                 Body = item.Body,
                 Attachments = ReadAttachments(item),
+                InReplyTo = meta.InReplyTo,
+                ConversationTopic = meta.ConversationTopic,
+                ClippyMarker = meta.ClippyMarker,
             };
         }
         finally
