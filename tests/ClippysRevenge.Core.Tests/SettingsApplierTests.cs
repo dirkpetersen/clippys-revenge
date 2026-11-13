@@ -57,12 +57,49 @@ public sealed class SettingsApplierTests : IDisposable
         try { Directory.Delete(_root, true); } catch (IOException) { }
     }
 
+    private Action? _aiChanged;
+
     private SettingsApplier Applier(bool withIndexes = false)
     {
         if (withIndexes)
             _indexes = new MailboxIndexes(Path.Combine(_root, "idx"), _live.SharedMailboxes.Where(m => m.Enabled).Select(m => m.Smtp));
         return new SettingsApplier(new SettingsApplyTargets(_live, _store, _tokens, p => _restart(p), () => _serverPort,
-            e => _startup(e), _indexes, () => _retention++, () => _syncNow++), _log);
+            e => _startup(e), _indexes, () => _retention++, () => _syncNow++, _aiChanged), _log);
+    }
+
+    [Fact]
+    public async Task AiSettingsChanged_CalledOncePerChangingApply_NotForNoChangeOrErrors()
+    {
+        var calls = 0;
+        _aiChanged = () => calls++;
+        var applier = Applier();
+
+        var none = await applier.ApplyAsync(new SettingsEditor(_live), TestContext.Current.CancellationToken);
+        Assert.True(none.Ok);
+        Assert.Equal(0, calls);
+
+        var bad = new SettingsEditor(_live);
+        bad.Draft.Port = 80;
+        Assert.False((await applier.ApplyAsync(bad, TestContext.Current.CancellationToken)).Ok);
+        Assert.Equal(0, calls);
+
+        var good = new SettingsEditor(_live);
+        good.Draft.AiDrafting.DailyCap = 31;
+        Assert.True((await applier.ApplyAsync(good, TestContext.Current.CancellationToken)).Ok);
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public async Task AiSettingsChanged_Throwing_DoesNotFailTheApply()
+    {
+        _aiChanged = () => throw new InvalidOperationException("secret-detail");
+        var e = new SettingsEditor(_live);
+        e.Draft.AiDrafting.DailyCap = 32;
+        var r = await Applier().ApplyAsync(e, TestContext.Current.CancellationToken);
+        Assert.True(r.Ok);
+        Assert.Empty(r.Warnings);
+        Assert.Equal(32, _live.AiDrafting.DailyCap);
+        Assert.DoesNotContain(_log.Lines, l => l.Contains("secret-detail", StringComparison.Ordinal));
     }
 
     private string FileJson => File.ReadAllText(_store.SettingsPath);

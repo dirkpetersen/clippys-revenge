@@ -56,6 +56,10 @@ public sealed class SyncService : BackgroundService
     /// <summary>Test hook; raised at the end of every cycle.</summary>
     internal event Action<SyncCycleResult>? CycleFinished;
 
+    /// <summary>Raised after every cycle that was not aborted (also when nothing changed). Handlers run on the sync
+    /// thread and must not block. Each handler is called separately; exceptions are caught and logged (SPEC 10).</summary>
+    public event Action<SyncCycleResult>? CycleCompleted;
+
     public bool IsPaused
     {
         get
@@ -334,11 +338,30 @@ public sealed class SyncService : BackgroundService
                     if (!aborted) _lastSync = now;
                 }
             }
-            CycleFinished?.Invoke(new SyncCycleResult(results, aborted));
+            var cycle = new SyncCycleResult(results, aborted);
+            CycleFinished?.Invoke(cycle);
+            if (!aborted) RaiseCycleCompleted(cycle);
         }
         finally
         {
             _gate.Release();
+        }
+    }
+
+    private void RaiseCycleCompleted(SyncCycleResult cycle)
+    {
+        var handlers = CycleCompleted;
+        if (handlers is null) return;
+        foreach (var d in handlers.GetInvocationList())
+        {
+            try
+            {
+                ((Action<SyncCycleResult>)d)(cycle);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning("A CycleCompleted handler failed ({Type}).", ex.GetType().Name);
+            }
         }
     }
 

@@ -47,6 +47,20 @@ public class MailTableTests
     }
 
     [Fact]
+    public void DraftMatch_both_halves_and_quote_doubling() =>
+        Assert.Equal(
+            "@SQL=(\"http://schemas.microsoft.com/mapi/proptag/0x1042001F\" = '<a''b@x>') OR (\"http://schemas.microsoft.com/mapi/proptag/0x0070001F\" = 'Budget')",
+            DaslFilter.DraftMatch("<a'b@x>", "Budget"));
+
+    [Fact]
+    public void DraftMatch_single_halves_and_blank()
+    {
+        Assert.Equal("@SQL=(\"http://schemas.microsoft.com/mapi/proptag/0x1042001F\" = '<a@x>')", DaslFilter.DraftMatch(" <a@x> ", " "));
+        Assert.Equal("@SQL=(\"http://schemas.microsoft.com/mapi/proptag/0x0070001F\" = 'T')", DaslFilter.DraftMatch(null, "T"));
+        Assert.Null(DaslFilter.DraftMatch("  ", null));
+    }
+
+    [Fact]
     public void Changed_exact_string() =>
         Assert.Equal(
             "@SQL=(\"http://schemas.microsoft.com/mapi/proptag/0x30080040\" >= '2026-03-09 12:00') AND (\"http://schemas.microsoft.com/mapi/proptag/0x0E060040\" >= '2025-03-09 00:00') AND (\"http://schemas.microsoft.com/mapi/proptag/0x001A001F\" LIKE 'IPM.Note%')",
