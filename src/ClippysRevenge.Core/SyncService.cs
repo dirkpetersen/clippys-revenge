@@ -70,18 +70,19 @@ public sealed class SyncService : BackgroundService
         if (!IsPaused) Wake();
     }
 
-    /// <summary>Wakes the loop like <see cref="SyncNow"/>; also ignored while paused.</summary>
-    public void NotifySettingsChanged()
-    {
-        if (!IsPaused) Wake();
-        else _ = Task.Run(ApplyRetentionWhilePausedAsync);
-    }
+    /// <summary>
+    /// Applies a RetentionMonths change at once, outside the cycle (needs no COM, so it works while Outlook is
+    /// unavailable or sync is paused), then wakes the loop unless paused.
+    /// </summary>
+    public void NotifySettingsChanged() => _ = Task.Run(ApplyRetentionAsync);
 
-    /// <summary>A smaller RetentionMonths purges at once, even while paused (needs no COM).</summary>
-    private async Task ApplyRetentionWhilePausedAsync()
+    private async Task ApplyRetentionAsync()
     {
         try
         {
+            CancellationTokenSource? cts;
+            lock (_lock) cts = _cycleCts;
+            Cancel(cts);
             await _gate.WaitAsync().ConfigureAwait(false);
             try
             {
@@ -106,6 +107,7 @@ public sealed class SyncService : BackgroundService
         {
             _log?.LogWarning(ex, "Applying a RetentionMonths change failed.");
         }
+        if (!IsPaused) Wake();
     }
 
     private void Wake() => _wake.Writer.TryWrite(true);

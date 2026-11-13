@@ -455,4 +455,40 @@ public class SyncServiceTests : IDisposable
         await svc.StopAsync(cts.Token);
         Assert.Equal(ActivityState.Idle, _hub.State);
     }
+
+    [Fact]
+    public async Task SettingsChanged_PurgesWhileOutlookUnavailable()
+    {
+        _src.Folder("", "Inbox");
+        for (var i = 0; i < 3; i++)
+        {
+            var d = T0.AddMonths(-6).AddHours(-i);
+            _src.Put("", "Inbox", new FakeMail(Id(i), d, d, false, "s"));
+        }
+        var svc = await Start();
+        await WaitCycle();
+        Assert.Equal(3, _indexes!.For("").Status().TotalEmails);
+        Assert.Equal("12", _indexes.For("").GetMeta("retention_months"));
+
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _src.BeforeCall = async (m, ct) =>
+        {
+            if (m == "OpenMailboxAsync")
+            {
+                entered.TrySetResult();
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+        };
+        _time.Advance(TimeSpan.FromMinutes(10));
+        svc.SyncNow();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        _settings.RetentionMonths = 3;
+        svc.NotifySettingsChanged();
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline && _indexes.For("").GetMeta("retention_months") != "3")
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+        Assert.Equal("3", _indexes.For("").GetMeta("retention_months"));
+        Assert.Equal(0, _indexes.For("").Status().TotalEmails);
+    }
 }
