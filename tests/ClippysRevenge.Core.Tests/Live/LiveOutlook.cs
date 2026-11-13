@@ -305,7 +305,7 @@ public sealed class LiveOutlook : IAsyncLifetime
             }
             catch (COMException)
             {
-                return true; // already gone
+                return PurgeDeleted(app, tracked.StoreId); // already gone from its folder; make sure Deleted Items is clean too
             }
             dynamic d = obj;
             string subject = d.Subject ?? "";
@@ -316,13 +316,101 @@ public sealed class LiveOutlook : IAsyncLifetime
                 return false;
             }
             d.Delete();
-            return true;
         }
         finally
         {
             if (obj is not null && Marshal.IsComObject(obj)) Marshal.ReleaseComObject(obj);
             if (session is not null) Marshal.ReleaseComObject(session);
         }
+        return PurgeDeleted(app, tracked.StoreId);
+    }
+
+    /// <summary>
+    /// Delete() only moves an item to Deleted Items. Removes this run's items (subject starts with "[RunToken] ")
+    /// from Deleted Items of the own store and of the tracked item's store. Worker thread only.
+    /// </summary>
+    private bool PurgeDeleted(Outlook.Application app, string storeId)
+    {
+        var prefix = "[" + RunToken + "] ";
+        var ok = true;
+        Outlook.NameSpace? session = null;
+        var storeIds = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            session = app.Session;
+            var targets = new List<Outlook.Store>();
+            try
+            {
+                targets.Add(Stores.Get(app, ""));
+                if (!string.IsNullOrEmpty(storeId))
+                {
+                    try { targets.Add(session.GetStoreFromID(storeId)); }
+                    catch (COMException ex)
+                    {
+                        WriteLine($"LIVE-RESULT: cleanup-error: store of tracked item not found: {ex.Message}");
+                        ok = false;
+                    }
+                }
+                foreach (var store in targets)
+                {
+                    if (!storeIds.Add(store.StoreID)) continue;
+                    Outlook.MAPIFolder? folder = null;
+                    Outlook.Items? items = null, restricted = null;
+                    var found = new List<object>();
+                    try
+                    {
+                        folder = store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderDeletedItems);
+                        items = folder.Items;
+                        restricted = items.Restrict($"@SQL=\"urn:schemas:httpmail:subject\" LIKE '%{RunToken}%'");
+                        object? item = restricted.GetFirst();
+                        while (item is not null)
+                        {
+                            string subject;
+                            try { subject = ((dynamic)item).Subject ?? ""; }
+                            catch
+                            {
+                                if (Marshal.IsComObject(item)) Marshal.ReleaseComObject(item);
+                                throw;
+                            }
+                            if (subject.StartsWith(prefix, StringComparison.Ordinal)) found.Add(item);
+                            else if (Marshal.IsComObject(item)) Marshal.ReleaseComObject(item);
+                            item = restricted.GetNext();
+                        }
+                        foreach (var hit in found)
+                        {
+                            try { ((dynamic)hit).Delete(); }
+                            catch (COMException ex)
+                            {
+                                WriteLine($"LIVE-RESULT: cleanup-error: could not purge from Deleted Items: {ex.Message}");
+                                ok = false;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        foreach (var hit in found)
+                            if (Marshal.IsComObject(hit)) Marshal.ReleaseComObject(hit);
+                        if (restricted is not null) Marshal.ReleaseComObject(restricted);
+                        if (items is not null) Marshal.ReleaseComObject(items);
+                        if (folder is not null) Marshal.ReleaseComObject(folder);
+                    }
+                }
+            }
+            finally
+            {
+                foreach (var store in targets) Marshal.ReleaseComObject(store);
+            }
+        }
+        catch (COMException ex)
+        {
+            WriteLine($"LIVE-RESULT: cleanup-error: Deleted Items purge failed: {ex.Message}");
+            ok = false;
+        }
+        finally
+        {
+            if (session is not null) Marshal.ReleaseComObject(session);
+        }
+        return ok;
     }
 
     public void Result(string key, string value)

@@ -34,12 +34,13 @@ $SettingsDir = Join-Path $env:APPDATA 'ClippysRevenge'
 $DataDir     = Join-Path $env:LOCALAPPDATA 'ClippysRevenge'
 
 function Stop-App {
-    $procs = Get-Process -Name $AppName -ErrorAction SilentlyContinue
+    # The tray app has no main window, so there is nothing to close gracefully.
+    $procs = Get-Process -Name $AppName -ErrorAction SilentlyContinue |
+        Where-Object { $_.SessionId -eq (Get-Process -Id $PID).SessionId }
     foreach ($p in $procs) {
         if ($PSCmdlet.ShouldProcess("process $($p.Id)", 'Stop')) {
             Write-Host "Stopping $AppName (pid $($p.Id))..."
-            $null = $p.CloseMainWindow()
-            if (-not $p.WaitForExit(3000)) { Stop-Process -Id $p.Id -Force }
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
             $null = $p.WaitForExit(5000)
         }
     }
