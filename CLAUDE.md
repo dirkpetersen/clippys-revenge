@@ -47,6 +47,8 @@ reference material only.
 src/ClippysRevenge.Core/    net10.0, pure logic, tested on Linux too
 src/ClippysRevenge.App/     net10.0-windows WinExe: COM, tray, Kestrel host
 tests/ClippysRevenge.Core.Tests/
+manual/                     user docs site (Zensical), published to gh-pages by .github/workflows/docs.yml
+zensical.toml               docs site config (docs_dir = manual, output site/ is gitignored)
 docs/PLAN.md                milestones and the task checklist the loop works from
 docs/QUESTIONS.md           open questions for the user (the loop writes here)
 docs/briefs/                architect briefs, one per task
@@ -61,6 +63,10 @@ dotnet test tests/ClippysRevenge.Core.Tests          # Core only (also works in 
 dotnet publish src/ClippysRevenge.App -c Release -r win-x64 --self-contained \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
 ```
+
+**User docs** (`manual/`, not `docs/`, which is internal):
+`pip install zensical==0.1.1`, then `zensical serve` to preview or
+`zensical build --clean --strict` to check. Docs must match `SPEC.md`.
 
 **Live Outlook tests** (`[Trait("live","outlook")]`) touch the user's real
 mailbox (they create drafts and a `DraftOnly` meeting). Run them only when

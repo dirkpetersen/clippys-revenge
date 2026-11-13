@@ -108,3 +108,5 @@ coverage*.xml
 token.bin
 
 .claude/worktrees/
+.venv-docs/
+site/
