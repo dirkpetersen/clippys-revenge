@@ -53,6 +53,7 @@ internal sealed class TrayApp : ApplicationContext
     private volatile bool _disposed;
     private IReadOnlyList<MailboxStore>? _mounted;
     private int _listing;
+    private ActivityForm? _activity;
 
     public TrayApp(TrayServices services)
     {
@@ -110,10 +111,25 @@ internal sealed class TrayApp : ApplicationContext
         // TODO(M9.2): show SettingsForm.
     });
 
-    /// <summary>Any thread; opens the Activity window on the UI thread (stub until M9.3).</summary>
+    /// <summary>Any thread; opens (or raises) the single Activity window on the UI thread.</summary>
     public void ShowActivity() => PostToUi(() =>
     {
-        // TODO(M9.3): show ActivityForm.
+        if (_activity is { IsDisposed: false } open)
+        {
+            if (open.WindowState == FormWindowState.Minimized)
+            {
+                open.WindowState = FormWindowState.Normal;
+            }
+            open.Activate();
+            return;
+        }
+        _activity = new ActivityForm(_s.Hub);
+        _activity.FormClosed += (_, _) =>
+        {
+            _activity?.Dispose();
+            _activity = null;
+        };
+        _activity.Show();
     });
 
     private void PostToUi(Action action) => _ui.Post(_ =>
@@ -222,7 +238,7 @@ internal sealed class TrayApp : ApplicationContext
         regen.Click += (_, _) => RegenerateToken();
 
         var activity = new ToolStripMenuItem("Activity…");
-        activity.Click += (_, _) => ShowActivity(); // TODO(M9.3)
+        activity.Click += (_, _) => ShowActivity();
         var settings = new ToolStripMenuItem("Settings…");
         settings.Click += (_, _) => ShowSettings(); // TODO(M9.2)
         var logs = new ToolStripMenuItem("Open log folder");
@@ -475,6 +491,7 @@ internal sealed class TrayApp : ApplicationContext
             _animTimer.Dispose();
             _houseTimer.Stop();
             _houseTimer.Dispose();
+            _activity?.Dispose();
             _notify.Visible = false;
             _notify.Dispose();
             _menu.Dispose();
