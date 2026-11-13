@@ -206,4 +206,20 @@ public sealed class OutlookMailLiveTests(LiveOutlook fx)
         _ = MailTableQueries.Changed(changed, now.AddDays(-30), now.AddDays(-365), MailTablePager.MaxPageRows);
         _ = MailTableQueries.Range(range, now.AddDays(-30), now, MailTablePager.MaxPageRows);
     }
+
+    [Fact(Timeout = 180_000)]
+    public async Task Thread_columns_table_works()
+    {
+        await fx.RequireReadyAsync(TestContext.Current.CancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        var page = await fx.RunAsync("reading thread columns", app =>
+        {
+            var rf = fx.Mail.ResolveFolder(app, "", "Inbox");
+            return fx.Mail.EnumerateThreadMeta(app, rf, now.AddDays(-30), now.AddMinutes(1), 50);
+        });
+        if (page.Rows.Count == 0) Assert.Skip(SkipTexts.NoData("Inbox mail in the last 30 days"));
+        Assert.All(page.Rows, r => Assert.NotNull(r.Thread));
+        fx.Result("thread-columns",
+            $"rows={page.Rows.Count}, withTopic={page.Rows.Count(r => r.Thread!.ConversationTopic is not null)}, withIrt={page.Rows.Count(r => r.Thread!.InReplyTo is not null)}");
+    }
 }

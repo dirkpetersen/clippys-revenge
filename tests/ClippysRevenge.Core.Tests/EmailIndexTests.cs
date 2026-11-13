@@ -68,20 +68,21 @@ public class EmailIndexTests : IDisposable
         NewIndex();
         using var c = Raw();
         var names = c.Query<(string type, string name)>("SELECT type, name FROM sqlite_master").ToList();
-        foreach (var t in new[] { "emails", "emails_fts", "attachments", "sync_state", "meta" })
+        foreach (var t in new[] { "emails", "emails_fts", "attachments", "sync_state", "meta", "ai_decisions" })
             Assert.Contains(("table", t), names);
-        foreach (var i in new[] { "ix_emails_time", "ix_emails_folder_time", "ix_emails_imid", "ix_emails_sender", "ix_att_name" })
+        foreach (var i in new[] { "ix_emails_time", "ix_emails_folder_time", "ix_emails_imid", "ix_emails_sender", "ix_att_name",
+                     "ix_emails_irt", "ix_emails_topic", "ix_ai_decided", "ix_ai_imid" })
             Assert.Contains(("index", i), names);
         foreach (var t in new[] { "emails_ai", "emails_ad", "emails_au" })
             Assert.Contains(("trigger", t), names);
     }
 
     [Fact]
-    public void Ctor_NewFile_WritesSchemaVersion1()
+    public void Ctor_NewFile_WritesSchemaVersion2()
     {
         NewIndex();
-        Assert.Equal("1", Scalar<string>("SELECT value FROM meta WHERE key='schema_version'"));
-        Assert.Equal(1, EmailIndex.SchemaVersion);
+        Assert.Equal("2", Scalar<string>("SELECT value FROM meta WHERE key='schema_version'"));
+        Assert.Equal(2, EmailIndex.SchemaVersion);
     }
 
     [Fact]
@@ -102,7 +103,7 @@ public class EmailIndexTests : IDisposable
         var ix2 = NewIndex();
         Assert.Equal(a.RowId, ix2.Get("A")!.RowId);
         Assert.Equal(b.RowId, ix2.Get("B")!.RowId);
-        Assert.Equal("1", Scalar<string>("SELECT value FROM meta WHERE key='schema_version'"));
+        Assert.Equal("2", Scalar<string>("SELECT value FROM meta WHERE key='schema_version'"));
     }
 
     [Fact]
@@ -120,7 +121,7 @@ public class EmailIndexTests : IDisposable
         SqliteConnection.ClearAllPools();
         var ex = Assert.Throws<InvalidOperationException>(() => new EmailIndex(DbFile));
         Assert.Contains("schema version 99", ex.Message);
-        Assert.Contains("supports up to 1", ex.Message);
+        Assert.Contains("supports up to 2", ex.Message);
     }
 
     [Fact]
@@ -149,7 +150,8 @@ public class EmailIndexTests : IDisposable
         using var c = Raw();
         Assert.Equal(
             ["id", "entry_id", "store_id", "internet_message_id", "folder", "subject", "sender_name", "sender_email",
-             "to_addrs", "cc_addrs", "event_time", "last_modified", "unread", "has_attachments", "attachment_names", "body"],
+             "to_addrs", "cc_addrs", "event_time", "last_modified", "unread", "has_attachments", "attachment_names", "body",
+             "in_reply_to", "conversation_topic", "clippy_marker"],
             c.Query<string>("SELECT name FROM pragma_table_info('emails') ORDER BY cid").ToArray());
         Assert.Equal(
             ["email_id", "position", "filename", "size", "is_inline"],

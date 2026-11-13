@@ -198,12 +198,12 @@ internal static class Program
                     .AddSingleton<IFreeBusySource>(new OutlookFreeBusySource(worker))
                     .AddSingleton(sp => new FreeTimeFinder(sp.GetRequiredService<IFreeBusySource>(), TimeProvider.System, TimeZoneInfo.Local));
                 s.AddSingleton(new Signatures(SignatureRegistry.Name, Signatures.DefaultDirectory()))
-                    .AddSingleton<IDraftWriter>(new OutlookDraftWriter(worker, stores))
+                    .AddSingleton<IDraftWriter>(new OutlookDraftWriter(worker, stores, loggerFactory.CreateLogger<OutlookDraftWriter>()))
                     .AddSingleton<CreateDraftTool>();
                 if (indexes is not null && mail is not null && sync is not null)
                 {
                     s.AddSingleton(indexes).AddSingleton(mail).AddSingleton(sync);
-                    s.AddSingleton<IReplyDraftWriter>(new OutlookReplyDraftWriter(worker, mail, stores))
+                    s.AddSingleton<IReplyDraftWriter>(new OutlookReplyDraftWriter(worker, mail, stores, loggerFactory.CreateLogger<OutlookReplyDraftWriter>()))
                         .AddSingleton<ReplyDraftTool>();
                     s.AddSingleton<IAttachmentSaver, OutlookAttachmentSaver>()
                         .AddSingleton(sp => new AttachmentExport(sp.GetRequiredService<IAttachmentSaver>(),

@@ -57,6 +57,18 @@ public sealed class ReplyDraftToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Plan_carries_the_tool_marker_and_interactive_priority()
+    {
+        var plan = _tool.Plan("ID1", "x", false, false, null);
+        Assert.Equal(DraftMarker.Tool, plan.Marker);
+        Assert.Equal(WorkPriority.Interactive, plan.Priority);
+        await _tool.RunAsync("ID1", "x", false, false, null, CancellationToken.None);
+        var sent = Assert.Single(_writer.Calls);
+        Assert.Equal(DraftMarker.Tool, sent.Marker);
+        Assert.Equal(WorkPriority.Interactive, sent.Priority);
+    }
+
+    [Fact]
     public async Task Html_is_inserted_as_is_and_reply_all_flows()
     {
         await _tool.RunAsync(" ID1 ", "<b>x</b>", true, true, null, CancellationToken.None);

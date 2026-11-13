@@ -12,12 +12,13 @@ public sealed class CreateDraftToolTests : IDisposable
         public List<(DraftPlan Plan, CancellationToken Ct)> Calls { get; } = [];
         public Exception? Throw { get; set; }
         public Func<DraftPlan, string>? SubjectOverride { get; set; }
+        public bool MarkerSet { get; set; } = true;
 
         public Task<CreatedDraft> CreateAsync(DraftPlan plan, CancellationToken ct)
         {
             Calls.Add((plan, ct));
             if (Throw is not null) throw Throw;
-            return Task.FromResult(new CreatedDraft("ENTRY1", SubjectOverride?.Invoke(plan) ?? plan.Subject));
+            return Task.FromResult(new CreatedDraft("ENTRY1", SubjectOverride?.Invoke(plan) ?? plan.Subject, MarkerSet));
         }
     }
 
@@ -78,6 +79,23 @@ public sealed class CreateDraftToolTests : IDisposable
         Assert.Equal(ActivityKind.Draft, ev.Kind);
         Assert.Equal("draft created: Budget", ev.Summary);
         Assert.Null(ev.Mailbox);
+    }
+
+    [Fact]
+    public async Task Plan_carries_the_tool_marker()
+    {
+        Assert.Equal(DraftMarker.Tool, _tool.Plan(Args("b@x.edu")).Marker);
+        await _tool.RunAsync(Args("b@x.edu"), CancellationToken.None);
+        Assert.Equal(DraftMarker.Tool, Assert.Single(_writer.Calls).Plan.Marker);
+    }
+
+    [Fact]
+    public async Task Marker_not_set_leaves_the_result_unchanged()
+    {
+        var ok = await _tool.RunAsync(Args("b@x.edu", subject: "S"), CancellationToken.None);
+        _writer.MarkerSet = false;
+        var failed = await _tool.RunAsync(Args("b@x.edu", subject: "S"), CancellationToken.None);
+        Assert.Equal(JsonSerializer.Serialize(ok), JsonSerializer.Serialize(failed));
     }
 
     [Fact]

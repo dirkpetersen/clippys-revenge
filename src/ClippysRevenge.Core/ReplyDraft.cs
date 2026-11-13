@@ -8,7 +8,9 @@ public sealed record ReplyPlan(
     string? Mailbox,
     bool ReplyAll,
     string HtmlFragment,
-    bool SignatureAdded);
+    bool SignatureAdded,
+    string Marker = DraftMarker.Tool,                     // "tool" for reply_draft, "ai" for AI drafts (M11.7)
+    WorkPriority Priority = WorkPriority.Interactive);    // Background for AI drafts (SPEC 19.9)
 
 /// <summary>Mailbox is the normalized key the draft ended up in ("" = own).</summary>
 public sealed record RepliedDraft(string EntryId, string Subject, string Mailbox);
@@ -67,7 +69,8 @@ public sealed class ReplyDraftTool
 
         var sig = _signatures.Default(SignatureKind.Reply);
         var fragment = DraftBody.Fragment(body ?? "", html, sig);
-        return new ReplyPlan(id.Trim(), target, replyAll, fragment, DraftBody.SignatureContent(sig) is not null);
+        return new ReplyPlan(id.Trim(), target, replyAll, fragment, DraftBody.SignatureContent(sig) is not null,
+            DraftMarker.Tool, WorkPriority.Interactive);
     }
 
     public async Task<CreateDraftResult> RunAsync(string? id, string? body, bool replyAll, bool html, string? mailbox, CancellationToken ct)

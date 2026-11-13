@@ -12,12 +12,15 @@ internal sealed partial class OutlookMail
     {
         ArgumentNullException.ThrowIfNull(app);
         ArgumentNullException.ThrowIfNull(plan);
+        if (DraftMarker.Normalize(plan.Marker) != plan.Marker)
+            throw new ArgumentException("Unknown draft marker.", nameof(plan));
 
         var resolved = Resolve(app, plan.Id);
         var original = resolved.Item;
         Outlook.MailItem? reply = null;
         Outlook.Store? store = null;
         var saved = false;
+        var markerSet = false;
         try
         {
             var target = plan.Mailbox ?? resolved.Mailbox;
@@ -27,6 +30,9 @@ internal sealed partial class OutlookMail
             reply.Subject = ReplySubject.Normalize(original.Subject);
             reply.BodyFormat = Outlook.OlBodyFormat.olFormatHTML;
             reply.HTMLBody = HtmlBody.InsertAtTop(reply.HTMLBody ?? "", plan.HtmlFragment);
+
+            // Named properties survive Move, so set the marker before it.
+            markerSet = TrySetDraftMarker(reply, plan.Marker);
 
             if (store is not null)
             {
@@ -49,7 +55,7 @@ internal sealed partial class OutlookMail
             saved = true;
             try
             {
-                return new CreatedReply(reply.EntryID, reply.Subject ?? "", target);
+                return new CreatedReply(reply.EntryID, reply.Subject ?? "", target, markerSet);
             }
             catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
             {
@@ -73,4 +79,4 @@ internal sealed partial class OutlookMail
     }
 }
 
-internal sealed record CreatedReply(string EntryId, string Subject, string Mailbox);
+internal sealed record CreatedReply(string EntryId, string Subject, string Mailbox, bool MarkerSet);

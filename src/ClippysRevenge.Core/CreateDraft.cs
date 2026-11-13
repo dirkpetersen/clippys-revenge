@@ -22,9 +22,11 @@ public sealed record DraftPlan(
     string Subject,
     string HtmlFragment,
     bool SignatureAdded,
-    IReadOnlyList<string> AttachmentPaths);
+    IReadOnlyList<string> AttachmentPaths,
+    string Marker = DraftMarker.Tool);
 
-public sealed record CreatedDraft(string EntryId, string Subject);
+/// <summary>MarkerSet is false when the ClippyDraft property couldn't be set (the draft was still saved).</summary>
+public sealed record CreatedDraft(string EntryId, string Subject, bool MarkerSet = true);
 
 public interface IDraftWriter
 {
@@ -138,7 +140,7 @@ public sealed class CreateDraftTool
         var fragment = DraftBody.Fragment(args.Body ?? "", args.Html, sig);
         var signatureAdded = DraftBody.SignatureContent(sig) is not null;
 
-        return new DraftPlan(key, to, cc, bcc, subject, fragment, signatureAdded, paths);
+        return new DraftPlan(key, to, cc, bcc, subject, fragment, signatureAdded, paths, DraftMarker.Tool);
     }
 
     public async Task<CreateDraftResult> RunAsync(CreateDraftArgs args, CancellationToken ct)
