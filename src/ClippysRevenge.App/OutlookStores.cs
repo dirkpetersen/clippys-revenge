@@ -36,7 +36,7 @@ internal sealed class OutlookStores
                 {
                     int type;
                     try { type = (int)store.ExchangeStoreType; }
-                    catch (COMException) { continue; }
+                    catch (COMException ex) when (!ComErrors.IsOutlookGone(ex)) { continue; }
                     if (!StoreCatalog.IsMailboxType(type)) continue;
                     var id = store.StoreID;
                     candidates.Add(new StoreCandidate(
@@ -80,7 +80,7 @@ internal sealed class OutlookStores
         {
             return session.GetStoreFromID(found.StoreId);
         }
-        catch (COMException)
+        catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
         {
             throw StoreCatalog.NotAvailable(mailbox, configured);
         }
@@ -112,7 +112,7 @@ internal sealed class OutlookStores
             def = session.DefaultStore;
             return def?.StoreID;
         }
-        catch (COMException)
+        catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
         {
             return null;
         }
@@ -136,7 +136,7 @@ internal sealed class OutlookStores
             user = entry.GetExchangeUser();
             return user?.PrimarySmtpAddress;
         }
-        catch (Exception ex) when (ex is COMException or InvalidCastException or ArgumentException)
+        catch (Exception ex) when (ex is (COMException or InvalidCastException or ArgumentException) && !ComErrors.IsOutlookGone(ex))
         {
             return null;
         }
