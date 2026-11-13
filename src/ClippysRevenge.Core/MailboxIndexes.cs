@@ -75,7 +75,7 @@ public sealed class MailboxIndexes : IDisposable
     private static string KeyList(IReadOnlyList<string> keys) =>
         string.Join(", ", keys.Select(k => k.Length == 0 ? "\"\" (your own mailbox)" : "\"" + k + "\""));
 
-    private static McpException Unknown(string? input, IReadOnlyList<string> keys)
+    public static McpException Unknown(string? input, IReadOnlyList<string> keys)
     {
         var shown = (input ?? "").Trim();
         if (shown.Length > 100) shown = shown[..100];

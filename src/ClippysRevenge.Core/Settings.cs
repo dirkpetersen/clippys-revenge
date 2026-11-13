@@ -182,17 +182,7 @@ public sealed class Settings
         return null;
     }
 
-    private static bool IsValidAddress(string? s)
-    {
-        if (s is null) return false;
-        s = s.Trim();
-        if (s.Length < 3 || s.Length > 254) return false;
-        int at = s.IndexOf('@');
-        if (at <= 0 || at != s.LastIndexOf('@') || at == s.Length - 1) return false;
-        foreach (var c in s)
-            if (char.IsWhiteSpace(c) || char.IsControl(c) || "<>;,\"()[]\\".Contains(c)) return false;
-        return true;
-    }
+    private static bool IsValidAddress(string? s) => EmailAddress.IsValid(s);
 
     /// <summary>AttachmentDir first, then AllowedFolders, de-duplicated.</summary>
     public IReadOnlyList<string> EffectiveAllowedFolders()
