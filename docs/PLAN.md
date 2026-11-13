@@ -60,29 +60,29 @@ v0.0.1 release.
 - [x] M4.3 Tray: `TrayApp` with the menu from SPEC §6.2 (handlers can be stubs), icon states from `ActivityHub`, original paperclip icons (generated `.ico` resources), balloons with rate limit `{arch:brief}`
 
 ## M5 Outlook core (SPEC §4, §8) — deps: M4
-- Review: [ ] pending
+- Review: [x] done (25628e1, approve after 2 fix rounds)
 - [x] M5.1 `OutlookWorker`: STA thread, two priority queues, attach-only `GetActiveObject`, backoff, `OutlookUnavailable`, fail-fast for interactive work; tray "Start Outlook" `{arch:brief}`
-- [ ] M5.2 `OutlookStores` (list mounted Exchange mailboxes, SMTP, `Get(mailbox)`) `{arch:skip}`
-- [ ] M5.3 `OutlookMail` reads: `ReadForIndex`, `IsInline`, Table-based `EnumerateChanged` / `EnumerateRange` / `ListEntryIds`, the DASL date helper, `GetItem` fallback chain `{arch:brief}`
+- [x] M5.2 `OutlookStores` (list mounted Exchange mailboxes, SMTP, `Get(mailbox)`) `{arch:skip}`
+- [x] M5.3 `OutlookMail` reads: `ReadForIndex`, `IsInline`, Table-based `EnumerateChanged` / `EnumerateRange` / `ListEntryIds`, the DASL date helper, `GetItem` fallback chain `{arch:brief}`
 
 ## M6 Sync (SPEC §10) — deps: M2, M5
-- Review: [ ] pending
-- [ ] M6.1 `SyncService`: changes pass, newest-first backfill, watermarks, progress, purge, all mailboxes, pause/resume, Sync now, rebuild `{arch:brief}`
-- [ ] M6.2 Daily reconcile (delete missing, add missing, refresh unread); retention changes `{arch:brief}`
+- Review: [x] done (63ac9b4, approve after 1 fix round)
+- [x] M6.1 `SyncService`: changes pass, newest-first backfill, watermarks, progress, purge, all mailboxes, pause/resume, Sync now, rebuild `{arch:brief}`
+- [x] M6.2 Daily reconcile (delete missing, add missing, refresh unread); retention changes `{arch:brief}`
 
 ## M7 Mail tools (SPEC §11.1–11.6) — deps: M6
-- Review: [ ] pending
-- [ ] M7.1 `search_emails`, `get_message` (COM fallback), `index_status` (real) `{arch:skip}`
-- [ ] M7.2 `get_attachment`, `save_attachments` (PathPolicy, UniquePath, inline handling) `{arch:brief}`
-- [ ] M7.3 `Signatures`, `create_draft` (own + shared, attachments checked first) `{arch:brief}`
-- [ ] M7.4 `reply_draft` (`Re:: `, HTML insert, shared mailbox drafts) `{arch:skip}`
+- Review: [x] done (188c405, approve after 1 fix round)
+- [x] M7.1 `search_emails`, `get_message` (COM fallback), `index_status` (real) `{arch:skip}`
+- [x] M7.2 `get_attachment`, `save_attachments` (PathPolicy, UniquePath, inline handling) `{arch:brief}`
+- [x] M7.3 `Signatures`, `create_draft` (own + shared, attachments checked first) `{arch:brief}`
+- [x] M7.4 `reply_draft` (`Re:: `, HTML insert, shared mailbox drafts) `{arch:skip}`
 
 ## M8 Calendar tools (SPEC §11.7–11.9, §6.6) — deps: M5, M1.8, M1.6
-- Review: [ ] pending
-- [ ] M8.1 `list_events` (+ shared calendars) `{arch:skip}`
-- [ ] M8.2 `GetFreeBusy` + `find_free_times` `{arch:brief}`
-- [ ] M8.3 `InviteConfirmForm` + confirmation queue + `AwaitingConfirmation` state `{arch:brief}`
-- [ ] M8.4 `CreateMeeting` + `send_meeting_invite` (all modes, Teams note, shared calendar) `{arch:brief}`
+- Review: [x] done (da36574, approve after 1 fix round)
+- [x] M8.1 `list_events` (+ shared calendars) `{arch:skip}`
+- [x] M8.2 `GetFreeBusy` + `find_free_times` `{arch:brief}`
+- [x] M8.3 `InviteConfirmForm` + confirmation queue + `AwaitingConfirmation` state `{arch:brief}`
+- [x] M8.4 `CreateMeeting` + `send_meeting_invite` (all modes, Teams note, shared calendar) `{arch:brief}`
 
 ## M9 UI completion (SPEC §6) — deps: M6, M8.3
 - Review: [ ] pending
@@ -106,6 +106,14 @@ v0.0.1 release.
 - M6.1: write `meta` keys `mailbox_smtp`, `store_id`, `retention_months` (nothing writes them yet). (M2 review)
 - MailboxIndexes small fixes, fold into M6.1 or M7.1: `Search` error should echo the caller's mailbox text, not the normalized key; `Add` must not open SQLite while holding `_lock`; constructor must `Close()` already-opened indexes if a later one throws; `SearchDates` must turn `ArgumentOutOfRangeException` (e.g. `9999-12-31`) into the standard `FormatException`. (M2 review)
 
+- COM release on error paths (M5 review): `OutlookMail.WithTable` (table leaks if column setup throws), `ResolveFolder` (child/match leak on non-gone errors), `OutlookStores.List` (`session.Stores` outside try, enumerator RCW). `FindByMessageId`: `OpenFolder` outside try. Fold into M10.1 or a cleanup task.
+- Perf (M5/M8 reviews): `OutlookStores.Get` runs `List()` (GAL lookup per store) on every call; cache per worker connection.
+- M6 review: `NotifySettingsChanged` cancels the running cycle on every settings change (should only for RetentionMonths); own-mailbox tag is `""` in sync events but `null` in reconcile/retention events; `RebuildAsync` may run `Reset` on the UI thread; no engine-level reconcile test.
+- M7 review: duplicate search-filter mapping (`MailQueries.Search` vs `SearchArgs.ToFilter`); duplicated mailbox validation in CreateDraft/ReplyDraft; `index_status` with `all`/unknown mailbox throws; `Optional<T>` and reply-draft Move-before-Save need SPEC §3/§8 notes.
+- M8 review: `list_events` `truncated` true at exactly 500; shared organizer name should fall back to store display name; `owner.Resolve()` result ignored; `InviteConfirmPresenter` leaks form if Show throws.
+- **Verify live (M10.2):** `CalendarEvents` builds DASL dtstart/dtend in local time; Outlook may compare in UTC (would shift the list_events window).
+- Flaky: `ComWorkerTests.StartsUnavailableAndFailsFast` failed 3/3 once on chain/A, passed after a clean rebuild. Investigate in M10.1.
+
 ## Log
 
 Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
@@ -125,3 +133,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-12 M4.1–M4.3 app shell: MCP host on loopback, SettingsStore + DPAPI, tray (chain/M4 → 440597e)
 2026-11-12 M2 + M4 milestone reviews approved after 1 fix round each; dev at 946 tests passing
 2026-11-12 M5.1 OutlookWorker: Core ComWorker + attach-only App attacher, Start Outlook launcher, 65 tests
+2026-11-12 M5.2–M8.4 built in 3 parallel tracks, M5/M6/M7/M8 reviews approved; merged to dev, 1618 tests
