@@ -27,6 +27,10 @@ artwork.
    and in `Send` mode every invite needs the user's click in a **tray
    confirmation dialog** (§6.6). Invites can also be set to draft-only or
    disabled.
+   It also **never deletes or moves email**: no `Delete`, `PermanentDelete`
+   or `EmptyDeletedItems` on Outlook items or folders. The only `Move`
+   puts a reply draft it just created into Drafts. Reconcile and retention
+   remove rows from Clippy's own index only, never mail.
 5. Reply drafts always have a subject that starts with **`Re:: `**.
 6. Search runs against local **SQLite + FTS5** indexes: one database for
    the user's own mailbox, plus **one database per shared mailbox** the user

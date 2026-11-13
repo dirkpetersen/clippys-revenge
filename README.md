@@ -1,4 +1,30 @@
-# Clippy's Revenge
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="Clippy's Revenge: a paperclip wrestling an envelope" width="300">
+</p>
+
+<h1 align="center">Clippy's Revenge</h1>
+
+<p align="center"><b>Your classic Outlook, as a local MCP server for Claude Code. No cloud, no Graph, no OAuth.</b></p>
+
+<p align="center">
+  <a href="https://github.com/dirkpetersen/clippys-revenge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/dirkpetersen/clippys-revenge/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/dirkpetersen/clippys-revenge/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/dirkpetersen/clippys-revenge?include_prereleases&sort=semver&label=release"></a>
+  <a href="https://github.com/dirkpetersen/clippys-revenge/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/dirkpetersen/clippys-revenge/total?label=downloads"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/dirkpetersen/clippys-revenge"></a>
+  <br>
+  <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white">
+  <img alt="Windows 11" src="https://img.shields.io/badge/platform-Windows%2011-0078D4">
+  <img alt="Classic Outlook via COM" src="https://img.shields.io/badge/Outlook-classic%20(COM)-0F6CBD">
+  <img alt="MCP server" src="https://img.shields.io/badge/MCP-streamable%20HTTP-6E56CF">
+  <img alt="Works from WSL" src="https://img.shields.io/badge/works%20from-WSL-E95420?logo=ubuntu&logoColor=white">
+  <br>
+  <img alt="Never sends email" src="https://img.shields.io/badge/never-sends%20email-2EA043">
+  <img alt="Never deletes email" src="https://img.shields.io/badge/never-deletes%20email-2EA043">
+  <img alt="Localhost only" src="https://img.shields.io/badge/network-localhost%20only-2EA043">
+  <a href="https://github.com/dirkpetersen/clippys-revenge/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/dirkpetersen/clippys-revenge"></a>
+</p>
+
+---
 
 A fast Outlook MCP server that works without the cloud. It is a Windows tray
 app that drives your **classic Outlook** desktop client through COM, keeps a
