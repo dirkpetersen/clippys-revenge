@@ -128,6 +128,8 @@ internal static class Program
                 if (indexes is not null && mail is not null && sync is not null)
                 {
                     s.AddSingleton(indexes).AddSingleton(mail).AddSingleton(sync);
+                    s.AddSingleton<IReplyDraftWriter>(new OutlookReplyDraftWriter(worker, mail))
+                        .AddSingleton<ReplyDraftTool>();
                     s.AddSingleton<IAttachmentSaver, OutlookAttachmentSaver>()
                         .AddSingleton(sp => new AttachmentExport(sp.GetRequiredService<IAttachmentSaver>(),
                             sp.GetRequiredService<MailboxIndexes>(), () => settings, hub));
