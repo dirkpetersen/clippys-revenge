@@ -13,7 +13,7 @@ public sealed class RollingFileLogOptions
     /// <summary>Read on every call, so a LogLevel setting change is live.</summary>
     public Func<LogLevel> MinLevel { get; init; } = static () => LogLevel.Information;
 
-    /// <summary>Secrets (the token) that are replaced by <see cref="LogRedactor.Mask"/> wherever they appear.</summary>
+    /// <summary>Secrets (the token and the saved API key) that are replaced by <see cref="LogRedactor.Mask"/> wherever they appear.</summary>
     public Func<IEnumerable<string?>> Secrets { get; init; } = static () => [];
 
     public int RetainDays { get; init; } = 7;
@@ -31,6 +31,9 @@ public static partial class LogRedactor
     [GeneratedRegex(@"(?i)\bBearer\s+[^\s""']+")]
     private static partial Regex BearerRegex();
 
+    [GeneratedRegex(@"sk-ant-[A-Za-z0-9_-]+")]
+    private static partial Regex AnthropicKeyRegex();
+
     public static string Redact(string text, IEnumerable<string?> secrets)
     {
         foreach (var s in secrets)
@@ -40,6 +43,7 @@ public static partial class LogRedactor
                 text = text.Replace(s, Mask, StringComparison.Ordinal);
             }
         }
+        text = AnthropicKeyRegex().Replace(text, Mask);
         return BearerRegex().Replace(text, "Bearer " + Mask);
     }
 }

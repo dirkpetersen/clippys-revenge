@@ -141,6 +141,22 @@ public class TrayPresenterTests
             p.Update(ActivityState.Backfilling, Lbl("", 5, 10), TrayStats.Unknown, null).Tooltip);
     }
 
+    [Theory]
+    [InlineData("drafting replies", 2, 5, "drafting replies (2 / 5)")]
+    [InlineData("drafting replies", 0, 0, "drafting replies")]
+    [InlineData("", 0, 0, "drafting replies")]
+    [InlineData("drafting replies", 1200, 1500, "drafting replies (1,200 / 1,500)")]
+    public void Drafting(string label, int done, int total, string text)
+    {
+        var (p, _) = Make();
+        var v = p.Update(ActivityState.Drafting, Lbl(label, done, total), TrayStats.Unknown, null);
+        Assert.Equal(TrayText.Prefix + text, v.Tooltip);
+        Assert.Equal(TrayText.Prefix + text, v.StatusLine);
+        Assert.Equal(TrayIconKey.Busy, v.Icon);
+        Assert.False(v.Animated);
+        Assert.False(v.ShowStartOutlook);
+    }
+
     [Fact]
     public void Syncing()
     {

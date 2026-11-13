@@ -36,6 +36,16 @@ internal static class Program
         }
         var settings = loaded.Settings;
         var tokens = new TokenHolder(loaded.Token);
+        // Load the saved API key once so log redaction knows it (SPEC 5.1). It is never used here.
+        var apiKeyUnreadable = false;
+        try
+        {
+            store.LoadApiKey();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            apiKeyUnreadable = true;
+        }
 
         // Rolling file log (SPEC 5.1); level is live from the LogLevel setting, the token is masked.
         var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClippysRevenge", "logs");
@@ -43,11 +53,12 @@ internal static class Program
         {
             Directory = logDir,
             MinLevel = () => settings.LogLevel,
-            Secrets = () => [tokens.Current],
+            Secrets = () => [tokens.Current, store.CachedApiKey],
         });
         var loggerFactory = LoggerFactory.Create(b => b.AddDebug().AddProvider(fileLog));
         var logger = loggerFactory.CreateLogger("ClippysRevenge");
         logger.LogInformation("Clippy's Revenge starting.");
+        if (apiKeyUnreadable) logger.LogWarning("anthropic-key.bin could not be read.");
         var hub = new ActivityHub();
         var worker = new OutlookWorker(hub, loggerFactory.CreateLogger("OutlookWorker"));
         worker.Start();
