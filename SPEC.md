@@ -93,15 +93,35 @@ src/ClippysRevenge.Core/        net10.0: no Windows, no COM, testable on Linux/W
     ComWorker.cs            ComWorker<TApp>: the worker loop of §4 (queues, attach, backoff, probe) over IComAttacher<TApp>
     OutlookConnection.cs    WorkPriority, OutlookConnectionState, IComAttacher<TApp>, AttachBackoff, ComErrors,
                             OutlookUnavailableException, OutlookAppPath
+    MailTable.cs            DASL date filters, Table columns/rows, tie-safe paging, Outlook dates
+    MailFolders.cs          indexed-folder paths (Inbox/Sent Items canonical), ResolvedFolder
+    MailItemRead.cs         inline rule, SMTP choice, To/CC format, GetItem chain, ItemNotFoundException
+    SyncModels.cs           IMailSource (the COM side of sync), plans, results, FolderPaths, SyncLabels
+    SyncEngine.cs           one sync cycle for one mailbox (§10)
+    SyncService.cs          background indexing loop (BackgroundService), all mailboxes
+    AttachmentSelection.cs  get_attachment / save_attachments selection rules
+    AttachmentExport.cs     save-dir policy, bulk save loop over IAttachmentSaver
+    SearchArgs.cs           tool args -> SearchFilter
+    Signatures.cs           default signature: name source -> %APPDATA%\Microsoft\Signatures\<name>.htm, decoded
+    DraftBody.cs            draft HTML fragment: new text + signature body
+    CreateDraft.cs          create_draft validation (recipients, mailbox, PathPolicy) and orchestration behind IDraftWriter
+    FreeTimeFinder.cs       find_free_times logic over IFreeBusySource (App supplies COM)
+    InviteConfirm.cs        invite dialog view model, external-recipient rule, one-at-a-time confirmation queue
+    MeetingInvite.cs        MeetingRequest validation, IMeetingCalendar, InviteTexts, MeetingInviteResult
+    MeetingInvites.cs       send_meeting_invite orchestration (§11.9) behind IMeetingCalendar
 src/ClippysRevenge.App/         net10.0-windows (WinExe): COM, tray, host
     Program.cs              single-instance check, wiring, message loop
     OutlookWorker.cs        ComWorker<Outlook.Application> on an STA thread + the GetActiveObject attacher
     OutlookStores.cs        list mounted Exchange mailboxes, resolve their SMTP
     OutlookMail.cs          COM reads/writes (items, attachments, drafts)
+    OutlookMail.Attachments.cs  partial: SaveAttachment
     OutlookCalendar.cs      events, free/busy, meeting invites
-    Signatures.cs           locate + load the default Outlook signature
-    SyncService.cs          background indexing (BackgroundService), all mailboxes
+    SignatureRegistry.cs    reads NewSignature/ReplySignature from HKCU (feeds Core Signatures)
+    OutlookMailSource.cs    IMailSource over OutlookWorker/OutlookMail
+    OutlookDraftWriter.cs   IDraftWriter on OutlookWorker + OutlookMail.CreateDraft
+    OutlookFreeBusySource.cs IFreeBusySource on OutlookWorker
     McpTools.cs             [McpServerToolType] tool definitions
+    AttachmentTools.cs      the two attachment tools
     DpapiProtector.cs       ISecretProtector over DPAPI (CurrentUser)
     StartupRegistration.cs  HKCU Run key
     OutlookLauncher.cs      Start Outlook: App Paths lookup + Process.Start (the only Outlook launch)
@@ -338,7 +358,10 @@ omits "· synced …". The second line is
 `Last sync: <relative|never>`, followed by ` · paused` while paused
 or ` · next in N min` otherwise. Regenerate auth token asks
 "Regenerate the auth token?" with OK/Cancel, and Cancel is the
-default button.
+default button. Rebuild index… asks "Rebuild the email index?" with
+buttons **My mailbox**, **All mailboxes** (only when a shared mailbox is
+enabled) and **Cancel** (the default). **Sync now** is disabled while
+paused.
 
 **Outlook not running.** The first status line reads
 `Clippy — Outlook is not running`, and **Start Outlook** appears. It
@@ -457,7 +480,9 @@ Balloon notifications are rate-limited to one per minute. They fire on:
 - Outlook becoming unavailable for more than 2 minutes;
 - an error state lasting more than 2 minutes, when `NotifyOnErrors` is on;
 - an invite being sent or saved as a draft after a timeout;
-- an initial backfill finishing (per mailbox).
+- an initial backfill finishing (per mailbox): "It looks like you're
+  trying to find an email. I finished indexing <your mailbox|smtp>: <n>
+  emails."
 
 The limit applies per balloon. A balloon that hits the limit is
 dropped, not queued. The 2-minute balloons fire once per
@@ -489,6 +514,20 @@ sent.
 - A countdown shows the remaining time. When `InviteConfirmTimeoutSeconds`
   runs out, the meeting is **saved as a draft**.
 - Invite requests are queued, and only one dialog is shown at a time.
+- The countdown for each invite starts when its dialog is shown, not
+  when it is queued. A click at or after the deadline counts as a
+  timeout. If the tool call is cancelled, its dialog is closed (or never
+  shown) and nothing is created. On shutdown, pending invites fail with
+  "Clippy's Revenge is shutting down, so the invite was not created. Try
+  again after it restarts."
+- A recipient is highlighted as outside the organization unless it
+  resolved to an Exchange address entry or its email domain equals the
+  organizer's SMTP domain or is a subdomain of it. Anything that can't
+  be classified is highlighted. Highlighted rows also say "— outside
+  your organization", and a summary line gives the count.
+- Closing the dialog without a button (title-bar X, Alt+F4) counts as
+  no choice, which `InviteGate` turns into `Cancel`. When time runs out,
+  Send and Save as draft are disabled while the draft is saved.
 - The COM worker is **not** blocked while the dialog is open. The tool
   first resolves the recipients (COM), then awaits the dialog (UI), then
   creates and sends or saves the meeting (COM). `InviteGate` in Core turns
@@ -540,7 +579,9 @@ All calls run through `OutlookWorker`.
      indexed folders with
      `@SQL="http://schemas.microsoft.com/mapi/proptag/0x1035001F" = '<internet message id>'`.
   4. If it is still not found, throw `ItemNotFoundException`.
-- `ReadForIndex(MailItem)` → `IndexedEmail`: entry id, store id, internet
+- `ReadForIndex(MailItem, folder)` → `IndexedEmail` (the folder supplies
+  the canonical path, store id and time field; without it the folder is
+  derived from `item.Parent`): entry id, store id, internet
   message id, folder, subject, sender name, **SMTP** sender (via
   `GetExchangeUser().PrimarySmtpAddress` for Exchange senders), To, CC,
   time (`ReceivedTime` for Inbox, `SentOn` for Sent), last modification
@@ -561,6 +602,42 @@ All calls run through `OutlookWorker`.
 - `IsInline(Attachment)`: true when the attachment type is `olOLE`, when
   `PR_ATTACHMENT_HIDDEN` is set, or when it is an image with
   `PR_ATTACH_CONTENT_ID` referenced in the HTML body.
+- **Details (M5.3)**:
+  - `OutlookMail` methods run on the worker thread and take the
+    `Outlook.Application`; callers wrap them in `RunAsync`. Folders
+    are resolved once to a `ResolvedFolder` (mailbox, canonical path,
+    folder EntryID, store id, time field) and reopened with
+    `GetFolderFromID`. `Inbox`/`Sent Items` and their subfolders use
+    the store's default folders; `Sent Items` and its subfolders use
+    `SentOn`, every other folder `ReceivedTime`.
+  - Only `IPM.Note` and `IPM.Note.*` items are indexed (meeting
+    requests, reports and other classes are skipped). Items without a
+    received/sent time are skipped by the Table passes.
+  - DASL date literals are UTC `yyyy-MM-dd HH:mm` (invariant culture),
+    built only by `DaslFilter`. Every bound is widened by one day and
+    the exact bounds are applied in Core on the Table's UTC values, so
+    neither minute precision nor local/UTC interpretation can drop
+    items. Table date columns are added by MAPI property tag, so they
+    come back in UTC; all times are truncated to whole seconds. A
+    date of 4501-01-01 means "none".
+  - `EnumerateChanged` (ascending `LastModificationTime`, inclusive
+    lower bound) and `EnumerateRange` (newest first, `from` inclusive,
+    `to` exclusive) return pages of at most 500 rows that never split
+    a group of equal times, plus `HasMore`. The next changes page uses
+    `last + 1 s`; the next backfill page uses `to = last`.
+  - `To`/`CC` are stored as `Name <smtp>; …` (at most 500 recipients
+    per field). SMTP addresses come from `PR_SMTP_ADDRESS` /
+    `PR_SENDER_SMTP_ADDRESS`, the address itself, or the Exchange
+    user, in that order (sender: Exchange user first for `EX`).
+  - `IsInline` image test: MIME type `image/*` or an image file
+    extension, and `cid:<content id>` appears in the HTML body as a
+    whole token. `HTMLBody` is read only when needed.
+  - `GetItem` for an id that isn't indexed tries
+    `GetItemFromID(id, storeId)` in each enabled mailbox, own first.
+    `ItemNotFoundException` is an `McpException`:
+    `Email "<id>" was not found in Outlook. It may have been deleted or moved to a folder that isn't indexed. Run search_emails again to get a current id.`
+    A configured folder that doesn't exist gives
+    `Folder "<path>" was not found in <your own mailbox | mailbox "<smtp>">. Check the indexed folders in the Clippy tray settings.`
 - `CreateDraft(mailbox, …)`: for the own mailbox, `CreateItem(olMailItem)`.
   For a shared mailbox, the item is added to **that mailbox's Drafts
   folder** and `SentOnBehalfOfName` is set to the shared address. Then
@@ -583,11 +660,20 @@ All calls run through `OutlookWorker`.
   `%APPDATA%\Microsoft\Signatures\<name>.htm`. It returns null when it is
   not set or not stored locally (cloud-roaming signatures may not be), and
   the tool result then says `signature_added: false`.
-- `GetFreeBusy(email, startDate, intervalMinutes)` → `string?`: calls
+  The name is refused (null) when blank, longer than 200 characters,
+  `.`/`..`, or containing `\ / : * ? " < > |` or control characters. The
+  registry value may be a string or UTF-16LE bytes. Files over 1 MiB are
+  ignored. The file is decoded by BOM, then by its `charset=` declaration,
+  then as strict UTF-8, else Windows-1252. Only the content of its
+  `<body>` is used; head styles and images from the `<name>_files` folder
+  are not carried over in v1. Text and signature are joined with `<br>`.
+- `GetFreeBusy(email, from, to, intervalMinutes)` → `string?`: calls
   `Session.CreateRecipient(email)`, then `Resolve()`, then
-  `AddressEntry.GetFreeBusy(start, interval, true)`. Outlook returns about
-  30 days per call, so longer ranges are fetched in **28-day chunks** and
-  joined. It returns null when the recipient can't be resolved.
+  `AddressEntry.GetFreeBusy(chunkStart, interval, true)` for each 28-day
+  chunk from `FreeBusy.ChunkStarts(from, to)`. The chunks are joined by
+  `FreeBusy.FetchChunked` (Core). It returns null when the recipient can't
+  be resolved, when a chunk is null or short, or when a `COMException`
+  other than the §4 'Outlook is gone' HRESULTs occurs.
 - `CreateMeeting(mailbox?, …)`: an `AppointmentItem` with
   `MeetingStatus = olMeeting`, recipients added as `olRequired`, and
   `Recipients.ResolveAll()` (it fails if any recipient is unresolved). For
@@ -595,7 +681,14 @@ All calls run through `OutlookWorker`.
   (`GetSharedDefaultFolder(…, olFolderCalendar)`). This needs delegate or
   editor rights, and the error says so when they're missing. It then calls
   `.Send()` or `.Save()` as decided by `InviteGate`. This is the **only**
-  `.Send()` call in the codebase.
+  `.Send()` call in the codebase. It takes the `InviteDecision` and calls
+  `.Send()` only for `InviteAction.Send` and `.Save()` only for
+  `SaveDraft`. Any other action throws before COM is touched. The own
+  mailbox uses `CreateItem(olAppointmentItem)`. On unresolved recipients
+  the item is discarded unsaved. It never displays an Inspector.
+  Recipients count as internal (not highlighted) when their
+  `AddressEntryUserType` is an Exchange user, distribution list, public
+  folder, agent or organization entry.
 
 ## 9. Index (`EmailIndex`, `MailboxIndexes`, Core)
 
@@ -636,7 +729,7 @@ CREATE TABLE sync_state (folder_key TEXT PRIMARY KEY,  -- folder EntryID
   oldest_synced INTEGER,          -- lower edge reached by backfill
   last_reconcile INTEGER, backfill_complete INTEGER);
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
-  -- schema_version, mailbox_smtp, store_id, retention_months
+  -- schema_version, mailbox_smtp, store_id, retention_months, last_sync
 ```
 
 There is **no attachment content column, ever**. The FTS table is
@@ -679,6 +772,11 @@ connection; the library pools them.
 - `Status()` → counts per folder, oldest and newest item, DB size, last
   sync, backfill complete.
 - `GetSyncState`/`SetSyncState(folderKey, …)`.
+- `GetMeta(key)` / `SetMeta(key, value?)` (null deletes; `schema_version`
+  can't be written). `GetSyncInfo(entryIds)` → entry id → (last modified,
+  unread) for known ids, used by sync to skip unchanged rows.
+  `Status().LastSync` is `meta.last_sync` when set, else the latest
+  `last_reconcile`.
 - `Close()` → `SqliteConnection.ClearPool(…)` so the file can be deleted
   (rebuild, mailbox removal).
 - `FtsQuery.Build(string? userText)` → `string?`: quotes every token, so
@@ -721,11 +819,15 @@ connection; the library pools them.
   also works on a disabled mailbox and deletes the `.db`, `-wal` and `-shm`
   files. The own mailbox can't be disabled or removed here; rebuilding it
   is `SyncService`'s job (§10).
+- `Reset(mailbox)` (own or an open shared mailbox) closes the index,
+  deletes its files and opens a fresh one in the same place in the order.
+  Used by Rebuild (§10).
 
-## 10. Sync (`SyncService`, App, `BackgroundService`)
+## 10. Sync (`SyncService`, Core, `BackgroundService`)
 
 - Loop: wait for the interval, a **Sync now** click, or a settings change.
-  Do nothing while paused or while Outlook is unavailable. Run the cycle
+  Do nothing while paused or while Outlook is unavailable (except the
+  RetentionMonths check below, which needs no COM). Run the cycle
   below for the own mailbox, then for each enabled shared mailbox.
 - Cycle, for each indexed folder of the mailbox:
   1. `cutoff = now - RetentionMonths` (that mailbox's value).
@@ -743,17 +845,63 @@ connection; the library pools them.
      interrupted backfill resumes where it stopped and recent mail becomes
      searchable first. It reports as `Backfilling` with `done/total`. When
      it reaches the cutoff, set `backfill_complete`.
-  5. **Reconcile, once a day:** `ListEntryIds(folder, cutoff)` compared with
-     the index. Delete rows for mail that is gone, add mail that is missing,
-     and refresh `unread` with `SetUnread`. Read-state changes may not
-     update `LastModificationTime`; this catches them either way (§17).
+  5. **Reconcile, once a day:** only for a folder whose backfill is
+     complete and whose `last_reconcile` is empty or at least 24 h old.
+     `ListEntryIds(folder, cutoff)` compared with every index row of that
+     folder (entry ids match case-insensitively). Add mail that is missing,
+     refresh `unread` with `SetUnread`, and delete rows for mail that is gone,
+     but only rows at least one day newer than the cutoff (older ones are left
+     to the purge). If Outlook lists no items at all while 20 or more rows
+     would be deleted, nothing is deleted that day. `last_reconcile` is set
+     only when the whole pass succeeds. Read-state changes may not update
+     `LastModificationTime`; this catches them either way (§17).
 - After all folders: `PurgeOlderThan(cutoff)` (`Purging` state), and emit a
   `Sync` event with the per-folder counts, tagged with the mailbox.
 - **Rebuild index** (one mailbox or all): stop sync, `Close()`, delete the
   DB, and start again from step 2.
-- **Changing RetentionMonths:** a larger value just moves the cutoff. The
-  backfill pass then runs again because `oldest_synced > cutoff`. A smaller
-  value runs a purge immediately.
+- **Changing RetentionMonths:** each index records the value it was synced
+  with in `meta.retention_months`. At the start of each mailbox cycle, and
+  on a settings change even while paused or while Outlook is unavailable,
+  the effective value is compared with it. A larger value clears
+  `backfill_complete` for folders whose `oldest_synced` is after the new
+  cutoff, so the backfill pass runs again. A smaller value raises
+  `oldest_synced` to the new cutoff and runs a purge immediately. The meta
+  value is written last.
+- Sync logic is in Core (`SyncEngine`, `SyncService`) behind `IMailSource`;
+  the App's `OutlookMailSource` runs each call as one Background work item
+  on `OutlookWorker`.
+- The `folder` column holds the configured folder path in canonical form
+  (`Inbox`, `Sent Items`, `Inbox\Projects`), whatever Outlook calls it.
+- Both passes skip rows whose stored `last_modified` (whole seconds) is
+  unchanged; a row whose only change is `UnRead` is updated with
+  `SetUnread` without opening the item. Date filters are inclusive, so
+  boundary rows are re-listed but not re-read. Rows older than the cutoff
+  are always dropped.
+- The first cycle runs at startup. The interval counts from the end of the
+  previous cycle. Several Sync now / settings-change signals during a cycle
+  give one follow-up cycle.
+- Pause cancels the running cycle at the next batch boundary (finished
+  batches are kept) and holds the `Paused` state; Sync now is ignored while
+  paused; Resume starts a cycle at once. The paused state isn't saved.
+- `Syncing` is shown only when a folder has rows to read (`Inbox +12`;
+  shared mailboxes are prefixed `helpdesk@… `). `Backfilling` is labelled
+  `Inbox (2025-11 → now)` with the cutoff month. `Purging` runs only when
+  the index holds rows older than the cutoff.
+- The `Sync` event is emitted only when something changed
+  (`Inbox +12, Sent +3 (1.8 s)`, `Sent Items` shown as `Sent`). Backfill
+  events: `Inbox: backfill started, 8,000 emails to index (2025-11 → now)`
+  and `Inbox: backfill complete`. Purge event:
+  `removed 310 emails older than 2025-11-12`.
+- A mailbox that fails holds an `Error` state `sync failed for <mailbox>`
+  until its next successful cycle; other mailboxes keep syncing. A mailbox
+  that isn't mounted, or a folder that doesn't exist, is skipped with one
+  `Error` event per episode and no Error state. Outlook going away
+  mid-cycle ends the cycle quietly.
+- Rebuild cancels the running cycle, waits for it, calls
+  `MailboxIndexes.Reset` for each target, and starts a cycle. Each mailbox
+  cycle writes `meta` `mailbox_smtp`, `store_id`, `retention_months` and
+  `last_sync` (`retention_months` only after the RetentionMonths check
+  above has been applied).
 
 ## 11. MCP tools (`McpTools`, App)
 
@@ -826,6 +974,17 @@ falls back to a live read through COM.
 
 Fetches the attachment live through COM. `save_dir` must pass `PathPolicy`.
 
+Details (M7.2): `save_dir` defaults to `AttachmentDir`. Selection:
+`position` is the 1-based attachment index; `filename` matches the whole
+file name case-insensitively. If both are given they must agree. With
+neither, the single non-inline attachment is used (or the only
+attachment); otherwise the error lists the attachments
+(`1 "report.pdf", 2 "image001.png" (inline)`) and asks for `filename` or
+`position`. Inline attachments can be fetched by name or position. The
+file is saved with `FileNames.UniquePath` (never overwrites); `filename`
+in the result is the attachment's original name and `size` the bytes
+written.
+
 ### 11.4 `save_attachments(save_dir?, <all search filters incl. mailbox>, include_inline=false, limit=50)`
 
 `attachment_name` and `attachment_ext` also choose *which* attachments get
@@ -833,11 +992,34 @@ saved. Files with the same name are saved as `name (2).ext`.
 
 Returns `{saved[], failed[], count}`.
 
+Details (M7.2): `limit` (clamped 1–200) and `offset` count **emails**, as
+in `search_emails`. An attachment is saved when it matches
+`attachment_name` and `attachment_ext` itself (same matching as search)
+and is not inline, unless `include_inline=true`. Emails are saved one
+after another, newest first, into one folder. `saved[]` entries are
+`{id, mailbox, position, filename, path, size}`, `failed[]` entries
+`{id, mailbox, position, filename, error}`, and `count` is the number
+saved. A per-email or per-attachment failure goes to `failed[]` and the
+rest continue; when Outlook becomes unavailable, all remaining
+attachments are reported as failed with that message. An attachment that
+no longer matches its indexed name and position is not saved. The result
+also has `note`, set when nothing matched or nothing was eligible.
+
 ### 11.5 `create_draft(to, subject, body, cc?, bcc?, html=false, attachments[]?, mailbox?)` → `{id, subject, mailbox, signature_added}`
 
 Only saves the draft. Every attachment path is checked with `PathPolicy`
 and for existence **before** anything is created. With `mailbox`, the
 draft goes into that mailbox's Drafts folder and is sent on its behalf.
+
+Checks run in this order and the first failure is returned: mailbox
+(`all` is refused), recipients (`to` needs at least one; parse errors are
+prefixed with `"to": `, `"cc": ` or `"bcc": `), attachments. Relative
+attachment paths resolve under `AttachmentDir`. Line breaks in the
+subject become spaces. Errors end with `Nothing was created.` The
+result's `mailbox` is `""` for the own mailbox. A created draft records a
+`Draft` event `draft created: <subject>` (subject cut to 80 characters);
+a refused path records `Blocked`
+`create_draft: attachment <n> refused (<reason>)`, without the path.
 
 ### 11.6 `reply_draft(id, body, reply_all=false, html=false, mailbox?)` → `{id, subject, mailbox, signature_added}`
 
@@ -881,6 +1063,26 @@ outside the Exchange org. They are left out of the availability check and
 reported back. The server keeps no state between calls: for "send #2", the
 model passes the `start` and `end` of suggestion 2.
 
+Details (M8.2):
+
+- Arguments are checked before Outlook is called. `duration_minutes` is
+  1–1440, `earliest_hour` 0–23, `latest_hour` 1–24 and later than the
+  start. At most 50 recipients. `days_ahead` is clamped to 1–60 and counts
+  calendar days from the day of `date_from` (default now);
+  `max_suggestions` is clamped to 1–20. `date_from` is parsed like
+  `search_emails`.
+- `mailbox` must be own or an enabled shared mailbox (the
+  `MailboxIndexes` error).
+- The owner is the Outlook current user's primary SMTP or the shared
+  mailbox entry. It is appended unless already listed.
+- An attendee is unknown when free/busy is null, empty, shorter than the
+  range, or has an invalid code. `attendees` lists only the known
+  attendees.
+- Suggestions are the first `max_suggestions` whole free blocks.
+  `start`/`end` are `yyyy-MM-ddTHH:mm:sszzz`.
+- With no suggestions, `text` explains why: no readable free/busy, or no
+  free block between the first and last day searched.
+
 ### 11.9 `send_meeting_invite(recipients, subject, start, end, body?, location?, teams=false, mailbox?)` — **the only sending tool**
 
 What it does depends on `MeetingInviteMode`:
@@ -904,10 +1106,29 @@ to confirm in a dialog, and the invite goes out immediately once they
 click Send**. Every outcome produces a bold `Invite` activity event, and
 sends and timeouts produce a notification.
 
-`teams=true` adds a Teams meeting through the Teams add-in when it is
-available. If it isn't, the meeting is still created and a note is
-returned. With `mailbox`, the meeting is organized from that mailbox's
-calendar (§8).
+`teams=true` (v1, (confirmed by the user 2026-11-12), §18): no Teams automation.
+The Outlook object model has no supported call to add a Teams meeting,
+so the meeting is created exactly as with `teams=false`, the result has
+`teams: false`, and a note is returned:
+`A Teams meeting was requested, but Clippy's Revenge can't add one through the Teams add-in on this PC, so the invite has no Teams link. If one is needed, the user can open the meeting in Outlook and click Teams Meeting.`
+No Inspector, `ExecuteMso` or `SendKeys` is used. With `mailbox`, the
+meeting is organized from that mailbox's calendar (§8).
+
+Details (M8.4): `start`/`end` take the §11.1 date-time forms (not
+date-only), and an offset is converted to local time. `end` must be
+after `start` and in the future. Blank `recipients`, `subject`, `start`
+or `end` are errors. The mode is checked first, so `Disabled` refuses
+before anything else. Recipients are resolved in `Send` and `DraftOnly`
+mode before anything is created or shown. If the user lowers
+`MeetingInviteMode` while a dialog is open, the lower mode is used.
+Once a decision is made, the request's cancellation no longer aborts
+it. Results other than `cancelled` are
+`{status, reason?, message, subject, start, end, mailbox, organizer, recipients, teams, note?}`,
+where `start`/`end` use the find_free_times format and `teams` is true
+only when a Teams link was added. Each call records exactly one
+`Invite` event, and the body never appears in events. The orchestration
+is Core's `MeetingInvites`. COM sits behind `IMeetingCalendar`
+(`OutlookCalendar`).
 
 ### 11.10 `index_status(mailbox?)`
 
@@ -1194,6 +1415,20 @@ Decided (2026-11-12):
   after Start Outlook, no retry of the failed item) and the §6.2 Start
   Outlook details. The `GetActiveObject` attach has no live test in M5.1
   (the test project can't reference the Windows App); M10.2 covers it.
+- Outlook reads (M5.3): see §8 Details (M5.3). The live DASL test (§15)
+  also checks that Table date columns are UTC.
+- Sync (M6.1): sync logic lives in Core behind `IMailSource` so it is
+  tested with a fake; the tray's email count is the sum over all enabled
+  mailboxes, and "last sync" is the end of the last full cycle.
+- Sync (M6.2): reconcile and retention logic live in Core
+  (`MailboxReconciler`, `RetentionApplier`) behind `IReconcileSource`; the
+  App supplies the COM adapter. Reconcile reports as `Syncing`
+  (`Reconciling <folder>`) and records a `Sync` event only when it changed
+  something.
+- Drafts (M7.3): recipients are added by address only
+  (`Recipients.Add(email)`), without resolving; Outlook resolves them when
+  the user opens the draft. `McpTools` is a partial class; tool services
+  are injected as tool-method parameters from DI.
 
 Open:
 
@@ -1208,3 +1443,8 @@ Open:
    the object-model guard when no up-to-date antivirus is registered. The
    tray shows this as the `Error` state "Outlook blocked programmatic
    access".
+4. **Teams link** (confirmed by the user 2026-11-12): the Outlook object model
+   has no supported call to add a Teams meeting, so v1 never adds one
+   (option A): `teams=true` creates the meeting without a Teams link and
+   returns the note (§11.9). No Inspector, `ExecuteMso` or `SendKeys`
+   automation.
