@@ -987,8 +987,10 @@ connection; the library pools them.
      folder (entry ids match case-insensitively). Add mail that is missing,
      refresh `unread` with `SetUnread`, and delete rows for mail that is gone,
      but only rows at least one day newer than the cutoff (older ones are left
-     to the purge). If Outlook lists no items at all while 20 or more rows
-     would be deleted, nothing is deleted that day. `last_reconcile` is set
+     to the purge). If Outlook lists no items at all, or none of its ids match
+     an index row, or more than half of the in-window rows would go, while 20
+     or more rows would be deleted, nothing is deleted (and for the last two
+     `last_reconcile` stays unset). `last_reconcile` is set
      only when the whole pass succeeds. Read-state changes may not update
      `LastModificationTime`; this catches them either way (§17).
 - After all folders: `PurgeOlderThan(cutoff)` (`Purging` state), and emit a
@@ -1520,6 +1522,10 @@ Decided (2026-11-12):
 - Table rows use the long-term EntryID (`PR_LONGTERM_ENTRYID_FROM_TABLE`,
   fallback to the `EntryID` column) so they match `MailItem.EntryID` in the
   index.
+- Reconcile refuses mass deletes when Outlook's ids don't match the index
+  (no overlap, or over half the in-window rows missing, with 20 or more
+  candidates), and abandons the pass without setting `last_reconcile` if
+  reads return ids that weren't requested.
 - Calendar DASL bounds are UTC, verified live 2026-11-13. Free/busy code
   `5` (no information, past the published horizon) counts as not busy.
 
