@@ -463,4 +463,38 @@ public class SettingsTests
         Assert.True(s.SharedMailboxes[0].Enabled);
         Assert.Equal(2, s.SharedMailboxes[0].IndexedFolders.Count);
     }
-}
+
+    // Updates (SPEC 5.2, 20)
+    [Fact]
+    public void Updates_DefaultsToInstall_AndRoundTrips()
+    {
+        Assert.Equal(UpdateMode.Install, S().Updates);
+        var s = S();
+        s.Updates = UpdateMode.Off;
+        Assert.Contains("\"Updates\": \"Off\"", s.ToJson());
+        Assert.Equal(UpdateMode.Off, Settings.FromJson(s.ToJson()).Updates);
+        Assert.Equal(UpdateMode.Install, Settings.FromJson("{}").Updates);
+        Assert.Equal(UpdateMode.Off, Settings.FromJson("{\"Updates\":\"Off\"}").Updates);
+    }
+
+    [Fact]
+    public void Updates_CopyFrom_AndValidate()
+    {
+        var a = S();
+        var b = S();
+        b.Updates = UpdateMode.Notify;
+        a.CopyFrom(b);
+        Assert.Equal(UpdateMode.Notify, a.Updates);
+        a.Updates = (UpdateMode)7;
+        AssertOnly(a, new SettingsError("Updates", "Unknown update mode."));
+    }
+
+    [Fact]
+    public void UpdateModeLabels()
+    {
+        Assert.Equal([UpdateMode.Install, UpdateMode.Notify, UpdateMode.Off], SettingsTexts.UpdateModes);
+        Assert.Equal("Install automatically", SettingsTexts.UpdateModeLabel(UpdateMode.Install));
+        Assert.Equal("Only tell me", SettingsTexts.UpdateModeLabel(UpdateMode.Notify));
+        Assert.Equal("Don't check", SettingsTexts.UpdateModeLabel(UpdateMode.Off));
+        Assert.Throws<ArgumentOutOfRangeException>(() => SettingsTexts.UpdateModeLabel((UpdateMode)9));
+    }}

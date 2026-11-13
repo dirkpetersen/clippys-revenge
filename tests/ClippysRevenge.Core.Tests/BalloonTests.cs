@@ -227,4 +227,25 @@ public class BalloonTests
         Assert.Equal("It looks like something went wrong: x. Right-click me and pick Activity… for details.", BalloonTexts.Error("x"));
         Assert.Equal("It looks like something went wrong. Right-click me and pick Activity… for details.", BalloonTexts.Error(""));
     }
-}
+
+    [Fact]
+    public void UpdateTexts_AreExact()
+    {
+        Assert.Equal("It looks like there's a newer me: v0.0.6. Right-click me and pick About Clippy's Revenge… to update.",
+            BalloonTexts.UpdateAvailable("0.0.6"));
+        Assert.Equal("It looks like there's a newer me: v0.0.6. I'll install it the next time I start. To do it now, pick About Clippy's Revenge… in my menu.",
+            BalloonTexts.UpdateReady("0.0.6"));
+        Assert.Equal("It looks like I got an upgrade. I'm now v0.0.6.", BalloonTexts.Updated("0.0.6"));
+        Assert.Equal("It looks like v0.0.6 didn't start, so I went back to v0.0.5. I won't install v0.0.6 again.",
+            BalloonTexts.UpdateRolledBack("0.0.6", "0.0.5"));
+    }
+
+    [Fact]
+    public void UpdateTexts_FitBalloonLimit()
+    {
+        var v = new string('1', 20);
+        Assert.True(BalloonTexts.UpdateAvailable(v).Length <= BalloonCenter.MaxTextLength);
+        Assert.True(BalloonTexts.UpdateReady(v).Length <= BalloonCenter.MaxTextLength);
+        Assert.True(BalloonTexts.Updated(v).Length <= BalloonCenter.MaxTextLength);
+        Assert.True(BalloonTexts.UpdateRolledBack(v, v).Length <= BalloonCenter.MaxTextLength);
+    }}

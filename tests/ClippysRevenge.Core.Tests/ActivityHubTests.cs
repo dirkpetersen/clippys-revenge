@@ -183,6 +183,7 @@ public class ActivityHubTests
             [
                 ActivityKind.Sync, ActivityKind.Backfill, ActivityKind.Purge, ActivityKind.Tool, ActivityKind.Draft,
                 ActivityKind.Invite, ActivityKind.Blocked, ActivityKind.Ai, ActivityKind.Error,
+                ActivityKind.Update,
             ],
             Enum.GetValues<ActivityKind>());
 
@@ -617,4 +618,31 @@ public class ActivityHubTests
         }
         Assert.Equal(8000, events[^1].Id);
     }
-}
+
+    [Fact]
+    public void IsActive_TracksOpenScopes()
+    {
+        using var hub = new ActivityHub();
+        Assert.False(hub.IsActive(ActivityState.Serving));
+        var serving = hub.Begin(ActivityState.Serving, "a");
+        var serving2 = hub.Begin(ActivityState.Serving, "b");
+        var error = hub.Begin(ActivityState.Error, "e");
+        Assert.Equal(ActivityState.Error, hub.State);
+        Assert.True(hub.IsActive(ActivityState.Serving));
+        Assert.True(hub.IsActive(ActivityState.Error));
+        Assert.False(hub.IsActive(ActivityState.Drafting));
+        error.Dispose();
+        serving.Dispose();
+        Assert.True(hub.IsActive(ActivityState.Serving));
+        serving2.Dispose();
+        Assert.False(hub.IsActive(ActivityState.Serving));
+        Assert.Throws<ArgumentOutOfRangeException>(() => hub.IsActive(ActivityState.Idle));
+        Assert.Throws<ArgumentOutOfRangeException>(() => hub.IsActive((ActivityState)99));
+    }
+
+    [Fact]
+    public void ActivityKind_Update_IsLast()
+    {
+        Assert.Equal(ActivityKind.Update, Enum.GetValues<ActivityKind>()[^1]);
+        Assert.Equal("Update", ActivityView.KindName(ActivityKind.Update));
+    }}
