@@ -124,7 +124,7 @@ internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker)
         [Description("Local end date-time, e.g. 2026-03-01T15:30, or the end of a find_free_times suggestion.")] string end,
         [Description("Optional plain-text invite body.")] string? body = null,
         [Description("Optional location, e.g. a room.")] string? location = null,
-        [Description("true = add a Teams meeting link when the Teams add-in is usable; otherwise a note says it wasn't added.")] bool teams = false,
+        [Description("Accepted for compatibility, but no Teams link is ever added (Outlook has no supported API for it); the result has teams=false and a note telling the user to click Teams Meeting in Outlook if they need one.")] bool teams = false,
         [Description("Optional SMTP address of a configured shared mailbox to organize the meeting from. Empty = the user's own calendar.")] string? mailbox = null,
         CancellationToken cancellationToken = default)
         => invites.SendAsync(recipients, subject, start, end, body, location, teams, mailbox, cancellationToken);
