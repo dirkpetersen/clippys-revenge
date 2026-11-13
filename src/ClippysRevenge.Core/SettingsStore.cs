@@ -156,6 +156,13 @@ public sealed class SettingsStore
         return key;
     }
 
+    /// <summary>The SaveApiKey rule for an already-trimmed key: 1..MaxApiKeyLength chars, no whitespace or control chars.</summary>
+    public static bool IsValidApiKeyFormat(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        return key.Length is >= 1 and <= MaxApiKeyLength && !key.Any(c => char.IsWhiteSpace(c) || char.IsControl(c));
+    }
+
     /// <summary>
     /// null: deletes anthropic-key.bin if present and clears CachedApiKey. Otherwise trims, validates and
     /// writes the key protected, atomically.
@@ -172,7 +179,7 @@ public sealed class SettingsStore
         var key = apiKey.Trim();
         if (key.Length == 0)
             throw new ArgumentException("The API key is empty.", nameof(apiKey));
-        if (key.Length > MaxApiKeyLength || key.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)))
+        if (!IsValidApiKeyFormat(key))
             throw new ArgumentException("The API key must be a single line without spaces.", nameof(apiKey));
         Directory.CreateDirectory(DataDir);
         WriteAtomic(ApiKeyPath, _protector.Protect(Encoding.UTF8.GetBytes(key)));

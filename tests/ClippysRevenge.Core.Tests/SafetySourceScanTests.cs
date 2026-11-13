@@ -366,4 +366,26 @@ public class SafetySourceScanTests
         Assert.DoesNotContain("y.Send", kept);
         Assert.Contains(lits, l => l == "2|x.Send()");
     }
+
+    [Fact]
+    public void AnthropicApi_UsesOnlyTheSavedKey()
+    {
+        const string model = "src/ClippysRevenge.Core/AnthropicApiModel.cs";
+        var f = Scan.Value.Files.Single(x => x.Rel == model);
+        var ctor = @"new\s+AnthropicClient\s*\(";
+        Assert.Matches(ctor, f.Code);
+        AssertNone(Find(x => x.Code, ctor, x => x.Rel == model), "AnthropicClient may only be built in AnthropicApiModel.cs.");
+        foreach (var required in new[] { @"ApiKey\s*=", @"MaxRetries\s*=\s*0", @"BaseUrl\s*=\s*ApiBaseUrl", @"OpenTelemetry\s*=\s*false" })
+            Assert.Matches(required, f.Code);
+        foreach (var forbidden in new[]
+        {
+            @"\bAuthToken\s*=", @"\bCredentials\s*=", "AnthropicCredentials", @"\bThinking\s*=", @"\bTools\s*=",
+            @"\bToolChoice\s*=", @"\bContainer\s*=", @"\.\s*Beta\b", "ANTHROPIC_",
+        })
+        {
+            Assert.DoesNotMatch(forbidden, f.Code);
+        }
+        Assert.DoesNotMatch("ANTHROPIC_", f.WithStrings);
+        AssertNone(Find(x => x.Code, "AnthropicCredentials", x => x.Rel == model), "AnthropicCredentials must not be used.");
+    }
 }

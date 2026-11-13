@@ -242,4 +242,22 @@ public sealed class SettingsStoreTests : IDisposable
         var r = Store().Load();
         Assert.DoesNotContain(r.Token, r.ToString());
     }
+
+    [Theory]
+    [InlineData("sk-ant-api03-abc", true)]
+    [InlineData("", false)]
+    [InlineData("a b", false)]
+    [InlineData("a\tb", false)]
+    [InlineData("a\nb", false)]
+    [InlineData("a\u0001b", false)]
+    public void IsValidApiKeyFormat_Cases(string key, bool expected) =>
+        Assert.Equal(expected, SettingsStore.IsValidApiKeyFormat(key));
+
+    [Fact]
+    public void IsValidApiKeyFormat_Length_And_Null()
+    {
+        Assert.True(SettingsStore.IsValidApiKeyFormat(new string('a', 512)));
+        Assert.False(SettingsStore.IsValidApiKeyFormat(new string('a', 513)));
+        Assert.Throws<ArgumentNullException>(() => SettingsStore.IsValidApiKeyFormat(null!));
+    }
 }

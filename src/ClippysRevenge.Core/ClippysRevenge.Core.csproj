@@ -11,6 +11,8 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.15" />
     <PackageReference Include="Dapper" Version="2.1.89" />
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
+    <!-- AI drafting API-key backend (SPEC §19.3); official SDK, pinned. -->
+    <PackageReference Include="Anthropic" Version="13.3.0" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="ClippysRevenge.Core.Tests" />
