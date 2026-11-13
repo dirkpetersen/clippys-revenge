@@ -93,7 +93,7 @@ v0.0.1 release.
 - [x] M9.5 COM call watchdog: a single hung Outlook call must not block the worker forever. Interactive calls fail fast with an actionable error after a timeout ("Outlook isn't responding…"), the tray shows it, and background work resumes when Outlook answers again. Also: avoid per-call GAL lookups (`GetExchangeUser().PrimarySmtpAddress`) in `OutlookStores.List`; cache per connection and prefer local properties. Needs a SPEC §4 change. `{arch:brief}`
 - [x] M9.6 Offline-safe sender SMTP: in `OutlookMail` read paths (`ReadForIndex`, ~OutlookMail.cs:374/435) prefer `PR_SENDER_SMTP_ADDRESS` / `PR_SENT_REPRESENTING_SMTP_ADDRESS` via `PropertyAccessor` and only fall back to `GetExchangeUser()` (GAL) when empty, so a cached-mode offline sync doesn't hit the watchdog every cycle. SPEC §8. From the M9.5 brief and M9 review. `{arch:skip}`
 ## M10 Ship — deps: everything above
-- Review: [ ] pending
+- Review: [x] covered by M10.4 (whole-branch review before v0.0.1)
 - [x] M10.1 Safety source-scan test (one `.Send(`, no Outlook launch calls) `{arch:skip}`
 - [x] M10.2 Live tests (`[Trait("live","outlook")]`), run once by the user with `CLIPPY_LIVE=1` `{arch:brief}` (code done 2f7cfbd; user run 2026-11-13: 27 passed, 3 skipped (no shared mailbox), 0 failed)
 - [x] M10.3 `install.ps1` (install, Start menu shortcut, `-Uninstall`) and README (install, WSL mirrored networking, security model, index at rest) `{arch:skip}`
