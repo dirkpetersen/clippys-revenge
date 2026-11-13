@@ -77,17 +77,12 @@ public sealed class SharedMailboxToggler
     {
         var key = EmailAddress.Normalize(smtp);
         _indexes.Add(key); // validates the address before settings change
-        var entry = Find(key);
-        if (entry is null)
+        Mutate(next =>
         {
-            _settings.SharedMailboxes.Add(new SharedMailbox { Smtp = key, DisplayName = displayName ?? "", Enabled = true });
-        }
-        else
-        {
-            entry.Enabled = true;
-            if (string.IsNullOrWhiteSpace(entry.DisplayName)) entry.DisplayName = displayName ?? "";
-        }
-        _save(_settings);
+            var existing = next.FindSharedMailbox(key);
+            var name = existing is null || string.IsNullOrWhiteSpace(existing.DisplayName) ? displayName : null;
+            next.AddOrEnableSharedMailbox(key, name);
+        });
         _changed();
     }
 
@@ -95,13 +90,25 @@ public sealed class SharedMailboxToggler
     public void Uncheck(string smtp, bool deleteIndex)
     {
         var key = EmailAddress.Normalize(smtp);
-        var entry = Find(key);
-        if (entry is not null) entry.Enabled = false;
-        _save(_settings);
+        Mutate(next => next.DisableSharedMailbox(key));
         _indexes.Remove(key, deleteIndex);
         _changed();
     }
 
-    private SharedMailbox? Find(string key) =>
-        _settings.SharedMailboxes.FirstOrDefault(m => m is not null && EmailAddress.Normalize(m.Smtp) == key);
+    /// <summary>Copy-on-write under the live settings gate: other threads may be enumerating the current list.</summary>
+    private void Mutate(Action<Settings> edit)
+    {
+        _settings.Gate.Wait();
+        try
+        {
+            var next = _settings.Clone();
+            edit(next);
+            _settings.SharedMailboxes = next.SharedMailboxes;
+            _save(_settings);
+        }
+        finally
+        {
+            _settings.Gate.Release();
+        }
+    }
 }

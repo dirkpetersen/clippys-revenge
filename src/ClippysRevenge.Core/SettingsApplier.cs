@@ -26,7 +26,7 @@ public sealed class SettingsApplier
 {
     private readonly SettingsApplyTargets _t;
     private readonly ILogger? _logger;
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private SemaphoreSlim _gate => _t.Live.Gate;
 
     /// <exception cref="ArgumentNullException">targets or any non-nullable member is null.</exception>
     public SettingsApplier(SettingsApplyTargets targets, ILogger? logger = null)
@@ -60,6 +60,7 @@ public sealed class SettingsApplier
     private async Task<SettingsApplyResult> ApplyCoreAsync(SettingsEditor editor)
     {
         var live = _t.Live;
+        editor.Rebase(live); // tray toggles since the window opened must not be reverted or undone
         var errors = editor.Errors();
         if (errors.Count > 0) return new SettingsApplyResult(errors, []);
         var changes = editor.Changes(live);

@@ -39,6 +39,13 @@ public sealed class Settings
     public const string AttachmentFolderName = "Clippy's Revenge";
     public static IReadOnlyList<string> DefaultIndexedFolders { get; } = ["Inbox", "Sent Items"];
 
+    /// <summary>
+    /// Serializes every writer of the live instance (tray toggler, settings applier). Not part of the
+    /// settings data: never serialized, never copied.
+    /// </summary>
+    [JsonIgnore]
+    public SemaphoreSlim Gate { get; } = new(1, 1);
+
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
     private static JsonSerializerOptions CreateJsonOptions()

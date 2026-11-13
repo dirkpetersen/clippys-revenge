@@ -165,4 +165,53 @@ public sealed class SharedMailboxMenuTests : IDisposable
             Assert.Equal(3, e.RetentionMonths);
         }
     }
+
+    [Fact]
+    public async Task ToggleWhileAnotherThreadEnumeratesNeverThrows()
+    {
+        var (t, s, ix, _) = Toggler();
+        using (ix)
+        {
+            var stop = false;
+            var reader = Task.Run(() =>
+            {
+                while (!Volatile.Read(ref stop))
+                    foreach (var m in s.SharedMailboxes) _ = m.Enabled;
+            }, TestContext.Current.CancellationToken);
+            for (var i = 0; i < 20; i++)
+            {
+                t.Check($"box{i}@x.edu", "");
+                t.Uncheck($"box{i}@x.edu", false);
+            }
+            Volatile.Write(ref stop, true);
+            await reader; // would fault with InvalidOperationException if the list were mutated in place
+            Assert.Equal(20, s.SharedMailboxes.Count);
+        }
+    }
+
+    [Fact]
+    public async Task StaleEditorAppliedAfterToggleDoesNotDisableToggledMailbox()
+    {
+        var (t, s, ix, _) = Toggler();
+        using (ix)
+        {
+            var editor = new SettingsEditor(s); // window opened before the tray toggle
+            t.Check("x@x.edu", "X");
+            editor.Draft.RetentionMonths = 7;
+            var store = new SettingsStore(Path.Combine(_dir, "data"), new PassThrough());
+            var applier = new SettingsApplier(new SettingsApplyTargets(s, store, new TokenHolder("t"),
+                _ => Task.FromResult(true), () => 1, _ => { }, ix, null, null));
+            var r = await applier.ApplyAsync(editor, TestContext.Current.CancellationToken);
+            Assert.True(r.Ok);
+            Assert.True(Assert.Single(s.SharedMailboxes).Enabled);
+            Assert.Contains("x@x.edu", ix.Mailboxes);
+            Assert.Equal(7, s.RetentionMonths);
+        }
+    }
+
+    private sealed class PassThrough : ISecretProtector
+    {
+        public byte[] Protect(byte[] plain) => plain;
+        public byte[] Unprotect(byte[] protectedData) => protectedData;
+    }
 }

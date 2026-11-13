@@ -37,6 +37,39 @@ public sealed class SettingsEditor
     {
         ArgumentNullException.ThrowIfNull(live);
         Draft = live.Clone();
+        _base = live.Clone();
+    }
+
+    private Settings _base;
+
+    /// <summary>
+    /// Three-way merge of shared mailbox changes made elsewhere (tray) since this editor was created or
+    /// last rebased: entries added or toggled in <paramref name="live"/> are adopted by the draft unless
+    /// the draft itself changed them. Then the baseline becomes live. Call under live.Gate.
+    /// </summary>
+    public void Rebase(Settings live)
+    {
+        ArgumentNullException.ThrowIfNull(live);
+        foreach (var lm in live.SharedMailboxes ?? [])
+        {
+            if (lm is null) continue;
+            var bm = _base.FindSharedMailbox(lm.Smtp);
+            var dm = Draft.FindSharedMailbox(lm.Smtp);
+            if (bm is null)
+            {
+                if (dm is null)
+                    Draft.SharedMailboxes.Add(new SharedMailbox
+                    {
+                        Smtp = lm.Smtp, DisplayName = lm.DisplayName, Enabled = lm.Enabled,
+                        RetentionMonths = lm.RetentionMonths, IndexedFolders = [.. lm.IndexedFolders ?? []],
+                    });
+                continue;
+            }
+            if (dm is null) continue;
+            if (lm.Enabled != bm.Enabled && dm.Enabled == bm.Enabled) dm.Enabled = lm.Enabled;
+            if (lm.DisplayName != bm.DisplayName && dm.DisplayName == bm.DisplayName) dm.DisplayName = lm.DisplayName;
+        }
+        _base = live.Clone();
     }
 
     public Settings Draft { get; }
