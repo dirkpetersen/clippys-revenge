@@ -33,12 +33,19 @@ $RunKey      = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $SettingsDir = Join-Path $env:APPDATA 'ClippysRevenge'
 $DataDir     = Join-Path $env:LOCALAPPDATA 'ClippysRevenge'
 
+# Piped through "irm ... | iex" the script isn't an advanced script, so $PSCmdlet is null.
+function Confirm-Step([string]$Target, [string]$Action) {
+    if ($null -ne $PSCmdlet) { return $PSCmdlet.ShouldProcess($Target, $Action) }
+    if ($WhatIfPreference) { Write-Host "What if: Performing the operation `"$Action`" on target `"$Target`"."; return $false }
+    return $true
+}
+
 function Stop-App {
     # The tray app has no main window, so there is nothing to close gracefully.
     $procs = Get-Process -Name $AppName -ErrorAction SilentlyContinue |
         Where-Object { $_.SessionId -eq (Get-Process -Id $PID).SessionId }
     foreach ($p in $procs) {
-        if ($PSCmdlet.ShouldProcess("process $($p.Id)", 'Stop')) {
+        if (Confirm-Step "process $($p.Id)" 'Stop') {
             Write-Host "Stopping $AppName (pid $($p.Id))..."
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
             $null = $p.WaitForExit(5000)
@@ -48,7 +55,7 @@ function Stop-App {
 
 function Remove-IfExists([string]$Path, [switch]$Recurse) {
     if (Test-Path -LiteralPath $Path) {
-        if ($PSCmdlet.ShouldProcess($Path, 'Remove')) {
+        if (Confirm-Step $Path 'Remove') {
             Remove-Item -LiteralPath $Path -Recurse:$Recurse -Force
             Write-Host "Removed $Path"
         }
@@ -82,7 +89,10 @@ function Get-ReleaseExe {
         }
     }
     if (-not $expected) { throw 'SHA256SUMS.txt has no entry for ClippysRevenge.exe.' }
-    $actual = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+    # .NET directly: Get-FileHash returns nothing when $WhatIfPreference is set (e.g. under iex).
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $fs = [IO.File]::OpenRead($exe)
+    try { $actual = -join ($sha.ComputeHash($fs) | ForEach-Object { $_.ToString('x2') }) } finally { $fs.Dispose(); $sha.Dispose() }
     if ($actual -ne $expected) {
         Remove-Item -LiteralPath $tmp -Recurse -Force -WhatIf:$false
         throw "SHA-256 mismatch for the downloaded exe (expected $expected, got $actual). Nothing was installed."
@@ -93,7 +103,7 @@ function Get-ReleaseExe {
 
 if ($Uninstall) {
     Stop-App
-    if ($PSCmdlet.ShouldProcess('HKCU Run\ClippysRevenge', 'Remove')) {
+    if (Confirm-Step 'HKCU Run\ClippysRevenge' 'Remove') {
         Remove-ItemProperty -Path $RunKey -Name $AppName -ErrorAction SilentlyContinue
     }
     Remove-IfExists $Shortcut
@@ -123,7 +133,7 @@ if ($Source) {
 }
 
 Stop-App
-if ($PSCmdlet.ShouldProcess($ExePath, 'Install')) {
+if (Confirm-Step $ExePath 'Install') {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     Copy-Item -LiteralPath $src -Destination $ExePath -Force
     Write-Host "Installed to $ExePath"
