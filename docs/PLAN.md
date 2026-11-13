@@ -95,9 +95,9 @@ v0.0.1 release.
 ## M10 Ship — deps: everything above
 - Review: [ ] pending
 - [x] M10.1 Safety source-scan test (one `.Send(`, no Outlook launch calls) `{arch:skip}`
-- [ ] M10.2 Live tests (`[Trait("live","outlook")]`), run once by the user with `CLIPPY_LIVE=1` `{arch:brief}`
+- [x] M10.2 Live tests (`[Trait("live","outlook")]`), run once by the user with `CLIPPY_LIVE=1` `{arch:brief}` (code done 2f7cfbd; user run pending: `powershell -NoProfile -File scripts\run-live-tests.ps1`)
 - [x] M10.3 `install.ps1` (install, Start menu shortcut, `-Uninstall`) and README (install, WSL mirrored networking, security model, index at rest) `{arch:skip}`
-- [ ] M10.4 Final review of the whole branch by `reviewer`, CI green on the PR, then hand to the user to merge (→ v0.0.1 release) `{arch:skip}`
+- [~] M10.4 Final review of the whole branch by `reviewer`, CI green on the PR, then hand to the user to merge (→ v0.0.1 release) `{arch:skip}`
 
 ## Carry-forward notes from reviews
 
@@ -139,3 +139,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-12 M5.2–M8.4 built in 3 parallel tracks, M5/M6/M7/M8 reviews approved; merged to dev, 1618 tests
 2026-11-12 Smoke test vs cached Outlook: auth OK (401 no token, 401 Origin, 200 token), loopback-only bind, 10 tools listed; sync indexed 0 emails, list_events hung 180 s, no log file; Outlook itself then showed Not Responding. Added M9.4, M9.5.
 2026-11-12 M9.1–M9.6, M10.1, M10.3 built in parallel; M9 review approved after fixes; merged to dev, 1776 tests, ComWorker tests 5/5 runs green
+2026-11-12 M10.2 live suite (30 tests, skip without CLIPPY_LIVE) + runner merged; 1780 tests; M10.4 final review started
