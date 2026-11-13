@@ -5,14 +5,6 @@ using Microsoft.Extensions.Logging;
 
 namespace ClippysRevenge.App;
 
-/// <summary>Placeholder until M8.3 lands: never confirms, so nothing is ever sent.</summary>
-internal sealed class UnavailableInviteConfirmer : IInviteConfirmer
-{
-    public Task<InviteConfirmation> ConfirmAsync(InvitePreview preview, TimeSpan timeout, CancellationToken ct) =>
-        throw new ModelContextProtocol.McpException(
-            "The invite confirmation dialog is not available in this build. Ask the user to set Meeting invite mode to Draft only.");
-}
-
 internal static class Program
 {
     [STAThread]
@@ -91,6 +83,8 @@ internal static class Program
                 return ok;
             }));
 
+        var inviteQueue = new InviteConfirmQueue(new InviteConfirmPresenter(SynchronizationContext.Current!), hub);
+
         instance.StartListening(() =>
         {
             logger.LogInformation("Second launch asked to open Settings.");
@@ -98,9 +92,8 @@ internal static class Program
         });
 
         var inviteStores = new OutlookStores(() => settings);
-        // TODO(M8.3): replace with the InviteConfirmForm-backed confirmer. Until then Send mode fails closed.
         var invites = new MeetingInvites(new OutlookMeetingCalendar(worker, inviteStores, () => settings),
-            new UnavailableInviteConfirmer(), () => settings, hub, balloons, TimeZoneInfo.Local);
+            new QueueInviteConfirmer(inviteQueue, () => settings, TimeZoneInfo.Local.StandardName), () => settings, hub, balloons, TimeZoneInfo.Local);
 
         var host = new McpHttpHost(new McpHostOptions
         {
@@ -120,6 +113,7 @@ internal static class Program
         }
 
         Application.Run(tray);
+        inviteQueue.Dispose();
 
         // Process entry point after the message loop ended: the one allowed blocking wait.
         // Task.Run avoids the WinForms SynchronizationContext.

@@ -5,9 +5,7 @@ using ModelContextProtocol;
 
 namespace ClippysRevenge.Core;
 
-// Types of the confirmation queue (M8.3). Added here because M8.3 had not landed when M8.4 was written.
-public sealed record InviteAttendee(string Name, string Email, bool IsExternal);
-
+// Types shared with the confirmation queue (InviteConfirm.cs, M8.3).
 public sealed record InvitePreview(
     string OrganizerName, string OrganizerEmail, string Mailbox,
     string Subject, DateTime Start, DateTime End,
