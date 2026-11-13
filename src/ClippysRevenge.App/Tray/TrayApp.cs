@@ -17,7 +17,10 @@ internal sealed record TrayServices(
     string DataFolder,
     string LogFolder,
     Func<bool> IsOutlookUnavailable,
-    Func<bool>? StartOutlook);
+    Func<bool>? StartOutlook,
+    Action? SyncNow = null,
+    Action? TogglePause = null,
+    Func<string, Task>? Rebuild = null);
 
 /// <summary>Tray icon and menu (SPEC 6.1, 6.2). All UI objects are touched on the UI thread only.</summary>
 internal sealed class TrayApp : ApplicationContext
@@ -35,9 +38,9 @@ internal sealed class TrayApp : ApplicationContext
     private readonly ToolStripMenuItem _status1 = new() { Enabled = false };
     private readonly ToolStripMenuItem _status2 = new() { Enabled = false };
     private readonly ToolStripMenuItem _startOutlook = new("Start Outlook");
-    private readonly ToolStripMenuItem _syncNow = new("Sync now") { Enabled = false }; // TODO(M6.1)
-    private readonly ToolStripMenuItem _pause = new("Pause indexing") { Enabled = false }; // TODO(M6.1)
-    private readonly ToolStripMenuItem _rebuild = new("Rebuild index…") { Enabled = false }; // TODO(M6.1)
+    private readonly ToolStripMenuItem _syncNow = new("Sync now") { Enabled = false };
+    private readonly ToolStripMenuItem _pause = new("Pause indexing") { Enabled = false };
+    private readonly ToolStripMenuItem _rebuild = new("Rebuild index…") { Enabled = false };
     private readonly ToolStripMenuItem _shared = new("Shared mailboxes");
     private readonly ToolStripMenuItem _startWithWindows = new("Start with Windows") { CheckOnClick = false };
 
@@ -240,9 +243,18 @@ internal sealed class TrayApp : ApplicationContext
                 _s.Balloons.PostUserFeedback(BalloonTexts.OutlookNotFound);
             }
         };
+        _syncNow.Click += (_, _) => _s.SyncNow?.Invoke();
+        _pause.Enabled = _s.TogglePause is not null;
+        _pause.Click += (_, _) => _s.TogglePause?.Invoke();
+        _rebuild.Enabled = _s.Rebuild is not null;
+        _rebuild.Click += (_, _) => AskRebuild();
         _shared.DropDownOpening += (_, _) => RebuildShared();
         _shared.DropDownItems.Add(new ToolStripMenuItem("Manage in Settings…", null, (_, _) => ShowSettings()));
-        _menu.Opening += (_, _) => _startWithWindows.Checked = _s.GetSettings().StartWithWindows;
+        _menu.Opening += (_, _) =>
+        {
+            _startWithWindows.Checked = _s.GetSettings().StartWithWindows;
+            _syncNow.Enabled = _s.SyncNow is not null && !_s.GetStats().Paused;
+        };
 
         _menu.Items.AddRange([
             _status1, _status2, new ToolStripSeparator(),
@@ -251,6 +263,52 @@ internal sealed class TrayApp : ApplicationContext
             activity, settings, logs, data, new ToolStripSeparator(),
             _startWithWindows, exit,
         ]);
+    }
+
+    private void AskRebuild()
+    {
+        if (_s.Rebuild is null)
+        {
+            return;
+        }
+        var mine = new TaskDialogButton("My mailbox");
+        var all = new TaskDialogButton("All mailboxes");
+        var cancel = new TaskDialogButton("Cancel");
+        var page = new TaskDialogPage
+        {
+            Caption = BalloonTexts.Title,
+            Heading = "Rebuild the email index?",
+            Text = "Clippy deletes the index and reads your mail from Outlook again. Search finds less until indexing is done.",
+            AllowCancel = true,
+            DefaultButton = cancel,
+        };
+        page.Buttons.Add(mine);
+        if (_s.GetSettings().SharedMailboxes.Any(m => m is not null && m.Enabled))
+        {
+            page.Buttons.Add(all);
+        }
+        page.Buttons.Add(cancel);
+        var choice = TaskDialog.ShowDialog(page);
+        if (choice == mine)
+        {
+            _ = RunRebuild("");
+        }
+        else if (choice == all)
+        {
+            _ = RunRebuild("all");
+        }
+    }
+
+    private async Task RunRebuild(string key)
+    {
+        try
+        {
+            await _s.Rebuild!(key);
+        }
+        catch (Exception ex)
+        {
+            PostToUi(() => _s.Balloons.PostUserFeedback("Couldn't rebuild the index: " + ex.Message));
+        }
     }
 
     private void RebuildShared()

@@ -37,8 +37,64 @@ public sealed class LongNameTools
     public string Long() => "x";
 }
 
+public sealed record ProbeService(string Prefix);
+
+[McpServerToolType]
+public sealed class OptionalProbeTools
+{
+    [McpServerTool(Name = "needs_index"), Description("needs index")]
+    public string NeedsIndex(Optional<ProbeService> svc, string text) => svc.Required().Prefix + text;
+
+    [McpServerTool(Name = "no_index"), Description("no index")]
+    public string NoIndex(string text) => "ok:" + text;
+}
+
+[McpServerToolType]
+public sealed class DiProbeTools
+{
+    [McpServerTool(Name = "di_probe"), Description("probe")]
+    public string Probe(ProbeService svc, string text) => svc.Prefix + text;
+}
+
 public class McpHttpHostTests
 {
+    [Fact]
+    public async Task MissingOptionalService_OtherToolsStayCallable_AndIndexToolsExplain()
+    {
+        await using var f = await Started(b => b.WithTools<OptionalProbeTools>(), s => s.AddSingleton(new Optional<ProbeService>(null)));
+        await using var c = await Client(f.Port);
+        var ct = TestContext.Current.CancellationToken;
+        var tools = await c.ListToolsAsync(cancellationToken: ct);
+        var needs = tools.Single(t => t.Name == "needs_index");
+        Assert.False(needs.JsonSchema.GetProperty("properties").TryGetProperty("svc", out _));
+        var ok = await c.CallToolAsync("no_index", new Dictionary<string, object?> { ["text"] = "x" }, cancellationToken: ct);
+        Assert.Equal("ok:x", Assert.IsType<TextContentBlock>(ok.Content[0]).Text);
+        var bad = await c.CallToolAsync("needs_index", new Dictionary<string, object?> { ["text"] = "x" }, cancellationToken: ct);
+        Assert.True(bad.IsError);
+        Assert.Contains("email index could not be opened", Assert.IsType<TextContentBlock>(bad.Content[0]).Text);
+    }
+
+    [Fact]
+    public void IndexStatus_WithoutIndex_ReportsStateAndOutlook()
+    {
+        using var hub = new ActivityHub();
+        var s = MailQueries.Status(null, hub, TimeZoneInfo.Utc, true, null);
+        Assert.Empty(s.Mailboxes);
+        Assert.True(s.OutlookRunning);
+    }
+    [Fact]
+    public async Task DiInjectedToolParameter_NotInSchema_AndBound()
+    {
+        await using var f = await Started(b => b.WithTools<DiProbeTools>(), s => s.AddSingleton(new ProbeService("p:")));
+        await using var c = await Client(f.Port);
+        var tool = (await c.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken)).Single(t => t.Name == "di_probe");
+        var props = tool.JsonSchema.GetProperty("properties");
+        Assert.True(props.TryGetProperty("text", out _));
+        Assert.False(props.TryGetProperty("svc", out _));
+        var r = await c.CallToolAsync("di_probe", new Dictionary<string, object?> { ["text"] = "x" }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal("p:x", Assert.IsType<TextContentBlock>(r.Content[0]).Text);
+    }
+
     private const string Init = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}""";
 
     private sealed class Fixture : IAsyncDisposable
@@ -48,13 +104,14 @@ public class McpHttpHostTests
         public TestTools Tools { get; } = new();
         public McpHttpHost Host { get; }
 
-        public Fixture(Action<IMcpServerBuilder>? mcp = null)
+        public Fixture(Action<IMcpServerBuilder>? mcp = null, Action<IServiceCollection>? services = null)
         {
             Host = new McpHttpHost(new McpHostOptions
             {
                 Tokens = Tokens,
                 Hub = Hub,
                 ConfigureMcp = mcp ?? (b => b.WithTools(Tools)),
+                ConfigureServices = services,
             });
         }
 
@@ -67,9 +124,9 @@ public class McpHttpHostTests
         }
     }
 
-    private static async Task<Fixture> Started(Action<IMcpServerBuilder>? mcp = null)
+    private static async Task<Fixture> Started(Action<IMcpServerBuilder>? mcp = null, Action<IServiceCollection>? services = null)
     {
-        var f = new Fixture(mcp);
+        var f = new Fixture(mcp, services);
         Assert.True(await f.Host.StartAsync(0));
         return f;
     }

@@ -42,6 +42,22 @@ public static partial class HtmlBody
         return string.Concat(html.AsSpan(0, end), fragment, html.AsSpan(end));
     }
 
+    [GeneratedRegex(@"</body\s*>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex BodyCloseTag();
+
+    /// Content of the first opening body tag up to the last closing body tag; the whole input when there is no opening tag.
+    /// Throws ArgumentNullException.
+    public static string BodyContent(string html)
+    {
+        ArgumentNullException.ThrowIfNull(html);
+        var m = BodyTag().Match(html);
+        if (!m.Success) return html;
+        var rest = html[(m.Index + m.Length)..];
+        var last = -1;
+        foreach (Match c in BodyCloseTag().Matches(rest)) last = c.Index;
+        return last < 0 ? rest : rest[..last];
+    }
+
     private static void Encode(string line, StringBuilder sb)
     {
         foreach (var c in line)

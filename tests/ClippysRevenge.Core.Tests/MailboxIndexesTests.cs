@@ -455,4 +455,69 @@ public class MailboxIndexesTests : IDisposable
         mi.Dispose();
         Assert.Throws<ObjectDisposedException>(() => mi.For(""));
     }
+
+    // ---- M6.1: Reset and carry-forward fixes
+
+    [Fact]
+    public void Reset_Own_EmptiesAndKeepsOrder()
+    {
+        var mi = Make(A);
+        Put(mi.For(""), Email("e1", T(1)));
+        mi.For("").SetSyncState(new SyncState("fk"));
+        var fresh = mi.Reset("");
+        Assert.Equal(0, fresh.Status().TotalEmails);
+        Assert.Null(fresh.GetSyncState("fk"));
+        Assert.Equal(["", A], mi.Mailboxes);
+        Assert.Same(fresh, mi.For(""));
+    }
+
+    [Fact]
+    public void Reset_Shared()
+    {
+        var mi = Make(A);
+        Put(mi.For(""), Email("e1", T(1)));
+        Put(mi.For(A), Email("e2", T(1)));
+        var fresh = mi.Reset(A);
+        Assert.Equal(0, fresh.Status().TotalEmails);
+        Assert.Same(fresh, mi.For(A));
+        Assert.Equal(1, mi.For("").Status().TotalEmails);
+        Assert.Equal(["", A], mi.Mailboxes);
+    }
+
+    [Fact]
+    public void Reset_Invalid()
+    {
+        var mi = Make(A);
+        Assert.Throws<ArgumentException>(() => mi.Reset("all"));
+        Assert.Throws<ArgumentException>(() => mi.Reset("x@y.org"));
+    }
+
+    [Fact]
+    public void Search_ErrorEchoesCallerText()
+    {
+        var mi = Make();
+        var ex = Assert.Throws<McpException>(() => mi.Search(All50, " X@Y.org "));
+        Assert.StartsWith("Mailbox \"X@Y.org\" is not configured", ex.Message);
+    }
+
+    [Fact]
+    public void Add_Concurrent_SameInstance()
+    {
+        var mi = Make();
+        var results = new EmailIndex[8];
+        Parallel.For(0, 8, new ParallelOptions { MaxDegreeOfParallelism = 8 }, i => results[i] = mi.Add("c@x.edu"));
+        Assert.All(results, r => Assert.Same(results[0], r));
+        Assert.Equal(["", "c@x.edu"], mi.Mailboxes);
+    }
+
+    [Fact]
+    public void Ctor_PartialFailure_ClosesOpened()
+    {
+        Directory.CreateDirectory(Path.Combine(_dir, "index-b@x.edu.db"));
+        Assert.ThrowsAny<Exception>(() => new MailboxIndexes(_dir, [A, B]));
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        File.Delete(Db(_dir, "index.db"));
+        File.Delete(Db(_dir, "index-a@x.edu.db"));
+        Assert.False(File.Exists(Db(_dir, "index.db")));
+    }
 }

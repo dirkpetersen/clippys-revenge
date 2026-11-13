@@ -301,6 +301,9 @@ public sealed class EmailIndex
         var range = conn.QuerySingle<RangeRow>("SELECT MIN(event_time) AS Min, MAX(event_time) AS Max FROM emails");
         var sync = conn.QuerySingle<SyncSummaryRow>(
             "SELECT MAX(last_reconcile) AS Last, COUNT(*) AS Folders, COALESCE(SUM(COALESCE(backfill_complete, 0) = 0), 0) AS Incomplete FROM sync_state");
+        long? metaLastSync = long.TryParse(
+            conn.ExecuteScalar<string?>("SELECT value FROM meta WHERE key = 'last_sync'"),
+            NumberStyles.Integer, CultureInfo.InvariantCulture, out var ls) ? ls : null;
         long size = 0;
         foreach (var f in new[] { DbPath, DbPath + "-wal" })
             if (File.Exists(f)) size += new FileInfo(f).Length;
@@ -310,8 +313,89 @@ public sealed class EmailIndex
             FromUnix(range.Min),
             FromUnix(range.Max),
             size,
-            FromUnix(sync.Last),
+            FromUnix(metaLastSync ?? sync.Last),
             sync.Folders > 0 && sync.Incomplete == 0);
+    }
+
+    public string? GetMeta(string key)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        using var conn = OpenConnection();
+        return conn.ExecuteScalar<string?>("SELECT value FROM meta WHERE key = @key", new { key });
+    }
+
+    /// <summary>Null deletes the key. "schema_version" can't be written.</summary>
+    public void SetMeta(string key, string? value)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        if (key == "schema_version")
+            throw new ArgumentException("schema_version is managed by the index and can't be written.", nameof(key));
+        using var conn = OpenConnection();
+        if (value is null)
+            conn.Execute("DELETE FROM meta WHERE key = @key", new { key });
+        else
+            conn.Execute(
+                "INSERT INTO meta(key, value) VALUES (@key, @value) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                new { key, value });
+    }
+
+    /// <summary>Known ids only; unknown ids are absent.</summary>
+    public IReadOnlyDictionary<string, IndexedRowInfo> GetSyncInfo(IReadOnlyCollection<string> entryIds)
+    {
+        ArgumentNullException.ThrowIfNull(entryIds);
+        var result = new Dictionary<string, IndexedRowInfo>(StringComparer.Ordinal);
+        var ids = entryIds.Where(i => !string.IsNullOrEmpty(i)).Distinct(StringComparer.Ordinal).ToList();
+        if (ids.Count == 0) return result;
+        using var conn = OpenConnection();
+        foreach (var chunk in ids.Chunk(500))
+        {
+            var sql = "SELECT entry_id AS EntryId, last_modified AS LastModified, unread AS Unread FROM emails WHERE entry_id IN ("
+                      + string.Join(",", chunk.Select((_, i) => "@p" + i.ToString(CultureInfo.InvariantCulture))) + ")";
+            var p = new DynamicParameters();
+            for (var i = 0; i < chunk.Length; i++) p.Add("p" + i.ToString(CultureInfo.InvariantCulture), chunk[i]);
+            foreach (var r in conn.Query<InfoRow>(sql, p))
+                result[r.EntryId] = new IndexedRowInfo(FromUnix(r.LastModified), (r.Unread ?? 0) != 0);
+        }
+        return result;
+    }
+
+    private sealed class InfoRow
+    {
+        public string EntryId { get; set; } = "";
+        public long? LastModified { get; set; }
+        public long? Unread { get; set; }
+    }
+
+    /// <summary>
+    /// Every row whose folder equals <paramref name="folder"/> (COLLATE NOCASE), any event time.
+    /// Order: event_time DESC, id DESC.
+    /// </summary>
+    public IReadOnlyList<IndexedEntry> ListEntries(string folder)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(folder);
+        using var conn = OpenConnection();
+        return conn.Query<EntryRow>(
+                "SELECT entry_id AS EntryId, unread AS Unread, event_time AS T FROM emails WHERE folder = @f COLLATE NOCASE ORDER BY event_time DESC, id DESC",
+                new { f = folder })
+            .Select(r => new IndexedEntry(r.EntryId, (r.Unread ?? 0) != 0, DateTimeOffset.FromUnixTimeSeconds(r.T)))
+            .ToList();
+    }
+
+    private sealed class EntryRow
+    {
+        public string EntryId { get; set; } = "";
+        public long? Unread { get; set; }
+        public long T { get; set; }
+    }
+
+    /// <summary>Every sync_state row, ordered by folder_key.</summary>
+    public IReadOnlyList<SyncState> ListSyncStates()
+    {
+        using var conn = OpenConnection();
+        return conn.Query<SyncRow>(
+                "SELECT folder_key AS FolderKey, folder_path AS FolderPath, modified_watermark AS W, oldest_synced AS O, last_reconcile AS L, backfill_complete AS B FROM sync_state ORDER BY folder_key")
+            .Select(r => new SyncState(r.FolderKey, r.FolderPath, FromUnix(r.W), FromUnix(r.O), FromUnix(r.L), (r.B ?? 0) != 0))
+            .ToList();
     }
 
     public SyncState? GetSyncState(string folderKey)
