@@ -2921,18 +2921,22 @@ Core (Linux and Windows):
   `OutlookAiMailbox.cs`. The scan runs on the code with comments and
   string/char literals removed (the existing `Strip`, `blankStrings:
   true`). In those files:
-  - no match of `\.\s*Send\s*\(` or `\.\s*Display\s*\(` (no exception);
   - every match of
-    `\b(\w+)\s*\.\s*(Move|Delete|PermanentDelete|EmptyDeletedItems)\s*\(`
-    is a failure unless the receiver identifier (group 1) is exactly
-    `File` or `Directory`. Those are `System.IO` calls on Clippy's own
-    files: `ClaudeCli.cs` deletes its `sp-*.md` system-prompt files, and
-    `StyleSkill.cs` renames a temp file over `SKILL.md` /
-    `state.json` (`File.Move(tmp, path, overwrite: true)`) and deletes a
-    leftover temp file. This is the same exception the existing
+    `\.\s*(Send|Display|Move)\s*\(|\bDelete\s*\(|\bPermanentDelete\s*\(`
+    is a failure (so `Delete(` counts with or without a receiver),
+  - unless the identifier right before the call's `.` (on the same line,
+    whitespace allowed) is exactly `File` or `Directory`. Those are
+    `System.IO` calls on Clippy's own files: `ClaudeCli.cs` deletes its
+    `sp-*.md` system-prompt files, and `StyleSkill.cs` renames a temp
+    file over `SKILL.md` / `state.json`
+    (`File.Move(tmp, path, overwrite: true)`) and deletes a leftover temp
+    file. This is the same exception the existing
     `NeverDeletesOutlookItems` and `OnlyMoveIsNewReplyDraftIntoDrafts`
     scans make (they match the hit text against `(File|Directory)\s*\.`).
-  The failure message lists `file:line: match`.
+  The failure message lists `file: line N: match`. A planted-violation
+  test checks the matcher (`item.Send()`, `item.Delete()`, bare
+  `Delete(x)`, `reply.Move(drafts)` are caught; `File.Delete(p)`,
+  `File.Move(a, b, overwrite: true)` are not).
 
 Live (opt-in, never in CI):
 - `[Trait("live","claude")]` (needs `CLIPPY_LIVE_CLAUDE=1`): CLI
