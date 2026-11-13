@@ -273,6 +273,126 @@ public sealed class EmailIndex
         };
     }
 
+    // ---- Purge, status, sync state, close (SPEC §9.2) ----
+
+    /// <summary>Deletes emails with event_time before <paramref name="cutoff"/>; VACUUMs when more than 10% of rows went.</summary>
+    public int PurgeOlderThan(DateTimeOffset cutoff)
+    {
+        using var conn = OpenConnection();
+        int removed;
+        long before;
+        using (var tx = conn.BeginTransaction())
+        {
+            before = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM emails", transaction: tx);
+            removed = conn.Execute("DELETE FROM emails WHERE event_time < @c", new { c = cutoff.ToUnixTimeSeconds() }, tx);
+            tx.Commit();
+        }
+        if (removed > 0 && removed * 10L > before)
+            conn.Execute("VACUUM");
+        return removed;
+    }
+
+    public IndexStatus Status()
+    {
+        using var conn = OpenConnection();
+        var folders = conn.Query<FolderCountRow>(
+            "SELECT folder AS Folder, COUNT(*) AS N FROM emails GROUP BY folder ORDER BY folder")
+            .ToDictionary(r => r.Folder, r => r.N, StringComparer.Ordinal);
+        var range = conn.QuerySingle<RangeRow>("SELECT MIN(event_time) AS Min, MAX(event_time) AS Max FROM emails");
+        var sync = conn.QuerySingle<SyncSummaryRow>(
+            "SELECT MAX(last_reconcile) AS Last, COUNT(*) AS Folders, COALESCE(SUM(COALESCE(backfill_complete, 0) = 0), 0) AS Incomplete FROM sync_state");
+        long size = 0;
+        foreach (var f in new[] { DbPath, DbPath + "-wal" })
+            if (File.Exists(f)) size += new FileInfo(f).Length;
+        return new IndexStatus(
+            folders.Values.Sum(),
+            folders,
+            FromUnix(range.Min),
+            FromUnix(range.Max),
+            size,
+            FromUnix(sync.Last),
+            sync.Folders > 0 && sync.Incomplete == 0);
+    }
+
+    public SyncState? GetSyncState(string folderKey)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(folderKey);
+        using var conn = OpenConnection();
+        var r = conn.QueryFirstOrDefault<SyncRow>(
+            "SELECT folder_key AS FolderKey, folder_path AS FolderPath, modified_watermark AS W, oldest_synced AS O, last_reconcile AS L, backfill_complete AS B FROM sync_state WHERE folder_key = @folderKey",
+            new { folderKey });
+        if (r is null) return null;
+        return new SyncState(r.FolderKey, r.FolderPath, FromUnix(r.W), FromUnix(r.O), FromUnix(r.L), (r.B ?? 0) != 0);
+    }
+
+    public void SetSyncState(SyncState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentException.ThrowIfNullOrEmpty(state.FolderKey);
+        using var conn = OpenConnection();
+        conn.Execute(
+            """
+            INSERT INTO sync_state (folder_key, folder_path, modified_watermark, oldest_synced, last_reconcile, backfill_complete)
+            VALUES (@k, @p, @w, @o, @l, @b)
+            ON CONFLICT(folder_key) DO UPDATE SET folder_path = excluded.folder_path,
+              modified_watermark = excluded.modified_watermark, oldest_synced = excluded.oldest_synced,
+              last_reconcile = excluded.last_reconcile, backfill_complete = excluded.backfill_complete
+            """,
+            new
+            {
+                k = state.FolderKey,
+                p = state.FolderPath,
+                w = state.ModifiedWatermark?.ToUnixTimeSeconds(),
+                o = state.OldestSynced?.ToUnixTimeSeconds(),
+                l = state.LastReconcile?.ToUnixTimeSeconds(),
+                b = state.BackfillComplete ? 1 : 0,
+            });
+    }
+
+    private static DateTimeOffset? FromUnix(long? v) => v is { } x ? DateTimeOffset.FromUnixTimeSeconds(x) : null;
+
+    /// <summary>Releases pooled connections so the file can be deleted (rebuild, mailbox removal).</summary>
+    public void Close()
+    {
+        try
+        {
+            using var conn = OpenConnection();
+            conn.Execute("PRAGMA wal_checkpoint(TRUNCATE)");
+        }
+        catch (SqliteException) { }
+        using var c = new SqliteConnection(ConnectionString);
+        SqliteConnection.ClearPool(c);
+    }
+
+    private sealed class FolderCountRow
+    {
+        public string Folder { get; set; } = "";
+        public long N { get; set; }
+    }
+
+    private sealed class RangeRow
+    {
+        public long? Min { get; set; }
+        public long? Max { get; set; }
+    }
+
+    private sealed class SyncSummaryRow
+    {
+        public long? Last { get; set; }
+        public long Folders { get; set; }
+        public long Incomplete { get; set; }
+    }
+
+    private sealed class SyncRow
+    {
+        public string FolderKey { get; set; } = "";
+        public string? FolderPath { get; set; }
+        public long? W { get; set; }
+        public long? O { get; set; }
+        public long? L { get; set; }
+        public long? B { get; set; }
+    }
+
     // ---- Search (SPEC §9.2, §11.1) ----
 
     public IReadOnlyList<EmailSummary> Search(SearchFilter filter)

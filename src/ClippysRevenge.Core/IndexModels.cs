@@ -42,3 +42,22 @@ public sealed record EmailDetail
     public required IReadOnlyList<AttachmentInfo> Attachments { get; init; }
     public string? Body { get; init; }
 }
+
+/// <summary>Per-folder sync bookkeeping (SPEC §9.1 sync_state). Times are UTC.</summary>
+public sealed record SyncState(
+    string FolderKey,
+    string? FolderPath = null,
+    DateTimeOffset? ModifiedWatermark = null,
+    DateTimeOffset? OldestSynced = null,
+    DateTimeOffset? LastReconcile = null,
+    bool BackfillComplete = false);
+
+/// <summary>Index statistics for one mailbox (SPEC §9.2 Status).</summary>
+public sealed record IndexStatus(
+    long TotalEmails,
+    IReadOnlyDictionary<string, long> FolderCounts,
+    DateTimeOffset? Oldest,
+    DateTimeOffset? Newest,
+    long DbSizeBytes,
+    DateTimeOffset? LastSync,
+    bool BackfillComplete);
