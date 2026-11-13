@@ -22,6 +22,8 @@ internal static class Program
         var loggerFactory = LoggerFactory.Create(b => b.AddDebug());
         var logger = loggerFactory.CreateLogger("ClippysRevenge");
         var hub = new ActivityHub();
+        var worker = new OutlookWorker(hub, loggerFactory.CreateLogger("OutlookWorker"));
+        worker.Start();
         var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClippysRevenge");
         var store = new SettingsStore(dataDir, new DpapiProtector());
         var loaded = store.Load();
@@ -68,7 +70,18 @@ internal static class Program
             },
             dataDir,
             // Logs live under %LOCALAPPDATA% (SPEC 5.1). "Open data folder" opens %APPDATA% on purpose: settings.json and token.bin.
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClippysRevenge", "logs")));
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClippysRevenge", "logs"),
+            () => worker.State == OutlookConnectionState.Unavailable,
+            () =>
+            {
+                var ok = OutlookLauncher.TryStart();
+                logger.LogInformation("Start Outlook: {Result}", ok ? "started" : "not found");
+                if (ok)
+                {
+                    worker.Nudge();
+                }
+                return ok;
+            }));
 
         instance.StartListening(() =>
         {
@@ -81,7 +94,7 @@ internal static class Program
             Tokens = tokens,
             Hub = hub,
             ConfigureMcp = b => b.WithTools<McpTools>(),
-            ConfigureServices = s => s.AddSingleton(settings).AddSingleton(balloons),
+            ConfigureServices = s => s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker),
             ConfigureLogging = b => b.AddDebug(),
         });
         _ = StartHostAsync(host, settings.Port, logger);
@@ -96,6 +109,7 @@ internal static class Program
         // Process entry point after the message loop ended: the one allowed blocking wait.
         // Task.Run avoids the WinForms SynchronizationContext.
         Task.Run(() => host.DisposeAsync().AsTask()).Wait(TimeSpan.FromSeconds(5));
+        worker.Dispose();
         hub.Dispose();
         loggerFactory.Dispose();
         return 0;

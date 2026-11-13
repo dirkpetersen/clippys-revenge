@@ -9,6 +9,7 @@ public static class BalloonTexts
     public const string Title = "Clippy's Revenge";
     public const string FirstRun = "Clippy's Revenge is running — right-click to copy the Claude setup command";
     public const string OutlookUnavailable = "It looks like Outlook isn't running. I'll wait — or right-click me and pick Start Outlook.";
+    public const string OutlookNotFound = "It looks like I can't find Outlook on this PC. Start it from the Start menu.";
     public const string Copied = "Copied — paste it in WSL";
 
     public static string Error(string reason) =>

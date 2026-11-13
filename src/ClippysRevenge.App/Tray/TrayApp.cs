@@ -15,7 +15,9 @@ internal sealed record TrayServices(
     Action<bool>? SetStartWithWindows,
     Func<string>? RegenerateToken,
     string DataFolder,
-    string LogFolder);
+    string LogFolder,
+    Func<bool> IsOutlookUnavailable,
+    Func<bool>? StartOutlook);
 
 /// <summary>Tray icon and menu (SPEC 6.1, 6.2). All UI objects are touched on the UI thread only.</summary>
 internal sealed class TrayApp : ApplicationContext
@@ -32,7 +34,7 @@ internal sealed class TrayApp : ApplicationContext
 
     private readonly ToolStripMenuItem _status1 = new() { Enabled = false };
     private readonly ToolStripMenuItem _status2 = new() { Enabled = false };
-    private readonly ToolStripMenuItem _startOutlook = new("Start Outlook") { Enabled = false }; // TODO(M5.1)
+    private readonly ToolStripMenuItem _startOutlook = new("Start Outlook");
     private readonly ToolStripMenuItem _syncNow = new("Sync now") { Enabled = false }; // TODO(M6.1)
     private readonly ToolStripMenuItem _pause = new("Pause indexing") { Enabled = false }; // TODO(M6.1)
     private readonly ToolStripMenuItem _rebuild = new("Rebuild index…") { Enabled = false }; // TODO(M6.1)
@@ -183,7 +185,7 @@ internal sealed class TrayApp : ApplicationContext
         _notify.Text = view.Tooltip;
         _status1.Text = view.StatusLine;
         _status2.Text = view.SyncLine;
-        _startOutlook.Visible = view.ShowStartOutlook;
+        _startOutlook.Visible = _s.IsOutlookUnavailable();
         _pause.Text = view.PauseMenuText;
 
         var balloon = _policy.Observe(state, progress, _s.GetSettings().NotifyOnErrors);
@@ -230,6 +232,14 @@ internal sealed class TrayApp : ApplicationContext
             ExitThread();
         };
 
+        _startOutlook.Enabled = _s.StartOutlook is not null;
+        _startOutlook.Click += (_, _) =>
+        {
+            if (_s.StartOutlook?.Invoke() == false)
+            {
+                _s.Balloons.PostUserFeedback(BalloonTexts.OutlookNotFound);
+            }
+        };
         _shared.DropDownOpening += (_, _) => RebuildShared();
         _shared.DropDownItems.Add(new ToolStripMenuItem("Manage in Settings…", null, (_, _) => ShowSettings()));
         _menu.Opening += (_, _) => _startWithWindows.Checked = _s.GetSettings().StartWithWindows;
