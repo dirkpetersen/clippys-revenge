@@ -162,6 +162,7 @@ public class SafetySourceScanTests
 
     private const string TrayFile = "src/ClippysRevenge.App/Tray/TrayApp.cs";
     private const string Launcher = "src/ClippysRevenge.App/OutlookLauncher.cs";
+    private const string ClaudeCliFile = "src/ClippysRevenge.Core/ClaudeCli.cs";
 
     // ---- Send ----
 
@@ -212,8 +213,8 @@ public class SafetySourceScanTests
     [Fact]
     public void ProcessStart_OnlyInOutlookLauncher_AndLauncherUsesNoCom()
     {
-        AssertNone(Find(f => f.Code, @"\bProcess\s*\.\s*Start\b|\bShellExecute\w*\s*\(", f => f.Rel == Launcher || f.Rel == TrayFile),
-            "Only OutlookLauncher.cs may start a process.");
+        AssertNone(Find(f => f.Code, @"\bProcess\s*\.\s*Start\b|\bShellExecute\w*\s*\(", f => f.Rel == Launcher || f.Rel == TrayFile || f.Rel == ClaudeCliFile),
+            "Only OutlookLauncher.cs, TrayApp.cs (Open data folder) and ClaudeCli.cs may start a process.");
         // TrayApp.OpenFolder opens a folder in Explorer (not Outlook); it is the only other Process.Start.
         var tray = Scan.Value.Files.Single(f => f.Rel == TrayFile);
         Assert.Single(Regex.Matches(tray.Code, @"\bProcess\s*\.\s*Start\b"));
@@ -223,6 +224,30 @@ public class SafetySourceScanTests
         Assert.NotNull(l);
         Assert.Matches(@"Process\s*\.\s*Start\s*\(", l!.Code);
         Assert.DoesNotMatch(@"Marshal\b|Outlook\.|GetActiveObject|Activator|ProgID", l.Code);
+    }
+
+    [Fact]
+    public void ClaudeCli_StartsProcessesSafely()
+    {
+        var cli = Scan.Value.Files.Single(f => f.Rel == ClaudeCliFile);
+        Assert.Matches(@"UseShellExecute\s*=\s*false", cli.Code);
+        AssertNone(Find(f => f.Code, @"UseShellExecute\s*=\s*true", f => f.Rel == TrayFile || f.Rel == Launcher),
+            "UseShellExecute = true is only allowed in TrayApp.cs and OutlookLauncher.cs.");
+
+        var bad = new List<string>();
+        var schemaFiles = new List<string>();
+        foreach (var f in Scan.Value.Files)
+        {
+            foreach (var lit in f.Literals)
+            {
+                var text = lit[(lit.IndexOf('|') + 1)..];
+                if (text is "--bare" or "login") bad.Add($"{f.Rel}: \"{text}\"");
+                if (text == "--json-schema") schemaFiles.Add(f.Rel);
+            }
+        }
+        AssertNone(bad, "No literal may equal --bare or login (Clippy never uses --bare and never signs in).");
+        Assert.NotEmpty(schemaFiles);
+        Assert.All(schemaFiles, r => Assert.Equal(ClaudeCliFile, r));
     }
 
     // ---- Mail items ----
