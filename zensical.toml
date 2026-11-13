@@ -18,6 +18,7 @@ nav = [
     "tray.md",
     "indexing.md",
     "calendar.md",
+    "ai-drafts.md",
   ] },
   { "Reference" = [
     "security.md",

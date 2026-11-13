@@ -37,6 +37,10 @@ No Microsoft Graph, no Entra app registration, no OAuth. If Outlook can open
 it, Clippy can use it. `SPEC.md` is the source of truth for behavior.
 User documentation: <https://dirkpetersen.github.io/clippys-revenge/>.
 
+## AI drafts (optional)
+
+Turn on [AI drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/) and Clippy writes reply drafts to new mail in your own style, using your signed-in Claude Code or an Anthropic API key. Off by default, asks for consent, saves drafts only (never sends), and the model gets no tools.
+
 ## Install
 
 Requirements: Windows 11 with classic Outlook (not the new Outlook), signed in.

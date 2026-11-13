@@ -3,6 +3,18 @@
 The full list of releases, with downloads, is on
 [GitHub](https://github.com/dirkpetersen/clippys-revenge/releases).
 
+## v0.0.5
+
+2026-11-13
+
+- AI drafts: Clippy can draft replies to new mail in your writing style with Claude
+  Code or an Anthropic API key. Off by default, asks for consent, saves drafts only,
+  never sends, and the model gets no tools. See [AI drafts](ai-drafts.md).
+- Writing-style skill built from your own sent mail, saved as
+  my-email-style in your Claude Code skills folder. Your edits are never
+  overwritten automatically.
+- New tray submenu **AI drafts** and a Settings tab with the same name.
+
 ## v0.0.2
 
 Released as a full (latest) release, so the installer and

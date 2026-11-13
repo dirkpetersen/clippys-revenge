@@ -30,6 +30,7 @@ Right-click the icon.
 | **Pause indexing** / **Resume indexing** | Pauses or resumes syncing. The pause isn't remembered after a restart |
 | **Rebuild index…** | Deletes the index and reads your mail from Outlook again. Asks whether to rebuild **My mailbox** or **All mailboxes** |
 | **Shared mailboxes** | Check a mailbox to index it; uncheck to stop. See [shared mailboxes](indexing.md#shared-mailboxes) |
+| **AI drafts** | Submenu: **Draft replies automatically** (a check mark; asks for [consent](ai-drafts.md#consent-and-what-is-sent) the first time), **Draft a reply to the selected email**, **Show Drafts in Outlook** (hidden while Outlook isn't running) and **AI drafts settings...**. See [AI drafts](ai-drafts.md) |
 | **Copy "claude mcp add" command** | Puts the full setup command on the clipboard |
 | **Copy auth token** | Copies the token |
 | **Regenerate auth token…** | Replaces the token after you confirm. Claude Code must be set up again |
@@ -82,6 +83,17 @@ Pick **My mailbox** or a shared mailbox, then set:
 Also here: add or remove shared mailboxes, and the global **sync interval**
 (30 to 3600 seconds, default 300).
 
+### AI drafts
+
+Turns on and tunes [AI drafts](ai-drafts.md): the switch **Draft replies to new
+email automatically**, **Use** (Claude Code or an Anthropic API key, with **Check**
+and **Save key** / **Remove key**), Claude Code path, Model, Effort, Daily limit,
+Minimum confidence, **Ignore mail older than** (days), **Only when I'm in To or CC**,
+**Never draft for** and **Only draft for** (one address or domain per line), the
+mailboxes, and the writing style (**View**, **Regenerate**, **Open in editor**,
+**Update weekly**). A link at the bottom leads to the manual page that explains what
+is sent to Claude.
+
 ### Scheduling
 
 These are the defaults for [`find_free_times`](tools.md#find_free_times) and
@@ -109,4 +121,4 @@ Settings are stored in `%APPDATA%\ClippysRevenge\settings.json`.
 The app shows a short balloon for the first run, when an initial index finishes,
 when Outlook has been unavailable for more than two minutes, for errors lasting
 more than two minutes (if **Notify on errors** is on), and when an invite is sent
-or saved as a draft after a timeout. Balloons are limited to one per minute.
+or saved as a draft after a timeout. After an AI drafting pass it says how many replies are in your Drafts folder; click it to open Drafts. Balloons are limited to one per minute.
