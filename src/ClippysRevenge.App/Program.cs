@@ -93,7 +93,7 @@ internal static class Program
 
         var inviteStores = new OutlookStores(() => settings);
         var invites = new MeetingInvites(new OutlookMeetingCalendar(worker, inviteStores, () => settings),
-            new QueueInviteConfirmer(inviteQueue, () => settings, TimeZoneInfo.Local.StandardName), () => settings, hub, balloons, TimeZoneInfo.Local);
+            new QueueInviteConfirmer(inviteQueue, () => settings, TimeZoneInfo.Local), () => settings, hub, balloons, TimeZoneInfo.Local);
 
         var host = new McpHttpHost(new McpHostOptions
         {

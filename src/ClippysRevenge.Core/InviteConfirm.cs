@@ -474,7 +474,7 @@ public sealed class InviteConfirmQueue : IDisposable
 }
 
 /// <summary>Adapts <see cref="InviteConfirmQueue"/> to <see cref="IInviteConfirmer"/> for MeetingInvites.</summary>
-public sealed class QueueInviteConfirmer(InviteConfirmQueue queue, Func<Settings> settings, string? timeZoneLabel) : IInviteConfirmer
+public sealed class QueueInviteConfirmer(InviteConfirmQueue queue, Func<Settings> settings, TimeZoneInfo timeZone) : IInviteConfirmer
 {
     public async Task<InviteConfirmation> ConfirmAsync(InvitePreview preview, TimeSpan timeout, CancellationToken ct)
     {
@@ -484,7 +484,7 @@ public sealed class QueueInviteConfirmer(InviteConfirmQueue queue, Func<Settings
             string.IsNullOrWhiteSpace(preview.OrganizerName) ? preview.OrganizerEmail : preview.OrganizerName,
             preview.Mailbox.Length > 0, preview.Subject, preview.Start, preview.End, preview.Location,
             preview.TeamsRequested, preview.Attendees, preview.Body);
-        var view = InviteConfirmView.Create(request, timeZoneLabel, s.WorkStartHour, s.WorkEndHour);
+        var view = InviteConfirmView.Create(request, TimeZoneLabels.Resolve(s.TimeZoneLabel, timeZone, preview.Start), s.WorkStartHour, s.WorkEndHour);
         var o = await queue.ConfirmAsync(view, timeout, ct).ConfigureAwait(false);
         return new InviteConfirmation(o.Choice, o.TimedOut);
     }
