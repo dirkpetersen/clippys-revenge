@@ -1,4 +1,4 @@
-﻿name: Release
+name: Release
 
 # Publishes GitHub release v<Version> (from Directory.Build.props) with the
 # single-file ClippysRevenge.exe whenever main has a version that has no tag yet.
