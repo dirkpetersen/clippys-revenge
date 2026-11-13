@@ -21,8 +21,23 @@ internal static class Program
         var loggerFactory = LoggerFactory.Create(b => b.AddDebug());
         var logger = loggerFactory.CreateLogger("ClippysRevenge");
         var hub = new ActivityHub();
-        var settings = new Settings(); // M4.2: SettingsStore.Load()
-        var tokens = new TokenHolder(AuthToken.Generate()); // M4.2: persisted DPAPI token
+        var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClippysRevenge");
+        var store = new SettingsStore(dataDir, new DpapiProtector());
+        var loaded = store.Load();
+        foreach (var w in loaded.Warnings)
+        {
+            logger.LogWarning("{Warning}", w);
+        }
+        var settings = loaded.Settings;
+        try
+        {
+            StartupRegistration.Apply(settings.StartWithWindows);
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            logger.LogWarning(ex, "Could not update the Run key.");
+        }
+        var tokens = new TokenHolder(loaded.Token);
 
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (_, e) => logger.LogCritical(e.Exception, "Unhandled UI thread exception.");
