@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- Windows: the live Outlook tests (Live/) compile the App's Outlook*.cs sources (SPEC §3, §15).
+         Other OSes: net10.0 with Core only; Live/ is not compiled. -->
+    <TargetFramework Condition="'$(OS)' == 'Windows_NT'">net10.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(OS)' != 'Windows_NT'">net10.0</TargetFramework>
+    <ClippyLive Condition="'$(OS)' == 'Windows_NT'">true</ClippyLive>
     <OutputType>Exe</OutputType>            <!-- required by xunit v3 -->
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
@@ -16,4 +20,37 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ClippysRevenge.Core\ClippysRevenge.Core.csproj" />
   </ItemGroup>
+
+  <ItemGroup Condition="'$(ClippyLive)' != 'true'">
+    <Compile Remove="Live/**" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ClippyLive)' == 'true'">
+    <!-- Compile-time only, embedded like in the App. -->
+    <PackageReference Include="Microsoft.Office.Interop.Outlook" Version="15.0.4797.1004" ExcludeAssets="runtime" />
+    <!-- Explicit list of App sources. Never add the launcher, the entry point, the MCP tools or the tray. -->
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookWorker.cs"            Link="AppLinked\OutlookWorker.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookStores.cs"            Link="AppLinked\OutlookStores.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookMail.cs"              Link="AppLinked\OutlookMail.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookMail.Attachments.cs"  Link="AppLinked\OutlookMail.Attachments.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookMail.Drafts.cs"       Link="AppLinked\OutlookMail.Drafts.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookMail.Reply.cs"        Link="AppLinked\OutlookMail.Reply.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookMailSource.cs"        Link="AppLinked\OutlookMailSource.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookDraftWriter.cs"       Link="AppLinked\OutlookDraftWriter.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookReplyDraftWriter.cs"  Link="AppLinked\OutlookReplyDraftWriter.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookCalendar.Events.cs"   Link="AppLinked\OutlookCalendar.Events.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookCalendar.FreeBusy.cs" Link="AppLinked\OutlookCalendar.FreeBusy.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookCalendar.Invites.cs"  Link="AppLinked\OutlookCalendar.Invites.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookFreeBusySource.cs"    Link="AppLinked\OutlookFreeBusySource.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\SignatureRegistry.cs"        Link="AppLinked\SignatureRegistry.cs" />
+  </ItemGroup>
+
+  <!-- Same embed target as the App csproj. -->
+  <Target Name="EmbedOutlookInteropTypes" AfterTargets="ResolveAssemblyReferences" Condition="'$(ClippyLive)' == 'true'">
+    <ItemGroup>
+      <ReferencePath Condition="'%(FileName)' == 'Microsoft.Office.Interop.Outlook'">
+        <EmbedInteropTypes>true</EmbedInteropTypes>
+      </ReferencePath>
+    </ItemGroup>
+  </Target>
 </Project>
