@@ -40,20 +40,47 @@ it, Clippy can use it. `SPEC.md` is the source of truth for behavior.
 Requirements: Windows 11 with classic Outlook (not the new Outlook), signed in.
 An Exchange / Microsoft 365 mailbox is required (IMAP/POP-only profiles aren't supported).
 
-From PowerShell (no admin needed):
+Paste this into PowerShell (no admin needed):
 
 ```powershell
-# download install.ps1 from the latest GitHub release, then:
-.\install.ps1                      # downloads the latest release and checks it against SHA256SUMS.txt
+irm https://raw.githubusercontent.com/dirkpetersen/clippys-revenge/main/install.ps1 | iex
+```
+
+It downloads the latest release, checks `ClippysRevenge.exe` against the
+release's `SHA256SUMS.txt`, installs it and starts it. Run the same line
+again to update.
+
+<details>
+<summary>Other ways to install</summary>
+
+Preview what it would do, without changing anything:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/dirkpetersen/clippys-revenge/main/install.ps1))) -WhatIf
+```
+
+Or download `install.ps1` from the
+[latest release](https://github.com/dirkpetersen/clippys-revenge/releases) and run it:
+
+```powershell
+.\install.ps1                                # same as the one-liner
 .\install.ps1 -Source .\ClippysRevenge.exe   # install a local build instead
 ```
+
+</details>
 
 This copies `ClippysRevenge.exe` to `%LOCALAPPDATA%\Programs\ClippysRevenge\`,
 creates a Start menu shortcut and starts the app. You can also just download
 `ClippysRevenge.exe` from the release and run it. The exe is not code-signed
 yet, so SmartScreen warns on first launch.
 
-Uninstall: `.\install.ps1 -Uninstall`. It stops the app and removes the exe,
+Uninstall:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/dirkpetersen/clippys-revenge/main/install.ps1))) -Uninstall
+```
+
+It stops the app and removes the exe,
 the shortcut and the "Start with Windows" entry, then asks whether to delete
 your settings, token, index and logs. Add `-Purge` to delete them without
 asking.

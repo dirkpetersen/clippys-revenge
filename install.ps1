@@ -57,7 +57,8 @@ function Remove-IfExists([string]$Path, [switch]$Recurse) {
 
 function Get-ReleaseExe {
     $tmp = Join-Path ([IO.Path]::GetTempPath()) ('clippy-' + [Guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $tmp | Out-Null
+    # Download + verify into a private temp dir even under -WhatIf; nothing is installed until later steps.
+    New-Item -ItemType Directory -Path $tmp -WhatIf:$false | Out-Null
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $headers = @{ 'User-Agent' = 'ClippysRevenge-installer' }
     Write-Host 'Looking up the latest release...'
@@ -83,7 +84,7 @@ function Get-ReleaseExe {
     if (-not $expected) { throw 'SHA256SUMS.txt has no entry for ClippysRevenge.exe.' }
     $actual = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actual -ne $expected) {
-        Remove-Item -LiteralPath $tmp -Recurse -Force
+        Remove-Item -LiteralPath $tmp -Recurse -Force -WhatIf:$false
         throw "SHA-256 mismatch for the downloaded exe (expected $expected, got $actual). Nothing was installed."
     }
     Write-Host 'SHA-256 verified.'
