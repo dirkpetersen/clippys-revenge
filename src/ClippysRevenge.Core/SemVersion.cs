@@ -11,11 +11,11 @@ public sealed class SemVersion : IComparable<SemVersion>, IEquatable<SemVersion>
     public const int MaxLength = 256;
 
     private static readonly Regex Grammar = new(
-        @"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?\z",
+        @"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?\z",
         RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     private static readonly Regex TagGrammar = new(
-        @"^v(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\z",
+        @"^v(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\z",
         RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     private SemVersion(int major, int minor, int patch, string[] preRelease)
@@ -95,11 +95,13 @@ public sealed class SemVersion : IComparable<SemVersion>, IEquatable<SemVersion>
         {
             return false;
         }
-        version = new SemVersion(
-            int.Parse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture),
-            int.Parse(m.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture),
-            int.Parse(m.Groups[3].Value, NumberStyles.None, CultureInfo.InvariantCulture),
-            []);
+        if (!int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var major)
+            || !int.TryParse(m.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var minor)
+            || !int.TryParse(m.Groups[3].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var patch))
+        {
+            return false;
+        }
+        version = new SemVersion(major, minor, patch, []);
         return true;
     }
 

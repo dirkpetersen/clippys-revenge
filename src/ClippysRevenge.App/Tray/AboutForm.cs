@@ -48,7 +48,10 @@ internal sealed class AboutForm : Form
         var y = 14;
         if (icon is not null)
         {
-            var pic = new PictureBox { Image = new Icon(icon, new Size(32, 32)).ToBitmap(), SizeMode = PictureBoxSizeMode.CenterImage };
+            using var small = new Icon(icon, new Size(32, 32));
+            var bitmap = small.ToBitmap();   // an independent copy; the form disposes it
+            Disposed += (_, _) => bitmap.Dispose();
+            var pic = new PictureBox { Image = bitmap, SizeMode = PictureBoxSizeMode.CenterImage };
             pic.SetBounds(16, y, 36, 36);
             Controls.Add(pic);
         }

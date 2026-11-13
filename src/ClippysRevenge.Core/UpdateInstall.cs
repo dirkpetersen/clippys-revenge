@@ -174,7 +174,27 @@ public static class UpdateInstall
         }
         catch (Exception ex) when (UpdateFiles.IsIo(ex))
         {
-            log?.LogWarning("Update swap: the state file couldn't be written ({Type}).", ex.GetType().Name);
+            // Without Pending the next start can't roll back, so the swap is undone: new exe back to the staged
+            // location, old exe back in place.
+            log?.LogWarning("Update swap: the state file couldn't be written ({Type}); undoing the swap.",
+                ex.GetType().Name);
+            try
+            {
+                await UpdateFiles.RetryAsync(() =>
+                {
+                    if (File.Exists(paths.ExePath))
+                    {
+                        File.Move(paths.ExePath, src, overwrite: true);
+                    }
+                    File.Move(paths.OldExePath, paths.ExePath);
+                }, RetryFor, RetryEvery, time, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception undoEx) when (UpdateFiles.IsIo(undoEx))
+            {
+                log?.LogCritical(
+                    "Update swap failed and the old exe could not be restored; run install.ps1 to repair.");
+            }
+            throw new UpdateInstallException(UpdateTexts.ReasonReplaceFailed(ex.GetType().Name), ex);
         }
         log?.LogInformation("Update swap: {From} -> {To}", pending.FromVersion, pending.ToVersion);
         return pending;
@@ -388,6 +408,8 @@ public static class UpdateStartup
 {
     public static readonly TimeSpan OldDeleteRetryFor = TimeSpan.FromSeconds(60);
     public static readonly TimeSpan OldDeleteRetryEvery = TimeSpan.FromSeconds(1);
+    public static readonly TimeSpan ConfirmRetryFor = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan ConfirmRetryEvery = TimeSpan.FromMilliseconds(250);
 
     /// <summary>SPEC 20.9 "UpdateStartup.Prepare". Call only for the installed copy. Never throws: I/O errors are
     /// logged and the step is skipped.</summary>
@@ -518,22 +540,30 @@ public static class UpdateStartup
     }
 
     /// <summary>Pending for this version and not yet confirmed → Confirmed = true; returns
-    /// Notice(Updated, Pending.FromVersion, Pending.ToVersion). Otherwise null. Never throws (I/O errors → logged, null).</summary>
-    public static UpdateNotice? Confirm(UpdateStateStore store, SemVersion running, ILogger? log = null)
+    /// Notice(Updated, Pending.FromVersion, Pending.ToVersion). Otherwise null. The write is retried for up to
+    /// ConfirmRetryFor because the old process may be reading the state file at that moment. Never throws except
+    /// OperationCanceledException for ct (I/O errors → logged, null).</summary>
+    public static async Task<UpdateNotice?> ConfirmAsync(UpdateStateStore store, SemVersion running,
+        TimeProvider? time = null, ILogger? log = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(running);
+        time ??= TimeProvider.System;
         UpdateNotice? notice = null;
         try
         {
-            store.Update(s =>
+            await UpdateFiles.RetryAsync(() =>
             {
-                if (s.Pending is { Confirmed: false } p && p.ToVersion == running.ToString())
+                notice = null;
+                store.Update(s =>
                 {
-                    s.Pending = p with { Confirmed = true };
-                    notice = new UpdateNotice(UpdateNoticeKind.Updated, p.FromVersion, p.ToVersion);
-                }
-            });
+                    if (s.Pending is { Confirmed: false } p && p.ToVersion == running.ToString())
+                    {
+                        s.Pending = p with { Confirmed = true };
+                        notice = new UpdateNotice(UpdateNoticeKind.Updated, p.FromVersion, p.ToVersion);
+                    }
+                });
+            }, ConfirmRetryFor, ConfirmRetryEvery, time, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (UpdateFiles.IsIo(ex))
         {

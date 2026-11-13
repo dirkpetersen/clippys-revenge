@@ -86,8 +86,8 @@ touched.
 ## An update failed or was rolled back
 
 Open **About Clippy's Revenge…** from the tray menu. Its status line gives the
-reason, for example `✗ Couldn't check for updates: GitHub didn't answer within
-15 s`. See [Updates](updates.md) for how updating works.
+reason, for example `✗ The last update attempt failed: GitHub didn't answer
+within 15 s`. See [Updates](updates.md) for how updating works.
 
 - **Couldn't check or download.** Usually the network, a proxy or GitHub's rate
   limit. Press **Check for updates** later. Clippy retries by itself.

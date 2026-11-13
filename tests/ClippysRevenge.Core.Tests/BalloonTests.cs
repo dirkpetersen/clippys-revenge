@@ -248,4 +248,5 @@ public class BalloonTests
         Assert.True(BalloonTexts.UpdateReady(v).Length <= BalloonCenter.MaxTextLength);
         Assert.True(BalloonTexts.Updated(v).Length <= BalloonCenter.MaxTextLength);
         Assert.True(BalloonTexts.UpdateRolledBack(v, v).Length <= BalloonCenter.MaxTextLength);
-    }}
+    }
+}

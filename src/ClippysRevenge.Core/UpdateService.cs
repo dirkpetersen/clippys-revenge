@@ -10,6 +10,8 @@ namespace ClippysRevenge.Core;
 /// <param name="RequestInstall">Swaps the files and asks the app to exit for the handover. Returns null when the app
 /// is now exiting, else an UpdateTexts reason (the old exe is still in place). Never throws for expected failures.</param>
 /// <param name="StartedUtc">Process start (for the 30-minute start-up window).</param>
+/// <param name="IsBusyManual">Idle test for a user-initiated Update now: like IsBusy but without the Settings window
+/// (the user is looking at it, e.g. About opened from Settings). Null = use IsBusy.</param>
 public sealed record UpdateServiceOptions(
     Func<Settings> Settings,
     UpdateClient Client,
@@ -25,7 +27,8 @@ public sealed record UpdateServiceOptions(
     BalloonCenter Balloons,
     DateTimeOffset StartedUtc,
     TimeProvider? Time = null,
-    ILogger? Logger = null);
+    ILogger? Logger = null,
+    Func<bool>? IsBusyManual = null);
 
 /// <summary>The update schedule (SPEC 20.8): weekly check, notify or stage, install in the start-up window, and the
 /// manual actions of the About window.</summary>
@@ -34,6 +37,9 @@ public sealed class UpdateService : BackgroundService
     private readonly UpdateServiceOptions _o;
     private readonly TimeProvider _time;
     private readonly ILogger? _log;
+    /// <summary>How long StopAsync waits for a file swap that is in progress.</summary>
+    public static readonly TimeSpan InstallStopWait = TimeSpan.FromSeconds(30);
+
     private readonly SemaphoreSlim _op = new(1, 1);
     private readonly Lock _lock = new();
 
@@ -43,6 +49,7 @@ public sealed class UpdateService : BackgroundService
     private string? _activityVersion;
     private string? _actionMessage;
     private ReleaseInfo? _lastRelease;
+    private Task? _installTask;
 
     /// <exception cref="ArgumentNullException">options or a non-nullable member is null.</exception>
     public UpdateService(UpdateServiceOptions options)
@@ -281,6 +288,31 @@ public sealed class UpdateService : BackgroundService
 
     // ---- building blocks ----
 
+    /// <summary>Waits (up to 30 s) for an install that is swapping files, so the process never exits with only the
+    /// .old exe on disk.</summary>
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await base.StopAsync(cancellationToken).ConfigureAwait(false);
+        Task? install;
+        lock (_lock) install = _installTask;
+        if (install is null)
+        {
+            return;
+        }
+        try
+        {
+            await install.WaitAsync(InstallStopWait, _time, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is TimeoutException or OperationCanceledException)
+        {
+            _log?.LogWarning("The update install was still running at exit.");
+        }
+        catch (Exception)
+        {
+            // The install's own failure is reported through its caller.
+        }
+    }
+
     private SemVersion? LatestVersion()
     {
         lock (_lock) return _state.LatestVersion;
@@ -475,41 +507,61 @@ public sealed class UpdateService : BackgroundService
     private async Task<bool> InstallWhenIdleAsync(StagedUpdate staged, TimeSpan maxWait, bool manual,
         CancellationToken ct)
     {
-        if (_o.IsBusy())
+        // A user-initiated install ignores the Settings window; an automatic one must not interrupt it.
+        var isBusy = manual && _o.IsBusyManual is { } busyManual ? busyManual : _o.IsBusy;
+        var start = _time.GetUtcNow();
+        while (true)
         {
-            SetActivity(UpdateActivity.WaitingForIdle);
-            var start = _time.GetUtcNow();
-            while (_o.IsBusy())
+            if (isBusy())
             {
-                if (_time.GetUtcNow() - start >= maxWait)
+                SetActivity(UpdateActivity.WaitingForIdle);
+                while (isBusy())
                 {
-                    SetActivity(UpdateActivity.None);
-                    if (manual)
+                    if (_time.GetUtcNow() - start >= maxWait)
                     {
-                        SetMessage(UpdateTexts.Busy);
+                        SetActivity(UpdateActivity.None);
+                        if (manual)
+                        {
+                            SetMessage(UpdateTexts.Busy);
+                        }
+                        return false;
                     }
-                    return false;
-                }
-                try
-                {
-                    await Task.Delay(UpdatePolicy.IdlePoll, _time, ct).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    SetActivity(UpdateActivity.None);
-                    throw;
+                    try
+                    {
+                        await Task.Delay(UpdatePolicy.IdlePoll, _time, ct).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        SetActivity(UpdateActivity.None);
+                        throw;
+                    }
                 }
             }
-        }
 
-        SetActivity(UpdateActivity.Installing, staged.Version);
-        _o.Hub.Event(ActivityKind.Update, UpdateTexts.EventInstalling(staged.Version));
-        _log?.LogInformation("Installing update {Version}", staged.Version);
+            SetActivity(UpdateActivity.Installing, staged.Version);
+            _o.Hub.Event(ActivityKind.Update, UpdateTexts.EventInstalling(staged.Version));
+            _log?.LogInformation("Installing update {Version}", staged.Version);
+
+            // Re-check right before the install: the user may have become busy meanwhile (automatic installs only).
+            if (manual || !isBusy())
+            {
+                break;
+            }
+        }
 
         string? err;
         try
         {
-            err = await _o.RequestInstall(staged, ct).ConfigureAwait(false);
+            var install = _o.RequestInstall(staged, ct);
+            lock (_lock) _installTask = install;
+            try
+            {
+                err = await install.ConfigureAwait(false);
+            }
+            finally
+            {
+                lock (_lock) _installTask = null;
+            }
         }
         catch (OperationCanceledException)
         {

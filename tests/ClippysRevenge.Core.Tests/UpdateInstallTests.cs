@@ -131,15 +131,18 @@ public sealed class UpdateInstallTests : IDisposable
     }
 
     [Fact]
-    public async Task Unwritable_store_does_not_stop_the_swap()
+    public async Task Unwritable_store_undoes_the_swap()
     {
         var dirStore = Path.Combine(_h.Root, "state-is-a-dir");
         Directory.CreateDirectory(dirStore);
 
-        var pending = await Begin(store: new UpdateStateStore(dirStore));
+        var ex = await Assert.ThrowsAsync<UpdateInstallException>(() =>
+            Begin(store: new UpdateStateStore(dirStore)));
 
-        Assert.Equal("0.0.6", pending.ToVersion);
-        Assert.Equal(_h.NewBytes, File.ReadAllBytes(_h.Paths.ExePath));
+        Assert.StartsWith("the installed program couldn't be replaced", ex.Message);
+        Assert.Equal(UpdateHarness.OldBytes, File.ReadAllBytes(_h.Paths.ExePath));
+        Assert.False(File.Exists(_h.Paths.OldExePath));
+        Assert.Equal(_h.NewBytes, File.ReadAllBytes(_h.Paths.StagedExePath(UpdateHarness.V06)));
     }
 
     [Fact]

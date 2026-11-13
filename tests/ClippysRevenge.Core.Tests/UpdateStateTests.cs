@@ -42,6 +42,19 @@ public class UpdateStateTests : IDisposable
             Func<TState, Exception?, string> formatter) => Entries.Add((logLevel, formatter(state, exception)));
     }
 
+    [Fact]
+    public void Load_with_non_ascii_digit_tag_does_not_throw()
+    {
+        WriteRaw("{\"LatestTag\":\"v1\\u0661.0.0\",\"FailedVersion\":\"1\\u0661.0.0\","
+            + "\"Pending\":{\"FromVersion\":\"1.0.0\",\"ToVersion\":\"1\\u0661.0.0\",\"Confirmed\":false}}");
+
+        var s = Store().Load();
+
+        Assert.Null(s.LatestTag);
+        Assert.Null(s.FailedVersion);
+        Assert.Null(s.Pending);
+    }
+
     // Paths
 
     [Fact]

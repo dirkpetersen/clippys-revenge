@@ -85,12 +85,13 @@ General, **Check now** opens the same window and starts a check. It shows:
 - the mode: `Updates: install automatically`, `Updates: only tell me` or
   `Updates: don't check`
 - `Last checked: never`, or the date and time with how long ago it was
-- a status line: `Checking for updates…`, `Downloading v... 42 %`, `Verifying the
+- a status line: `Checking for updates…`, `Downloading v0.0.7… 42 %`, `Verifying the
   download…`, `You have the latest version.`, `v... is available (released
   ...).`, or `v... is downloaded. It installs the next time Clippy's Revenge
   starts, or press Update now.` If something failed, it says why, after a
-  `✗`, for example `✗ Couldn't check for updates: GitHub didn't answer within
-  15 s`
+  `✗`, for example `✗ The last update attempt failed: GitHub didn't answer
+  within 15 s`. A check you started yourself says `✗ Couldn't check for updates:
+  ...`
 
 Buttons and links:
 

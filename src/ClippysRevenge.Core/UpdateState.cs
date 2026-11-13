@@ -256,7 +256,7 @@ public sealed class UpdateStateStore
                 failure = "TooLarge";
                 return false;
             }
-            var bytes = File.ReadAllBytes(Path);
+            var bytes = ReadShared(Path);
             if (bytes.Length > MaxFileBytes)
             {
                 failure = "TooLarge";
@@ -271,13 +271,22 @@ public sealed class UpdateStateStore
             state = Sanitize(read);
             return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException
-            or NotSupportedException or System.Security.SecurityException)
+        catch (Exception ex)
         {
+            // Never throws (documented): anything unexpected, including from sanitising, is an invalid state.
             failure = ex.GetType().Name;
             state = new UpdateState();
             return false;
         }
+    }
+
+    /// <summary>Reads without blocking a writer's rename: another process may replace the file meanwhile.</summary>
+    private static byte[] ReadShared(string path)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var ms = new MemoryStream();
+        fs.CopyTo(ms);
+        return ms.ToArray();
     }
 
     /// <summary>Atomic: writes Path + ".tmp", then File.Move(tmp, Path, overwrite: true). Creates the folder.</summary>

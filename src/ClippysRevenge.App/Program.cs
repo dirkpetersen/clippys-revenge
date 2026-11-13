@@ -91,14 +91,13 @@ internal static class Program
             catch (UpdateInstallException ex)
             {
                 logger.LogWarning("Update {Version} not installed at start-up: {Reason}", staged.Version, ex.Message);
-                try
-                {
-                    updateStore.Update(s => s.LastError = ex.Message);
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                {
-                    logger.LogWarning("The update state could not be saved ({ExceptionType}).", e.GetType().Name);
-                }
+                RecordUpdateError(updateStore, logger, ex.Message);
+            }
+            catch (Exception ex)
+            {
+                // Anything unexpected must not keep the app from starting.
+                logger.LogError("Update {Version} not installed at start-up ({ExceptionType}).", staged.Version, ex.GetType().Name);
+                RecordUpdateError(updateStore, logger, UpdateTexts.ReasonReplaceFailed(ex.GetType().Name));
             }
             if (pendingAtStart is not null)
             {
@@ -339,7 +338,10 @@ internal static class Program
                     return ex.Message;
                 }
             },
-            hub, balloons, startedUtc, Logger: loggerFactory.CreateLogger<UpdateService>()));
+            hub, balloons, startedUtc, Logger: loggerFactory.CreateLogger<UpdateService>(),
+            // Update now is the user's own action; an open Settings window (About starts from there) must not block it.
+            IsBusyManual: () => hub.IsActive(ActivityState.Serving) || hub.IsActive(ActivityState.Drafting)
+                || hub.IsActive(ActivityState.AwaitingConfirmation)));
 
         var inviteQueue = new InviteConfirmQueue(new InviteConfirmPresenter(SynchronizationContext.Current!), hub);
 
@@ -394,7 +396,8 @@ internal static class Program
             e => StartupRegistration.Apply(e), indexes,
             sync is null ? null : sync.NotifySettingsChanged, sync is null ? null : sync.SyncNow,
             drafts is null ? null : drafts.NotifySettingsChanged), logger);
-        var hostStart = StartHostAsync(host, settings.Port, logger);
+        var hostStart = StartHostAsync(host, settings.Port, logger,
+            startupPlan.ConfirmAfterStart ? NewInstanceBindRetry : TimeSpan.Zero);
         _ = AfterStartAsync(hostStart, SynchronizationContext.Current!, startupPlan, updatePaths, updateStore, running, updates, hub, balloons, loggerFactory);
         _ = sync?.StartAsync(CancellationToken.None);
         _ = drafts?.StartAsync(CancellationToken.None);
@@ -409,9 +412,13 @@ internal static class Program
 
         // Process entry point after the message loop ended: the one allowed blocking wait.
         // Task.Run avoids the WinForms SynchronizationContext.
-        Task.Run(async () =>
+        // The update service first: it waits for a file swap that is still running, so a handover is known below.
+        WaitBounded(() => updates!.StopAsync(CancellationToken.None), UpdateService.InstallStopWait + TimeSpan.FromSeconds(5), logger, "update service");
+        var pendingHandover = Volatile.Read(ref handover);
+        // Then the MCP host, before anything else: the new version needs its port, and no new requests are wanted.
+        var hostStopped = WaitBounded(() => host.DisposeAsync().AsTask(), HostStopWait, logger, "MCP host");
+        WaitBounded(async () =>
         {
-            await updates!.StopAsync(CancellationToken.None);
             if (drafts is not null)
             {
                 await drafts.StopAsync(CancellationToken.None);
@@ -420,15 +427,20 @@ internal static class Program
             {
                 await sync.StopAsync(CancellationToken.None);
             }
-            await host.DisposeAsync();
-        }).Wait(TimeSpan.FromSeconds(5));
+        }, TimeSpan.FromSeconds(5), logger, "background services");
         (apiModel as IDisposable)?.Dispose();
         worker.Dispose();
         indexes?.Dispose();
         indexErrorScope?.Dispose();
         hub.Dispose();
         updateClient.Dispose();
-        if (Volatile.Read(ref handover) is { } pendingHandover)
+        if (pendingHandover is not null && !hostStopped)
+        {
+            // The port may still be held, so the new version could not bind it. The swapped exe starts at the next
+            // launch and confirms itself then (SPEC 20.9).
+            logger.LogWarning("Update handover skipped: the MCP server did not stop in time.");
+        }
+        else if (pendingHandover is not null)
         {
             instance.Dispose();   // releases the mutex and the pipe before the new exe starts (SPEC 14)
             var outcome = RunBlocking(() => UpdateHandover.RunAsync(updatePaths, updateStore, pendingHandover,
@@ -444,22 +456,61 @@ internal static class Program
     /// Task.Run avoids the WinForms SynchronizationContext.</summary>
     private static T RunBlocking<T>(Func<Task<T>> work) => Task.Run(work).GetAwaiter().GetResult();
 
+    private static readonly TimeSpan HostStopWait = TimeSpan.FromSeconds(10);
+    /// <summary>The first start of a freshly updated process: the old process may still hold the MCP port for a moment.</summary>
+    private static readonly TimeSpan NewInstanceBindRetry = TimeSpan.FromSeconds(10);
+
+    /// <summary>Process entry point only, after the message loop ended. False when it didn't finish in time or failed.</summary>
+    private static bool WaitBounded(Func<Task> work, TimeSpan limit, ILogger logger, string what)
+    {
+        try
+        {
+            if (Task.Run(work).Wait(limit))
+            {
+                return true;
+            }
+            logger.LogWarning("Stopping the {What} took longer than {Seconds} s.", what, (int)limit.TotalSeconds);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning("Stopping the {What} failed ({ExceptionType}).", what, ex.GetBaseException().GetType().Name);
+        }
+        return false;
+    }
+
+    private static void RecordUpdateError(UpdateStateStore store, ILogger logger, string reason)
+    {
+        try
+        {
+            store.Update(s => s.LastError = reason);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning("The update state could not be saved ({ExceptionType}).", e.GetType().Name);
+        }
+    }
+
     /// <summary>Once the server start was attempted and the message loop pumps: confirm a fresh update, show notices,
     /// then start the update schedule (so the first check is 60 s after a working tray).</summary>
-    private static async Task AfterStartAsync(Task hostStart, SynchronizationContext ui, StartupUpdatePlan plan,
+    private static async Task AfterStartAsync(Task<bool> hostStart, SynchronizationContext ui, StartupUpdatePlan plan,
         UpdatePaths paths, UpdateStateStore store, AppVersionInfo running, UpdateService updates, ActivityHub hub,
         BalloonCenter balloons, ILoggerFactory loggerFactory)
     {
-        await hostStart.ConfigureAwait(false);
+        var hostStarted = await hostStart.ConfigureAwait(false);
         var log = loggerFactory.CreateLogger("Update");
-        ui.Post(_ =>
+        ui.Post(async _ =>
         {
             try
             {
                 UpdateNotice? notice = plan.Notice;
-                if (plan.ConfirmAfterStart)
+                if (plan.ConfirmAfterStart && !hostStarted)
                 {
-                    var confirmed = UpdateStartup.Confirm(store, running.Version, log);
+                    // A new version that can't serve isn't a working update: stay unconfirmed so the old process rolls back.
+                    log.LogWarning("Update not confirmed: the MCP server did not start.");
+                }
+                else if (plan.ConfirmAfterStart)
+                {
+                    var confirmed = await UpdateStartup.ConfirmAsync(store, running.Version, log: log);
                     if (confirmed is not null)
                     {
                         notice = confirmed;
@@ -492,22 +543,21 @@ internal static class Program
         }, null);
     }
 
-    private static async Task StartHostAsync(McpHttpHost host, int port, ILogger logger)
+    private static async Task<bool> StartHostAsync(McpHttpHost host, int port, ILogger logger, TimeSpan bindRetryFor)
     {
         try
         {
-            if (await host.StartAsync(port).ConfigureAwait(false))
+            if (await host.StartAsync(port, bindRetryFor: bindRetryFor).ConfigureAwait(false))
             {
                 logger.LogInformation("MCP server listening on 127.0.0.1:{Port}.", host.Port);
+                return true;
             }
-            else
-            {
-                logger.LogError("MCP server did not start.");
-            }
+            logger.LogError("MCP server did not start.");
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "MCP server start failed.");
         }
+        return false;
     }
 }

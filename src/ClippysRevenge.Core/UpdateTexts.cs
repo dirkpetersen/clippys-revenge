@@ -52,6 +52,7 @@ public static class UpdateTexts
     public static string Installing(string v) => $"Installing v{v}…";
     public const string Busy = "Clippy is busy. Try again in a minute.";
     public static string CheckFailed(string reason) => $"✗ Couldn't check for updates: {reason}";
+    public static string LastAttemptFailed(string reason) => $"✗ The last update attempt failed: {reason}";
     public static string DownloadFailed(string reason) => $"✗ The update couldn't be downloaded: {reason}";
     public static string InstallFailed(string reason) => $"✗ The update couldn't be installed: {reason}";
     public const string NoCheckYet = "No update check yet.";
@@ -185,7 +186,7 @@ public static class AboutView
         }
         if (s.LastError is not null)
         {
-            return UpdateTexts.CheckFailed(s.LastError);
+            return UpdateTexts.LastAttemptFailed(s.LastError);
         }
         if (latest is null)
         {

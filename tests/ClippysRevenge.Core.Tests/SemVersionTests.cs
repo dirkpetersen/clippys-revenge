@@ -130,10 +130,21 @@ public class SemVersionTests
     [InlineData("v0.0")]
     [InlineData("v1234567890.0.0")]
     [InlineData("v0.0.4\n")]
+    [InlineData("v1١.0.0")]
+    [InlineData("v1.0.٣")]
     [InlineData(null)]
     public void ReleaseTag_Rejects(string? tag)
     {
         Assert.False(SemVersion.TryParseReleaseTag(tag, out var v));
+        Assert.Null(v);
+    }
+
+    [Theory]
+    [InlineData("1١.0.0")]
+    [InlineData("1.0.0-١")]
+    public void Parse_rejects_non_ascii_digits(string text)
+    {
+        Assert.False(SemVersion.TryParse(text, out var v));
         Assert.Null(v);
     }
 

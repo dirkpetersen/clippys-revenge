@@ -44,6 +44,7 @@ public sealed class UpdateServiceTests : IDisposable
     private volatile bool _busy;
     private string? _exeVersion = "0.0.6";
     private string? _installResult;
+    private TaskCompletionSource<string?>? _installGate;
 
     public UpdateServiceTests()
     {
@@ -70,19 +71,20 @@ public sealed class UpdateServiceTests : IDisposable
         }
     }
 
-    private UpdateService Make(bool installed = true, DateTimeOffset? started = null, string running = "0.0.5")
+    private UpdateService Make(bool installed = true, DateTimeOffset? started = null, string running = "0.0.5",
+        Func<bool>? isBusy = null, Func<bool>? busyManual = null)
     {
         var client = new UpdateClient(SemVersion.Parse(running), _h, _manual);
         _clients.Add(client);
         var svc = new UpdateService(new UpdateServiceOptions(
             () => _settings, client, _store, _paths, new AppVersionInfo(SemVersion.Parse(running), null),
-            installed, Path.Combine(_root, "run"), () => _busy, _ => _exeVersion,
+            installed, Path.Combine(_root, "run"), isBusy ?? (() => _busy), _ => _exeVersion,
             (staged, _) =>
             {
                 _installs.Add(staged);
-                return Task.FromResult(_installResult);
+                return _installGate?.Task ?? Task.FromResult(_installResult);
             },
-            _hub, _balloons, started ?? Now, _time));
+            _hub, _balloons, started ?? Now, _time, IsBusyManual: busyManual));
         _services.Add(svc);
         return svc;
     }
@@ -485,6 +487,53 @@ public sealed class UpdateServiceTests : IDisposable
         Assert.Equal(UpdateTexts.Busy, svc.Status.ActionMessage);
         Assert.Empty(_installs);
         Assert.Equal(UpdateActivity.None, svc.Status.Activity);
+    }
+
+    [Fact]
+    public async Task Update_now_ignores_the_settings_window_but_an_automatic_install_does_not()
+    {
+        ScriptLatest();
+        _busy = true;   // only Settings is open: IsBusy true, the manual test false
+        var svc = Make(busyManual: () => false);
+
+        await svc.UpdateNowAsync(TestContext.Current.CancellationToken);
+
+        Assert.Single(_installs);
+        Assert.Null(svc.Status.ActionMessage);
+    }
+
+    [Fact]
+    public async Task Automatic_install_rechecks_busy_right_before_requesting()
+    {
+        ScriptLatest();
+        var calls = 0;
+        var svc = Make(isBusy: () => Interlocked.Increment(ref calls) == 2);
+        var task = svc.RunAutomaticAsync(TestContext.Current.CancellationToken);
+        await WaitUntil(() => task.IsCompleted || _time.TimerCount >= 1);
+
+        while (!task.IsCompleted) await Step(task, TimeSpan.FromSeconds(5));
+
+        Assert.True(await task);
+        Assert.Single(_installs);
+        Assert.True(Volatile.Read(ref calls) >= 4, "the idle test must run again before the install");
+    }
+
+    [Fact]
+    public async Task Stop_waits_for_a_swap_in_progress()
+    {
+        ScriptLatest();
+        _installGate = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var svc = Make();
+        var update = svc.UpdateNowAsync(TestContext.Current.CancellationToken);
+        await WaitUntil(() => _installs.Count == 1);
+
+        var stop = svc.StopAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+        Assert.False(stop.IsCompleted);
+
+        _installGate.SetResult(null);
+        await stop;
+        await update;
     }
 
     [Fact]

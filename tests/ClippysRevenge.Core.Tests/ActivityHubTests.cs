@@ -645,4 +645,5 @@ public class ActivityHubTests
     {
         Assert.Equal(ActivityKind.Update, Enum.GetValues<ActivityKind>()[^1]);
         Assert.Equal("Update", ActivityView.KindName(ActivityKind.Update));
-    }}
+    }
+}

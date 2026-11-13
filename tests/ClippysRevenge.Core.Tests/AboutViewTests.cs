@@ -81,7 +81,7 @@ public class AboutViewTests
     {
         Assert.Equal("Clippy is busy. Try again in a minute.",
             StatusLine(s => s with { ActionMessage = UpdateTexts.Busy, LastError = "e", LatestTag = "v0.0.6" }));
-        Assert.Equal("✗ Couldn't check for updates: no release found",
+        Assert.Equal("✗ The last update attempt failed: no release found",
             StatusLine(s => s with { LastError = "no release found", LatestTag = "v0.0.6" }));
         Assert.Equal("No update check yet.", StatusLine(s => s));
         Assert.Equal("No update check yet.", StatusLine(s => s with { LatestTag = "garbage" }));

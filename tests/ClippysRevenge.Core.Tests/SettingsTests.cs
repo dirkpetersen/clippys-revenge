@@ -497,4 +497,5 @@ public class SettingsTests
         Assert.Equal("Only tell me", SettingsTexts.UpdateModeLabel(UpdateMode.Notify));
         Assert.Equal("Don't check", SettingsTexts.UpdateModeLabel(UpdateMode.Off));
         Assert.Throws<ArgumentOutOfRangeException>(() => SettingsTexts.UpdateModeLabel((UpdateMode)9));
-    }}
+    }
+}

@@ -170,26 +170,73 @@ public sealed class UpdateStartupTests : IDisposable
     }
 
     [Fact]
-    public void Confirm_marks_pending_once()
+    public async Task Confirm_marks_pending_once()
     {
         _h.Store.Update(s => s.Pending = UpdateHarness.Pending());
 
-        var notice = UpdateStartup.Confirm(_h.Store, UpdateHarness.V06);
+        var notice = await UpdateStartup.ConfirmAsync(_h.Store, UpdateHarness.V06, _h.Clock, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(new UpdateNotice(UpdateNoticeKind.Updated, "0.0.5", "0.0.6"), notice);
         Assert.True(_h.Store.Load().Pending!.Confirmed);
-        Assert.Null(UpdateStartup.Confirm(_h.Store, UpdateHarness.V06));
+        Assert.Null(await UpdateStartup.ConfirmAsync(_h.Store, UpdateHarness.V06, _h.Clock, ct: TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public void Confirm_ignores_missing_or_other_pending()
+    public async Task Confirm_ignores_missing_or_other_pending()
     {
-        Assert.Null(UpdateStartup.Confirm(_h.Store, UpdateHarness.V06));
+        Assert.Null(await UpdateStartup.ConfirmAsync(_h.Store, UpdateHarness.V06, _h.Clock, ct: TestContext.Current.CancellationToken));
 
         var pending = UpdateHarness.Pending();
         _h.Store.Update(s => s.Pending = pending);
-        Assert.Null(UpdateStartup.Confirm(_h.Store, V07));
+        Assert.Null(await UpdateStartup.ConfirmAsync(_h.Store, V07, _h.Clock, ct: TestContext.Current.CancellationToken));
         Assert.Equal(pending, _h.Store.Load().Pending);
+    }
+
+    [Fact]
+    [Trait("os", "windows")]
+    public async Task Confirm_retries_while_the_state_file_is_held_open()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        _h.Store.Update(s => s.Pending = UpdateHarness.Pending());
+        // What the old process's reader used to do: share Read only, which blocks the rename over the file.
+        var hold = new FileStream(_h.Paths.StateFile, FileMode.Open, FileAccess.Read, FileShare.Read);
+        UpdateNotice? notice;
+        try
+        {
+            var task = UpdateStartup.ConfirmAsync(_h.Store, UpdateHarness.V06, _h.Clock, ct: TestContext.Current.CancellationToken);
+            var released = false;
+            notice = await _h.Drive(task, TimeSpan.FromMilliseconds(250), i =>
+            {
+                if (i == 4 && !released)
+                {
+                    released = true;
+                    hold.Dispose();
+                }
+            });
+        }
+        finally
+        {
+            hold.Dispose();
+        }
+
+        Assert.Equal(new UpdateNotice(UpdateNoticeKind.Updated, "0.0.5", "0.0.6"), notice);
+        Assert.True(_h.Store.TryLoad(out var s));
+        Assert.True(s.Pending!.Confirmed);
+    }
+
+    [Fact]
+    [Trait("os", "windows")]
+    public async Task Confirm_gives_up_after_ten_seconds_when_the_file_stays_held()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        var pending = UpdateHarness.Pending();
+        _h.Store.Update(s => s.Pending = pending);
+        using var hold = new FileStream(_h.Paths.StateFile, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        var notice = await _h.Drive(UpdateStartup.ConfirmAsync(_h.Store, UpdateHarness.V06, _h.Clock, ct: TestContext.Current.CancellationToken),
+            TimeSpan.FromMilliseconds(250));
+
+        Assert.Null(notice);
     }
 
     private Task Cleanup() =>
@@ -281,7 +328,8 @@ public sealed class UpdateStartupTests : IDisposable
                 // What the new process does at start-up.
                 var plan = UpdateStartup.Prepare(_h.Paths, _h.Store, UpdateHarness.V06, UpdateMode.Install);
                 Assert.True(plan.ConfirmAfterStart);
-                Assert.NotNull(UpdateStartup.Confirm(_h.Store, UpdateHarness.V06));
+                Assert.NotNull(UpdateStartup.ConfirmAsync(_h.Store, UpdateHarness.V06, _h.Clock, ct: TestContext.Current.CancellationToken)
+                    .GetAwaiter().GetResult());
                 UpdateStartup.CleanupOldAsync(_h.Paths, _h.Store, UpdateHarness.V06, _h.Clock)
                     .GetAwaiter().GetResult();
             },

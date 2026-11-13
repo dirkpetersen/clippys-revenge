@@ -33,6 +33,7 @@ public sealed class McpHttpHost : IAsyncDisposable
     public const string McpPath = "/mcp";
     public const string ServerName = "clippy";
     public const int MaxToolLabelLength = 64;
+    private static readonly TimeSpan BindRetryEvery = TimeSpan.FromMilliseconds(500);
 
     private readonly McpHostOptions _options;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -54,7 +55,9 @@ public sealed class McpHttpHost : IAsyncDisposable
 
     public bool IsRunning => _running;
 
-    public async Task<bool> StartAsync(int port, CancellationToken ct = default)
+    /// <summary>Starts the server. <paramref name="bindRetryFor"/> (default none) keeps retrying a bind that fails
+    /// with "address in use", for the new process of an update while the old one releases the port.</summary>
+    public async Task<bool> StartAsync(int port, CancellationToken ct = default, TimeSpan bindRetryFor = default)
     {
         ValidatePort(port);
         await _gate.WaitAsync(ct).ConfigureAwait(false);
@@ -65,7 +68,7 @@ public sealed class McpHttpHost : IAsyncDisposable
             {
                 throw new InvalidOperationException("The MCP host is already running.");
             }
-            return await StartCoreAsync(port, ct).ConfigureAwait(false);
+            return await StartCoreAsync(port, ct, bindRetryFor).ConfigureAwait(false);
         }
         finally
         {
@@ -143,11 +146,29 @@ public sealed class McpHttpHost : IAsyncDisposable
         }
     }
 
-    private async Task<bool> StartCoreAsync(int port, CancellationToken ct)
+    private async Task<bool> StartCoreAsync(int port, CancellationToken ct, TimeSpan bindRetryFor = default)
     {
         _errorScope?.Dispose();
         _errorScope = null;
 
+        var started = _options.Time.GetTimestamp();
+        while (true)
+        {
+            var (ok, inUse) = await TryStartOnceAsync(port, ct).ConfigureAwait(false);
+            if (ok || !inUse || _options.Time.GetElapsedTime(started) >= bindRetryFor)
+            {
+                return ok ? true : Fail(inUse
+                    ? "port " + port.ToString(CultureInfo.InvariantCulture) + " is in use"
+                    : _lastFailure);
+            }
+            await Task.Delay(BindRetryEvery, _options.Time, ct).ConfigureAwait(false);
+        }
+    }
+
+    private string _lastFailure = "HTTP server failed to start";
+
+    private async Task<(bool Ok, bool InUse)> TryStartOnceAsync(int port, CancellationToken ct)
+    {
         WebApplication? app = null;
         ILogger? logger = null;
         try
@@ -166,12 +187,13 @@ public sealed class McpHttpHost : IAsyncDisposable
                 await DisposeAppAsync(app).ConfigureAwait(false);
                 app = null;
                 logger?.LogError(ex, "Unexpected HTTP binding.");
-                return Fail("unexpected HTTP binding");
+                _lastFailure = "unexpected HTTP binding";
+                return (false, false);
             }
             _app = app;
             Volatile.Write(ref _port, bound);
             _running = true;
-            return true;
+            return (true, false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
@@ -179,11 +201,10 @@ public sealed class McpHttpHost : IAsyncDisposable
             {
                 await DisposeAppAsync(app).ConfigureAwait(false);
             }
-            var label = HasAddressInUse(ex)
-                ? "port " + port.ToString(CultureInfo.InvariantCulture) + " is in use"
-                : "HTTP server failed to start";
-            logger?.LogError(ex, "{Label}", label);
-            return Fail(label);
+            var inUse = HasAddressInUse(ex);
+            _lastFailure = "HTTP server failed to start";
+            logger?.LogError(ex, "{Label}", inUse ? "port is in use" : _lastFailure);
+            return (false, inUse);
         }
     }
 
