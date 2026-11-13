@@ -94,10 +94,10 @@ public class InviteConfirmViewTests
     }
 
     [Theory]
-    [InlineData(false, "From: Petersen, Dirk <d@x.edu>")]
-    [InlineData(true, "From: Petersen, Dirk <d@x.edu> (shared mailbox)")]
+    [InlineData(false, "From: Sample, Bob <b@x.edu>")]
+    [InlineData(true, "From: Sample, Bob <b@x.edu> (shared mailbox)")]
     public void V11_Organizer(bool shared, string expected) =>
-        Assert.Equal(expected, Make(Req(organizer: "Petersen, Dirk <d@x.edu>", shared: shared)).OrganizerLine);
+        Assert.Equal(expected, Make(Req(organizer: "Sample, Bob <b@x.edu>", shared: shared)).OrganizerLine);
 
     [Fact]
     public void V12_Subject()

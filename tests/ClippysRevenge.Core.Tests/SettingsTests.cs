@@ -242,20 +242,20 @@ public class SettingsTests
     [Fact]
     public void MenuLabel()
     {
-        Assert.Equal("Helpdesk <helpdesk@oregonstate.edu>",
-            new SharedMailbox { DisplayName = "Helpdesk", Smtp = "helpdesk@oregonstate.edu" }.MenuLabel);
-        Assert.Equal("helpdesk@oregonstate.edu",
-            new SharedMailbox { DisplayName = " ", Smtp = "helpdesk@oregonstate.edu" }.MenuLabel);
+        Assert.Equal("Helpdesk <helpdesk@example.edu>",
+            new SharedMailbox { DisplayName = "Helpdesk", Smtp = "helpdesk@example.edu" }.MenuLabel);
+        Assert.Equal("helpdesk@example.edu",
+            new SharedMailbox { DisplayName = " ", Smtp = "helpdesk@example.edu" }.MenuLabel);
     }
 
     [Fact]
     public void AddOrEnable_AddsNew()
     {
         var s = S();
-        var m = s.AddOrEnableSharedMailbox(" HelpDesk@OregonState.edu ", " Helpdesk ");
+        var m = s.AddOrEnableSharedMailbox(" HelpDesk@Example.edu ", " Helpdesk ");
         Assert.Single(s.SharedMailboxes);
         Assert.Same(m, s.SharedMailboxes[0]);
-        Assert.Equal("helpdesk@oregonstate.edu", m.Smtp);
+        Assert.Equal("helpdesk@example.edu", m.Smtp);
         Assert.Equal("Helpdesk", m.DisplayName);
         Assert.True(m.Enabled);
         Assert.Equal(new[] { "Inbox", "Sent Items" }, m.IndexedFolders);

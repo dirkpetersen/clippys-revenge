@@ -90,7 +90,7 @@ public sealed class CreateDraftTool
         var cc = ParseList(args.Cc, "cc");
         var bcc = ParseList(args.Bcc, "bcc");
         if (to.Count == 0)
-            throw new McpException("create_draft needs at least one recipient in \"to\", like \"Petersen, Dirk <dirk.petersen@example.org>; someone@example.org\".");
+            throw new McpException("create_draft needs at least one recipient in \"to\", like \"Sample, Bob <bob.sample@example.org>; someone@example.org\".");
 
         // 3. Subject
         var subject = (args.Subject ?? "").Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ').Trim();

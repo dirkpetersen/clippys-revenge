@@ -24,7 +24,7 @@ public sealed class FileNamesTests : IDisposable
         { "Lpt1.tar.gz", "_Lpt1.tar.gz" },
         { "CONSOLE.txt", "CONSOLE.txt" },
         { ".env", ".env" },
-        { "dirk.petersen@oregonstate.edu", "dirk.petersen@oregonstate.edu" },
+        { "bob.sample@example.edu", "bob.sample@example.edu" },
         { "Résumé – final.docx", "Résumé – final.docx" },
     };
 
