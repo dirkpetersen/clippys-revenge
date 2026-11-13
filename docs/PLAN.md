@@ -31,14 +31,14 @@ v0.0.1 release.
 
 ## M1 Core helpers (SPEC §12) — deps: M0
 - Review: [ ] pending
-- [~] M1.1 `ReplySubject`, `FileNames`, `Recipients` + tests `{arch:brief}`
-- [~] M1.2 `FtsQuery` + tests `{arch:brief}`
-- [~] M1.3 `SlotFormatter`, `TimeZoneLabels` + tests `{arch:brief}`
-- [~] M1.4 `HtmlBody` + tests `{arch:brief}`
-- [~] M1.5 `PathPolicy` + tests (junction test Windows-only) `{arch:brief}`
-- [~] M1.6 `InviteGate` + tests `{arch:brief}`
-- [~] M1.7 `Settings` model, defaults, `Validate()`, shared mailbox entries + tests `{arch:brief}`
-- [~] M1.8 `FreeBusy.BusyIntervals` / `FreeSlots`, 28-day chunk joining + tests `{arch:brief}`
+- [x] M1.1 `ReplySubject`, `FileNames`, `Recipients` + tests `{arch:brief}`
+- [x] M1.2 `FtsQuery` + tests `{arch:brief}`
+- [x] M1.3 `SlotFormatter`, `TimeZoneLabels` + tests `{arch:brief}`
+- [x] M1.4 `HtmlBody` + tests `{arch:brief}`
+- [x] M1.5 `PathPolicy` + tests (junction test Windows-only) `{arch:brief}`
+- [x] M1.6 `InviteGate` + tests `{arch:brief}`
+- [x] M1.7 `Settings` model, defaults, `Validate()`, shared mailbox entries + tests `{arch:brief}`
+- [x] M1.8 `FreeBusy.BusyIntervals` / `FreeSlots`, 28-day chunk joining + tests `{arch:brief}`
 
 ## M2 Index (SPEC §9) — deps: M1.2
 - Review: [ ] pending
@@ -50,8 +50,8 @@ v0.0.1 release.
 
 ## M3 Host plumbing (SPEC §7, §13) — deps: M0
 - Review: [ ] pending
-- [~] M3.1 `BearerAuth` middleware + tests (Origin → 401, live token swap) `{arch:brief}`
-- [~] M3.2 `ActivityHub` (ref-counted states, ring buffer, 10 Hz throttle) + tests `{arch:brief}`
+- [x] M3.1 `BearerAuth` middleware + tests (Origin → 401, live token swap) `{arch:brief}`
+- [x] M3.2 `ActivityHub` (ref-counted states, ring buffer, 10 Hz throttle) + tests `{arch:brief}`
 
 ## M4 App shell — deps: M1.7, M3
 - Review: [ ] pending
@@ -101,3 +101,13 @@ v0.0.1 release.
 
 Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-12 M0.1 Solution scaffold: slnx, Core/App/Tests projects, pinned packages, 2 tests (review: approve, 0 fix rounds)
+2026-11-12 M1.1 implemented in parallel worktree, merged to dev (4208a5b)
+2026-11-12 M1.2 implemented in parallel worktree, merged to dev (6af376a)
+2026-11-12 M1.3 implemented in parallel worktree, merged to dev (0dd217b)
+2026-11-12 M1.4 implemented in parallel worktree, merged to dev (ba2b9f9)
+2026-11-12 M1.5 implemented in parallel worktree, merged to dev (1368b33)
+2026-11-12 M1.6 implemented in parallel worktree, merged to dev (c1717b2)
+2026-11-12 M1.7 implemented in parallel worktree, merged to dev (290dd06)
+2026-11-12 M1.8 implemented in parallel worktree, merged to dev (391f309)
+2026-11-12 M3.1 implemented in parallel worktree, merged to dev (bfa56cb)
+2026-11-12 M3.2 ActivityHub: states, ring buffer, throttled Changed, 27 tests
