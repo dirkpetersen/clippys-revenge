@@ -88,7 +88,7 @@ public sealed record ResolvedInvite(
     IReadOnlyList<string> Unresolved);
 
 /// <summary>The saved meeting's ids. Empty strings when Outlook saved it but the ids couldn't be read.</summary>
-public sealed record CreatedMeeting(string EntryId, string StoreId);
+public sealed record CreatedMeeting(string EntryId, string StoreId, bool Categorized = false);
 
 public interface IMeetingCalendar
 {

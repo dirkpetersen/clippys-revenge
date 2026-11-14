@@ -433,6 +433,64 @@ public class SafetySourceScanTests
             "The only Outlook .Move( allowed is the new reply draft into Drafts, found:" + Environment.NewLine + string.Join(Environment.NewLine, hits));
     }
 
+    // ---- Draft invite category (M15.2, SPEC 22.2) ----
+
+    private const string DraftInvitesApp = "src/ClippysRevenge.App/OutlookCalendar.DraftInvites.cs";
+    private const string InvitesApp = "src/ClippysRevenge.App/OutlookCalendar.Invites.cs";
+    private const string CategoriesAssign = @"\.\s*Categories\s*=(?![=>])";
+    private const string AnyAssign = @"\b\w+\s*\.\s*(\w+)\s*=(?![=>])";
+
+    [Fact]
+    public void CategoriesWrites_OnlyInCreateMeetingAndCheck()
+    {
+        var hits = Find(f => f.Code, CategoriesAssign);
+        Assert.Equal(2, hits.Count);
+        Assert.Single(hits, h => h.StartsWith(InvitesApp + ":", StringComparison.Ordinal));
+        Assert.Single(hits, h => h.StartsWith(DraftInvitesApp + ":", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void DraftInviteCheck_IsCategoriesOnlySave()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == DraftInvitesApp);
+        Assert.Single(Regex.Matches(f.Code, @"\.\s*Save\s*\(\s*\)"));
+        var assigns = Regex.Matches(f.Code, AnyAssign);
+        var m = Assert.Single(assigns);
+        Assert.Equal("Categories", m.Groups[1].Value);
+        Assert.DoesNotMatch(@"\.\s*(Close|Display|Send|Move|Delete|PermanentDelete)\s*\(", f.Code);
+    }
+
+    [Fact]
+    public void MasterCategories_NeverRecolouredOrRemoved()
+    {
+        var files = Scan.Value.Files.Where(f => f.Rel.StartsWith("src/ClippysRevenge.App/OutlookCalendar", StringComparison.Ordinal)).ToList();
+        Assert.Contains(files, f => f.Rel == InvitesApp);
+        Assert.Contains(files, f => f.Rel == DraftInvitesApp);
+        var bad = files.SelectMany(f => Regex.Matches(f.Code, @"\.\s*Color\s*=(?!=)|\.\s*Remove\s*\(")
+            .Select(m => $"{f.Rel}:{LineOf(f.Code, m.Index)}: {m.Value}")).ToList();
+        AssertNone(bad, "Master-list categories are never recoloured or removed.");
+        Assert.Contains("OlCategoryColor.olCategoryColorOrange", files.Single(f => f.Rel == InvitesApp).Code);
+    }
+
+    [Fact]
+    public void CategoryName_IsTheSpecString()
+    {
+        Assert.Equal("Clippy draft invite", DraftInvites.CategoryName);
+        Assert.EndsWith("/8229000B", DraftInvites.FInvitedProperty);
+        Assert.Contains("{00062002-0000-0000-C000-000000000046}", DraftInvites.FInvitedProperty);
+    }
+
+    [Fact]
+    public void CategoryScanMatchers_CatchPlantedViolations()
+    {
+        Assert.Matches(CategoriesAssign, "item.Categories = x;");
+        Assert.DoesNotMatch(CategoriesAssign, "if (item.Categories == x) {}");
+        Assert.DoesNotMatch(CategoriesAssign, "var c = item.Categories;");
+        var m = Regex.Match("item.Subject = \"x\";", AnyAssign);
+        Assert.True(m.Success);
+        Assert.Equal("Subject", m.Groups[1].Value);
+    }
+
     // ---- Graph ----
 
     [Fact]

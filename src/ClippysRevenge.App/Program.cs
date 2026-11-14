@@ -360,8 +360,15 @@ internal static class Program
         var meetingNotes = replyWriter is null ? null
             : new MeetingNotes(replyWriter, replyWriter, () => signatures.Default(SignatureKind.Reply),
                 loggerFactory.CreateLogger<MeetingNotes>());
-        var invites = new MeetingInvites(new OutlookMeetingCalendar(worker, stores, () => settings),
-            () => settings, hub, TimeZoneInfo.Local, notes: meetingNotes);
+        var draftInvites = new DraftInvites(
+            new OutlookDraftInviteCalendar(worker, loggerFactory.CreateLogger<OutlookDraftInviteCalendar>()),
+            new DraftInvitesStore(Path.Combine(dataDir, DraftInvitesStore.FileName), loggerFactory.CreateLogger<DraftInvitesStore>()),
+            () => worker.State == OutlookConnectionState.Available,
+            TimeZoneInfo.Local, logger: loggerFactory.CreateLogger<DraftInvites>());
+        if (sync is not null) sync.CycleCompleted += _ => draftInvites.OnSyncCycleCompleted();
+        var invites = new MeetingInvites(
+            new OutlookMeetingCalendar(worker, stores, () => settings, loggerFactory.CreateLogger<OutlookMeetingCalendar>()),
+            () => settings, hub, TimeZoneInfo.Local, tracker: draftInvites, notes: meetingNotes);
 
         var host = new McpHttpHost(new McpHostOptions
         {
