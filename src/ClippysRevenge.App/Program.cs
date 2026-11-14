@@ -168,6 +168,8 @@ internal static class Program
             indexErrorScope = hub.Begin(ActivityState.Error, "index can't be opened");
         }
 
+        var freeBusy = new OutlookFreeBusySource(worker);
+
         // AI drafting (SPEC 19). Needs the index, so there is no worker when the index failed to open.
         // A failure here is not an index failure: AI stays off and the rest of the app runs.
         if (indexes is not null && mail is not null && sync is not null && replyWriter is not null)
@@ -199,7 +201,7 @@ internal static class Program
                 styleGuide,
                 () => signatures.Default(SignatureKind.Reply), hub, balloons,
                 () => worker.State == OutlookConnectionState.Available, () => syncRef.IsPaused, TimeZoneInfo.Local,
-                Logger: loggerFactory.CreateLogger<DraftWorker>()));
+                Logger: loggerFactory.CreateLogger<DraftWorker>(), FreeBusy: freeBusy));
             var draftsRef = drafts;
             sync.CycleCompleted += _ => draftsRef.Wake();
             }
@@ -367,7 +369,7 @@ internal static class Program
             ConfigureServices = s =>
             {
                 s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(stores).AddSingleton(invites)
-                    .AddSingleton<IFreeBusySource>(new OutlookFreeBusySource(worker))
+                    .AddSingleton<IFreeBusySource>(freeBusy)
                     .AddSingleton(sp => new FreeTimeFinder(sp.GetRequiredService<IFreeBusySource>(), TimeProvider.System, TimeZoneInfo.Local, logger: loggerFactory.CreateLogger<FreeTimeFinder>()));
                 s.AddSingleton(signatures)
                     .AddSingleton<IDraftWriter>(new OutlookDraftWriter(worker, stores, loggerFactory.CreateLogger<OutlookDraftWriter>()))
