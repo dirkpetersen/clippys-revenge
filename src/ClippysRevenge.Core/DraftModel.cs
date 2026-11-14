@@ -45,7 +45,7 @@ public static class DraftModel
 
     /// <summary>SPEC 19.6 style schema (used by M11.6).</summary>
     public const string StyleSchema =
-        """{"type":"object","additionalProperties":false,"required":["body_markdown"],"properties":{"body_markdown":{"type":"string"}}}""";
+        """{"type":"object","additionalProperties":false,"required":["body_markdown"],"properties":{"body_markdown":{"type":"string"},"meeting_phrasing":{"type":"string","maxLength":600}}}""";
 
     public const int DraftMaxOutputTokens = 8_000;
     public const int StyleMaxOutputTokens = 16_000;

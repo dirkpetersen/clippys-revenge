@@ -267,7 +267,9 @@ Rules:
 - Quote greetings, sign-offs and phrases exactly as the user writes them, in their language.
 - Keep the guide between 300 and 1,500 words.
 - Start directly with the first section heading. No YAML frontmatter, no title, and no text before or after the guide.
-- Return JSON with one field, body_markdown, that holds the guide.
+- Don't write about proposing meeting times in body_markdown.
+- Return JSON with body_markdown, which holds the guide, and meeting_phrasing.
+- meeting_phrasing: one to three sentences, in English, on how the user proposes meeting times: their usual lead-in and how they ask the other person to choose, quoting their wording. No names. Leave meeting_phrasing out when the samples show no meeting proposals.
 """.ReplaceLineEndings("\n");
 
     public static string User(StyleCorpusResult.Built corpus, DateTimeOffset now, TimeZoneInfo zone)
@@ -318,18 +320,199 @@ public static class StyleSkillText
         return s.Length == 0 ? "the user" : s;
     }
 
-    /// <summary>The whole SKILL.md text, "\n" line endings, ending with "\n".</summary>
-    public static string Render(string displayName, DateOnly generatedLocalDate, int sampleCount, string body)
+    /// <summary>The current section's start marker line. M15.3 changes this to "... v2 -->" (SPEC 22.5).</summary>
+    public const string MeetingStartMarker = "<!-- clippy:meeting-times v1 -->";
+    /// <summary>Any version's start marker line starts with this (after trimming).</summary>
+    public const string MeetingMarkerPrefix = "<!-- clippy:meeting-times";
+    public const string MeetingEndMarker = "<!-- /clippy:meeting-times -->";
+    public const string DefaultMeetingPhrasing =
+        "Introduce the options with one short sentence in the same tone and language as the rest of the reply, and ask the other person to pick one or suggest another time.";
+    public const int MaxMeetingPhrasingChars = 600;
+
+    /// <summary>The whole SKILL.md text, "\n" line endings, ending with "\n".
+    /// meetingPhrasing goes through CleanMeetingPhrasing (null/invalid gives the default).</summary>
+    public static string Render(string displayName, DateOnly generatedLocalDate, int sampleCount, string body,
+        string? meetingPhrasing = null)
     {
         ArgumentNullException.ThrowIfNull(displayName);
         ArgumentNullException.ThrowIfNull(body);
         var date = generatedLocalDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var n = sampleCount.ToString(CultureInfo.InvariantCulture);
+        var b = body.TrimEnd();
         return "---\nname: " + SkillName + "\n"
-               + "description: \"" + displayName + "'s email writing style: greetings, sign-offs, tone, length and phrasing by audience. Use when drafting or replying to email as " + displayName + ".\"\n"
+               + "description: \"" + displayName + "'s email writing style: greetings, sign-offs, tone, length and phrasing by audience, and how to offer meeting times. Use when drafting or replying to email as " + displayName + ".\"\n"
                + "---\n"
                + GeneratedCommentStart + " on " + date + " from " + n + " sent emails. You can edit this file; Clippy won't replace your edits without asking. -->\n\n"
-               + body.TrimEnd() + "\n";
+               + (b.Length > 0 ? b + "\n\n" : "")
+               + MeetingSection(displayName, meetingPhrasing);
+    }
+
+    // One piece per bullet, so M15.3 (SPEC 22.5) can change the version and the last bullet in place.
+    private static string[] MeetingBullets(string name) =>
+    [
+        "- Never make up times or guess " + name + "'s availability. Get them from the Clippy's Revenge MCP server: call `find_free_times` with the people who should attend (the sender, plus the others on the email when they are invited too), `duration_minutes` from the email (60 when it doesn't say), and `offer_cet: true` when the person you are writing to is in Europe.",
+        "- Paste the tool's `offer_text` unchanged, one option per line, so " + name + " can delete the lines that don't suit:\n\n  ```\n  1. Tue 11/18  10:00–11:00 PT  (19:00–20:00 CET)\n  2. Wed 11/19  14:00–15:00 PT  (23:00–00:00 CET)\n  ```\n",
+        "- The options are already ranked: times right before or after " + name + "'s meetings come first, then times next to tentative meetings, then the rest, each group in date order. Don't reorder them.",
+        "- For someone in Europe, each option also shows the time in CET (always labelled CET, also in summer). Options between 08:00 and 18:00 CET come first. If there aren't enough, the others follow in a second list headed \"Outside European office hours:\"; translate that heading into the language of the reply.",
+        "- If `find_free_times` finds no time or isn't available, write that " + name + " will suggest times, and list none.",
+        "- Don't book a meeting or create an invite unless " + name + " asks.",
+    ];
+
+    /// <summary>The fixed section of SPEC 21.7, from the start marker line through the end marker line plus "\n".</summary>
+    /// <exception cref="ArgumentNullException">displayName null.</exception>
+    public static string MeetingSection(string displayName, string? phrasing)
+    {
+        ArgumentNullException.ThrowIfNull(displayName);
+        return MeetingStartMarker + "\n"
+               + "## Offering meeting times\n\n"
+               + "This section is written by Clippy's Revenge and replaced when the skill is regenerated.\n\n"
+               + "When an email asks for or suggests a meeting or a call and " + displayName + " wants to meet, offer concrete times in the reply:\n\n"
+               + string.Join("\n", MeetingBullets(displayName)) + "\n\n"
+               + "### How " + displayName + " offers times\n\n"
+               + CleanMeetingPhrasing(phrasing) + "\n"
+               + MeetingEndMarker + "\n";
+    }
+
+    private static string CollapseWhitespace(string s)
+    {
+        var sb = new StringBuilder(s.Length);
+        bool space = false;
+        foreach (var c in s)
+        {
+            if (char.IsWhiteSpace(c)) { space = true; continue; }
+            if (space && sb.Length > 0) sb.Append(' ');
+            space = false;
+            sb.Append(c);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>SPEC 21.7 validation. Returns the cleaned text, or DefaultMeetingPhrasing. Never throws.</summary>
+    public static string CleanMeetingPhrasing(string? raw)
+    {
+        try
+        {
+            if (raw is null) return DefaultMeetingPhrasing;
+            var sb = new StringBuilder(raw.Length);
+            foreach (var c in raw) sb.Append(char.IsControl(c) ? ' ' : c);
+            var s = CollapseWhitespace(sb.ToString());
+            s = MailText.Redact(s);
+            while (s.Contains("<!--", StringComparison.Ordinal) || s.Contains("-->", StringComparison.Ordinal))
+                s = s.Replace("<!--", "", StringComparison.Ordinal).Replace("-->", "", StringComparison.Ordinal);
+            s = CollapseWhitespace(s);
+            return s.Length >= 1 && s.Length <= MaxMeetingPhrasingChars ? s : DefaultMeetingPhrasing;
+        }
+        catch (Exception)
+        {
+            return DefaultMeetingPhrasing;
+        }
+    }
+
+    /// <summary>The raw "meeting_phrasing" string of the style output, or null. Never throws. Doesn't clean.</summary>
+    public static string? ReadMeetingPhrasing(JsonElement output)
+    {
+        try
+        {
+            if (output.ValueKind != JsonValueKind.Object) return null;
+            if (!output.TryGetProperty("meeting_phrasing", out var v) || v.ValueKind != JsonValueKind.String) return null;
+            return v.GetString();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsStartLine(string line) => line.Trim().StartsWith(MeetingMarkerPrefix, StringComparison.Ordinal);
+
+    private static bool IsEndLine(string line) => line.Trim() == MeetingEndMarker;
+
+    /// <summary>Finds the next complete block at or after from: start line index and end line index, or false.</summary>
+    private static bool TryFindBlock(List<string> lines, int from, out int start, out int end)
+    {
+        start = end = -1;
+        for (int i = from; i < lines.Count; i++)
+        {
+            if (!IsStartLine(lines[i])) continue;
+            for (int j = i + 1; j < lines.Count; j++)
+            {
+                if (!IsEndLine(lines[j])) continue;
+                start = i;
+                end = j;
+                return true;
+            }
+            return false;
+        }
+        return false;
+    }
+
+    /// <summary>Removes every complete meeting-times block and returns the rest, trimmed. Never throws (null gives "").</summary>
+    public static string RemoveMeetingSections(string text)
+    {
+        try
+        {
+            var lines = (text ?? "").ReplaceLineEndings("\n").Split('\n').ToList();
+            var kept = new List<string>();
+            int pos = 0;
+            while (pos < lines.Count)
+            {
+                if (!TryFindBlock(lines, pos, out var s, out var e)) break;
+                kept.AddRange(lines.GetRange(pos, s - pos));
+                pos = e + 1;
+            }
+            if (pos < lines.Count) kept.AddRange(lines.GetRange(pos, lines.Count - pos));
+            return string.Join('\n', kept).Trim();
+        }
+        catch (Exception)
+        {
+            return "";
+        }
+    }
+
+    /// <summary>The display name from a SKILL.md text's description line, cleaned; "the user" when not found. Never throws.</summary>
+    internal static string NameFromDescription(string fileText)
+    {
+        try
+        {
+            var lines = (fileText ?? "").TrimStart('﻿').ReplaceLineEndings("\n").Split('\n');
+            if (lines.Length == 0 || lines[0].TrimEnd() != "---") return "the user";
+            for (int i = 1; i < lines.Length; i++)
+            {
+                if (lines[i].Trim() == "---") break;
+                const string prefix = "description: \"";
+                if (!lines[i].StartsWith(prefix, StringComparison.Ordinal)) continue;
+                var rest = lines[i][prefix.Length..];
+                int k = rest.IndexOf("'s email writing style", StringComparison.Ordinal);
+                return k < 0 ? "the user" : CleanDisplayName(rest[..k]);
+            }
+            return "the user";
+        }
+        catch (Exception)
+        {
+            return "the user";
+        }
+    }
+
+    /// <summary>The raw phrasing from the first complete meeting-times block of a SKILL.md text, or null. Never throws.</summary>
+    internal static string? PhrasingFromSection(string fileText)
+    {
+        try
+        {
+            var lines = (fileText ?? "").ReplaceLineEndings("\n").Split('\n').ToList();
+            if (!TryFindBlock(lines, 0, out var s, out var e)) return null;
+            for (int i = s + 1; i < e; i++)
+            {
+                var t = lines[i].Trim();
+                if (!t.StartsWith("### How ", StringComparison.Ordinal) || !t.EndsWith(" offers times", StringComparison.Ordinal)) continue;
+                var phrasing = string.Join(' ', lines.GetRange(i + 1, e - i - 1)).Trim();
+                return phrasing.Length == 0 ? null : phrasing;
+            }
+            return null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     /// <summary>Validates the style JSON and returns the cleaned, redacted body, or null when invalid. Never throws.</summary>
@@ -393,6 +576,16 @@ public static class StyleSkillText
             return "";
         }
     }
+}
+
+public enum MeetingSectionRefresh
+{
+    /// <summary>The three files were rewritten with the current section.</summary>
+    Updated,
+    /// <summary>The user file already contains MeetingStartMarker. Nothing written.</summary>
+    AlreadyCurrent,
+    /// <summary>A file missing or unusable, no valid state, the user file edited, or the result too big. Nothing written.</summary>
+    NotApplicable,
 }
 
 /// <summary>The three fixed files (SPEC 5.1, 19.6). All fully qualified.</summary>
@@ -581,10 +774,37 @@ public sealed class StyleSkillFiles
         {
             var text = ReadUsable(p);
             if (text is null) continue;
-            var body = StyleSkillText.StripHeader(text);
+            // The drafting model has its own meeting rules and no tools (SPEC 21.6), so the section stays out.
+            var body = StyleSkillText.RemoveMeetingSections(StyleSkillText.StripHeader(text));
             return body.Length == 0 ? StyleSkillText.NoStyleGuideLine : body;
         }
         return StyleSkillText.NoStyleGuideLine;
+    }
+
+    /// <summary>SPEC 21.7 "Existing skills". No model call. zone gives the comment's local date.</summary>
+    /// <exception cref="ArgumentNullException">zone null.</exception>
+    /// <exception cref="IOException">Write failed (from Write).</exception>
+    /// <exception cref="UnauthorizedAccessException">Same.</exception>
+    public MeetingSectionRefresh RefreshMeetingSection(TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(zone);
+        var user = ReadUsable(Paths.UserSkillFile);
+        var app = ReadUsable(Paths.AppCopyFile);
+        if (user is null || app is null) return MeetingSectionRefresh.NotApplicable;
+        if (IsEdited()) return MeetingSectionRefresh.NotApplicable;
+        var state = ReadState();
+        if (state is null) return MeetingSectionRefresh.NotApplicable;
+        if (user.Contains(StyleSkillText.MeetingStartMarker, StringComparison.Ordinal)) return MeetingSectionRefresh.AlreadyCurrent;
+
+        var name = StyleSkillText.NameFromDescription(app);
+        var phrasing = StyleSkillText.PhrasingFromSection(app);
+        var body = StyleSkillText.RemoveMeetingSections(StyleSkillText.StripHeader(app));
+        var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(state.GeneratedUtc, zone).DateTime);
+        var text = StyleSkillText.Render(name, date, state.SampleCount, body, phrasing);
+        if (new UTF8Encoding(false).GetByteCount(text) > StyleSkillText.MaxReadBytes) return MeetingSectionRefresh.NotApplicable;
+        if (IsEdited()) return MeetingSectionRefresh.NotApplicable;
+        Write(text, state.GeneratedUtc, state.SampleCount, state.NewestSentUtc);
+        return MeetingSectionRefresh.Updated;
     }
 
     /// <summary>The full text of the file the prompt would use (user file, else app copy); null when neither is usable.</summary>
@@ -637,6 +857,7 @@ public static class StyleTexts
     public const string SaveFailed = "couldn't save the skill file";
     public const string IndexFailed = "couldn't read the index";
     public const string CorpusFailed = "couldn't prepare your sent emails";
+    public const string MeetingSectionEvent = "writing style: added how to offer meeting times";
 
     public static string CallFailed(ModelFailure kind) => "a Claude call failed (" + kind + ")";
 
@@ -698,6 +919,31 @@ public sealed class StyleSkill
         if (!EmailAddress.IsValid(owner.Email)) throw new ArgumentException("The owner's address isn't a valid email address.", nameof(owner));
     }
 
+    /// <summary>Runs Files.RefreshMeetingSection under the run gate (SPEC 21.7). True only when the files were updated.
+    /// Needs no consent and no Enabled. Never throws.</summary>
+    public bool RefreshMeetingSection()
+    {
+        // A style run in progress writes the current section itself; a concurrent refresh would race its write.
+        if (!_gate.Wait(0)) return false;
+        try
+        {
+            var r = Files.RefreshMeetingSection(_time.LocalTimeZone);
+            if (r != MeetingSectionRefresh.Updated) return false;
+            _logger?.LogInformation("Writing style skill: meeting-times section updated.");
+            _activity.Event(ActivityKind.Ai, StyleTexts.MeetingSectionEvent, null, null);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning("Writing style skill: meeting-times section not updated ({Type})", ex.GetType().Name);
+            return false;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     public Task<StyleRunResult> RunIfDueAsync(Recipient owner, CancellationToken ct)
     {
         ValidateOwner(owner);
@@ -713,6 +959,7 @@ public sealed class StyleSkill
     private async Task<StyleRunResult> RunIfDueCoreAsync(Recipient owner, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+        RefreshMeetingSection();
         var s = _settings();
         if (!(s.Enabled && s.AutoRegenerateStyle && s.HasConsent)) return new StyleRunResult.NotDue();
         var now = _time.GetUtcNow();
@@ -888,6 +1135,7 @@ public sealed class StyleSkill
         ct.ThrowIfCancellationRequested();
 
         string? body = null;
+        string? phrasing = null;
         switch (result)
         {
             case ModelResult.RateLimited:
@@ -899,6 +1147,7 @@ public sealed class StyleSkill
             case ModelResult.Ok ok:
                 body = StyleSkillText.ParseBody(ok.Output);
                 if (body is null) return Fail(StyleTexts.BadAnswer, null);
+                phrasing = StyleSkillText.ReadMeetingPhrasing(ok.Output);
                 break;
             default:
                 return Fail(StyleTexts.BadAnswer, null);
@@ -910,7 +1159,7 @@ public sealed class StyleSkill
 
         var text = StyleSkillText.Render(StyleSkillText.CleanDisplayName(owner.Name),
             DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, _time.LocalTimeZone).DateTime),
-            built.Samples.Count, body);
+            built.Samples.Count, body, phrasing);
         try
         {
             Files.Write(text, now, built.Samples.Count, built.NewestSentUtc);

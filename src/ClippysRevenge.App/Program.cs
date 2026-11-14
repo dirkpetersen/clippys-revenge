@@ -211,6 +211,11 @@ internal static class Program
                 draftModel = null;
                 styleSkill = null;
             }
+            if (styleSkill is not null)
+            {
+                var skillAtStart = styleSkill;
+                _ = Task.Run(skillAtStart.RefreshMeetingSection);   // SPEC 21.7: off the UI thread, no consent needed, never throws
+            }
         }
 
         // After Outlook stops hanging, resume sync at once instead of waiting for the next interval (SPEC 4).

@@ -23,6 +23,9 @@ public class DraftModelTests
     {
         using var d = JsonDocument.Parse(DraftModel.StyleSchema);
         Assert.Equal(["body_markdown"], d.RootElement.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(600, d.RootElement.GetProperty("properties").GetProperty("meeting_phrasing").GetProperty("maxLength").GetInt32());
+        Assert.Equal("""{"type":"object","additionalProperties":false,"required":["body_markdown"],"properties":{"body_markdown":{"type":"string"},"meeting_phrasing":{"type":"string","maxLength":600}}}""", DraftModel.StyleSchema);
+        Assert.True(ClaudeCliArgs.TryCompactSchema(DraftModel.StyleSchema, out _));
     }
 
     [Fact]

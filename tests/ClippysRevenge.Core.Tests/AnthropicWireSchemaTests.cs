@@ -22,9 +22,11 @@ public class AnthropicWireSchemaTests
     }
 
     [Fact]
-    public void StyleSchema_Unchanged()
+    public void StyleSchema_ReducesExactly()
     {
-        Assert.True(JsonElement.DeepEquals(Parse(DraftModel.StyleSchema), Reduce(DraftModel.StyleSchema)));
+        Assert.True(JsonElement.DeepEquals(
+            Parse("""{"type":"object","additionalProperties":false,"required":["body_markdown"],"properties":{"body_markdown":{"type":"string"},"meeting_phrasing":{"type":"string"}}}"""),
+            Reduce(DraftModel.StyleSchema)));
     }
 
     [Fact]
