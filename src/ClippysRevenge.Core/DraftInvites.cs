@@ -240,7 +240,7 @@ public sealed class DraftInvitesStore
 }
 
 /// <summary>Tracked draft invites: list, check, triggers (SPEC 22.2, 22.3). Thread-safe.</summary>
-public sealed class DraftInvites : IDraftInviteTracker
+public sealed class DraftInvites : IDraftInviteTracker, IAttentionSource
 {
     public const string CategoryName = "Clippy draft invite";
     public const string FInvitedProperty =

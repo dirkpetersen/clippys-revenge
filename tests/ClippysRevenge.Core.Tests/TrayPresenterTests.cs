@@ -318,4 +318,74 @@ public class TrayPresenterTests
             CultureInfo.CurrentCulture = old;
         }
     }
+
+    // ---- attention suffix (SPEC 22.6) ----
+
+    private static readonly string S1 = AttentionBadge.TooltipSuffix(1);
+    private static readonly string S2 = AttentionBadge.TooltipSuffix(2);
+
+    [Fact]
+    public void Idle_with_attention()
+    {
+        var (p, _) = Make();
+        var v = p.Update(ActivityState.Idle, ActivityProgress.None,
+            new TrayStats(48210, T.AddMinutes(-2), T.AddMinutes(3), false), null, attentionCount: 2);
+        Assert.Equal("Clippy — idle · 48,210 emails · synced 2 min ago" + S2, v.Tooltip);
+        Assert.Equal("Clippy — idle · 48,210 emails", v.StatusLine);
+    }
+
+    [Fact]
+    public void Singular()
+    {
+        var (p, _) = Make();
+        var v = p.Update(ActivityState.Idle, ActivityProgress.None, TrayStats.Unknown, null, attentionCount: 1);
+        Assert.EndsWith(S1, v.Tooltip);
+    }
+
+    [Fact]
+    public void Zero_is_unchanged()
+    {
+        foreach (var (state, progress) in new[]
+        {
+            (ActivityState.Idle, ActivityProgress.None),
+            (ActivityState.Error, Lbl("oops")),
+            (ActivityState.Backfilling, Lbl("inbox", 5, 10)),
+        })
+        {
+            var (p1, _) = Make();
+            var (p2, _) = Make();
+            Assert.Equal(p1.Update(state, progress, TrayStats.Unknown, null),
+                p2.Update(state, progress, TrayStats.Unknown, null, attentionCount: 0));
+        }
+    }
+
+    [Fact]
+    public void Long_label_keeps_suffix()
+    {
+        var (p, _) = Make();
+        var v = p.Update(ActivityState.Error, Lbl(new string('x', 200)), TrayStats.Unknown, null, attentionCount: 3);
+        var s3 = AttentionBadge.TooltipSuffix(3);
+        Assert.Equal(127, v.Tooltip.Length);
+        Assert.EndsWith(s3, v.Tooltip);
+        Assert.Equal('…', v.Tooltip[127 - s3.Length - 1]);
+    }
+
+    [Fact]
+    public void Serving_pulse_has_suffix()
+    {
+        var (p, c) = Make();
+        p.Update(ActivityState.Serving, Lbl("search_emails"), TrayStats.Unknown, null, attentionCount: 2);
+        c.Advance(TimeSpan.FromMilliseconds(300));
+        var v = p.Update(ActivityState.Idle, ActivityProgress.None, TrayStats.Unknown, null, attentionCount: 2);
+        Assert.StartsWith("Clippy — search_emails", v.Tooltip);
+        Assert.EndsWith(S2, v.Tooltip);
+    }
+
+    [Fact]
+    public void Negative_count_throws()
+    {
+        var (p, _) = Make();
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            p.Update(ActivityState.Idle, ActivityProgress.None, TrayStats.Unknown, null, attentionCount: -1));
+    }
 }

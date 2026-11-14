@@ -252,6 +252,15 @@ internal static class Program
                 : ct => AiOwner.ResolveAsync(aiMailboxForUi, indexesForUi, WorkPriority.Interactive, ct),
             drafts is null ? null : drafts.Today);
 
+        // Built before the tray: the tray's attention badge counts tracked draft invites (SPEC 22.6).
+        var draftInvites = new DraftInvites(
+            new OutlookDraftInviteCalendar(worker, loggerFactory.CreateLogger<OutlookDraftInviteCalendar>()),
+            new DraftInvitesStore(Path.Combine(dataDir, DraftInvitesStore.FileName), loggerFactory.CreateLogger<DraftInvitesStore>()),
+            () => worker.State == OutlookConnectionState.Available,
+            TimeZoneInfo.Local, logger: loggerFactory.CreateLogger<DraftInvites>());
+        if (sync is not null) sync.CycleCompleted += _ => draftInvites.OnSyncCycleCompleted();
+        var attention = new AttentionCount([draftInvites], loggerFactory.CreateLogger<AttentionCount>());
+
         SettingsApplier? applier = null;
         McpHttpHost? hostRef = null;
         UpdateService? updates = null;
@@ -320,7 +329,8 @@ internal static class Program
                     TrayApp.ShellOpen, icons.Get(TrayIconKey.Idle));
                 form.Disposed += (_, _) => icons.Dispose();
                 return form;
-            }));
+            },
+            Attention: attention));
         trayRef = tray;
 
         // Auto-update service (SPEC 20). Started after the server start was attempted, see AfterStartAsync.
@@ -360,12 +370,6 @@ internal static class Program
         var meetingNotes = replyWriter is null ? null
             : new MeetingNotes(replyWriter, replyWriter, () => signatures.Default(SignatureKind.Reply),
                 loggerFactory.CreateLogger<MeetingNotes>());
-        var draftInvites = new DraftInvites(
-            new OutlookDraftInviteCalendar(worker, loggerFactory.CreateLogger<OutlookDraftInviteCalendar>()),
-            new DraftInvitesStore(Path.Combine(dataDir, DraftInvitesStore.FileName), loggerFactory.CreateLogger<DraftInvitesStore>()),
-            () => worker.State == OutlookConnectionState.Available,
-            TimeZoneInfo.Local, logger: loggerFactory.CreateLogger<DraftInvites>());
-        if (sync is not null) sync.CycleCompleted += _ => draftInvites.OnSyncCycleCompleted();
         var invites = new MeetingInvites(
             new OutlookMeetingCalendar(worker, stores, () => settings, loggerFactory.CreateLogger<OutlookMeetingCalendar>()),
             () => settings, hub, TimeZoneInfo.Local, tracker: draftInvites, notes: meetingNotes);

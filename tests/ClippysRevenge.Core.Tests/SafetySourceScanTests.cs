@@ -350,6 +350,18 @@ public class SafetySourceScanTests
     }
 
     [Fact]
+    public void No_unowned_icon_handles() =>
+        AssertNone(Find(f => f.Code, @"\bGetHicon\s*\(|\bFromHandle\s*\("),
+            "Badged icons come from an in-memory .ico: no GetHicon / Icon.FromHandle (SPEC 22.6).");
+
+    [Fact]
+    public void Badge_renderer_has_no_pinvoke()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/Tray/TrayBadgeRenderer.cs");
+        Assert.DoesNotMatch(@"\bDllImport\b|\bLibraryImport\b", f.Code);
+    }
+
+    [Fact]
     public void AiUi_NeverSignsInAndNeverShowsTheKey()
     {
         const string TrayDir = "src/ClippysRevenge.App/Tray/";
