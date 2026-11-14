@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 
 namespace ClippysRevenge.Core;
@@ -20,27 +21,41 @@ public static partial class Recipients
             var entry = part.Trim();
             if (entry.Length == 0) continue;
 
-            string name = "", email;
-            var m = AngleForm().Match(entry);
-            if (m.Success)
-            {
-                name = m.Groups["name"].Value.Trim();
-                email = m.Groups["email"].Value.Trim();
-                if (name.Length >= 2 && name[0] == '"' && name[^1] == '"')
-                    name = name[1..^1].Trim();
-            }
-            else
-            {
-                email = entry;
-            }
-
-            if (!EmailAddress.IsValid(email))
+            if (!TryParseEntry(entry, out var r))
                 throw new FormatException(
                     $"Recipient \"{entry}\" has no valid email address. Use \"Name <email>\" or a bare email, and separate recipients with \";\".");
 
-            if (seen.Add(email)) result.Add(new Recipient(name, email));
+            if (seen.Add(r.Email)) result.Add(r);
         }
         return result;
+    }
+
+    /// <summary>One list entry ("Name &lt;email&gt;", "\"Name\" &lt;email&gt;", "&lt;email&gt;" or a bare email), trimmed.
+    /// False for null, blank, or no valid address (EmailAddress.IsValid). Never throws.</summary>
+    public static bool TryParseEntry(string? entry, [NotNullWhen(true)] out Recipient? recipient)
+    {
+        recipient = null;
+        if (entry is null) return false;
+        entry = entry.Trim();
+        if (entry.Length == 0) return false;
+
+        string name = "", email;
+        var m = AngleForm().Match(entry);
+        if (m.Success)
+        {
+            name = m.Groups["name"].Value.Trim();
+            email = m.Groups["email"].Value.Trim();
+            if (name.Length >= 2 && name[0] == '"' && name[^1] == '"')
+                name = name[1..^1].Trim();
+        }
+        else
+        {
+            email = entry;
+        }
+
+        if (!EmailAddress.IsValid(email)) return false;
+        recipient = new Recipient(name, email);
+        return true;
     }
 
     public static string Format(IEnumerable<Recipient> recipients)

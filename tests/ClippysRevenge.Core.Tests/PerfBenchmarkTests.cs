@@ -95,4 +95,56 @@ public class PerfBenchmarkTests : IDisposable
         Assert.True(single < 20, $"single p95 {single:F2} ms");
         Assert.True(all < 50, $"all p95 {all:F2} ms");
     }
+
+    [PerfFact]
+    public void EmailStats_100k_MeetsTargets()
+    {
+        var ix = new EmailIndex(Path.Combine(_dir, "stats.db"));
+        var rnd = new Random(7);
+        var start = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var batch = new List<IndexedEmail>(1000);
+        const int N = 100_000;
+        string Rcpt() { var j = rnd.Next(5000); return $"Last, First {j} <r{j}@d{j % 50}.edu>"; }
+        for (var i = 0; i < N; i++)
+        {
+            var k = rnd.Next(2000);
+            var f = rnd.Next(10);
+            batch.Add(new IndexedEmail
+            {
+                EntryId = "st-" + i,
+                Folder = f < 7 ? "Inbox" : f < 9 ? "Sent Items" : "Inbox\\Projects",
+                Subject = "subject " + i,
+                SenderName = $"Person {k}",
+                SenderEmail = $"p{k}@d{k % 50}.edu",
+                To = string.Join("; ", Enumerable.Range(0, 1 + rnd.Next(3)).Select(_ => Rcpt())),
+                Cc = string.Join("; ", Enumerable.Range(0, rnd.Next(3)).Select(_ => Rcpt())),
+                EventTime = start.AddMinutes(i * 10),
+                Body = string.Join(' ', Enumerable.Range(0, 20).Select(_ => Vocab(rnd))),
+            });
+            if (batch.Count == 1000) { ix.UpsertBatch(batch); batch.Clear(); }
+        }
+        if (batch.Count > 0) ix.UpsertBatch(batch);
+
+        var zone = TimeZoneInfo.Local;
+        var failures = new List<string>();
+        foreach (var g in Enum.GetValues<StatsGroupBy>())
+        {
+            var limit = g is StatsGroupBy.Recipient or StatsGroupBy.RecipientDomain ? 3000 : 1000;
+            var c = EmailStats.Count(ix, new SearchFilter(), g, true, zone);
+            EmailStats.Shape(c, g, StatsOrder.Count, 10, "", zone);
+            double max = 0;
+            for (var r = 0; r < 3; r++)
+            {
+                var t = Stopwatch.GetTimestamp();
+                c = EmailStats.Count(ix, new SearchFilter(), g, true, zone);
+                EmailStats.Shape(c, g, StatsOrder.Count, 10, "", zone);
+                max = Math.Max(max, Stopwatch.GetElapsedTime(t).TotalMilliseconds);
+            }
+            Console.Error.WriteLine($"PERF email_stats {EmailStats.WireName(g)} = {max:F0} ms (target < {limit})");
+            Assert.Equal(N, c.Total);
+            if (max >= limit) failures.Add($"{EmailStats.WireName(g)} {max:F0} ms");
+        }
+        Assert.True(failures.Count == 0, string.Join("; ", failures));
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+    }
 }

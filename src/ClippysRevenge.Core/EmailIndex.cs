@@ -4,6 +4,14 @@ using Microsoft.Data.Sqlite;
 
 namespace ClippysRevenge.Core;
 
+/// <summary>The search_emails filters as SQL (SPEC 11.1). Shared by Search and EmailStats; the only place filters
+/// become SQL.</summary>
+/// <param name="From">"emails e" or "emails_fts JOIN emails e ON e.id = emails_fts.rowid" (when FtsMatch is set).</param>
+/// <param name="Where">"" or " WHERE &lt;clause&gt; AND &lt;clause&gt;..." (leading space).</param>
+/// <param name="Parameters">Bound values: q, s, r0..r49, subj, from, to, folder, ha, an, ext, u (only those used).</param>
+/// <param name="FtsMatch">FtsQuery.Build(filter.Query), also bound as @q; null when there is no MATCH.</param>
+internal sealed record FilterSql(string From, string Where, DynamicParameters Parameters, string? FtsMatch);
+
 /// <summary>SQLite + FTS5 index for one mailbox (SPEC §9).</summary>
 public sealed partial class EmailIndex
 {
@@ -560,6 +568,58 @@ public sealed partial class EmailIndex
         ArgumentOutOfRangeException.ThrowIfNegative(take);
         if (take == 0) return [];
 
+        var f = BuildFilter(filter);
+        var p = f.Parameters;
+        var fts = f.FtsMatch;
+
+        // Pick the page of ids first; compute snippet/attachments/body only for those rows.
+        var snippetCol = fts is not null
+            ? "snippet(emails_fts, -1, '**', '**', '…', 16)"
+            : "NULL";
+        var outerFrom = fts is not null
+            ? "page JOIN emails e ON e.id = page.id JOIN emails_fts ON emails_fts.rowid = e.id AND emails_fts MATCH @q"
+            : "page JOIN emails e ON e.id = page.id";
+        var sql = "WITH page AS (SELECT e.id AS id, e.event_time AS t FROM " + f.From +
+                  f.Where +
+                  " ORDER BY e.event_time DESC, e.id DESC LIMIT @take OFFSET @skip) " +
+                  "SELECT e.entry_id AS EntryId, e.folder AS Folder, e.event_time AS EventTime, " +
+                  "e.sender_name AS SenderName, e.sender_email AS SenderEmail, e.to_addrs AS ToAddrs, " +
+                  "e.subject AS Subject, e.has_attachments AS HasAttachments, " +
+                  "(SELECT json_group_array(json_object('p', a.position, 'n', a.filename, 's', a.size, 'i', a.is_inline)) " +
+                  "FROM attachments a WHERE a.email_id = e.id) AS AttJson, " +
+                  snippetCol + " AS Fts, substr(e.body, 1, 1000) AS Body FROM " + outerFrom +
+                  " ORDER BY page.t DESC, page.id DESC";
+        p.Add("take", take);
+        p.Add("skip", skip);
+
+        using var conn = OpenConnection();
+        var rows = conn.Query<SearchRow>(sql, p).ToList();
+        var result = new List<EmailSummary>(rows.Count);
+        foreach (var r in rows)
+        {
+            var snippet = r.Fts is null ? "" : CollapseWhitespace(r.Fts);
+            if (snippet.Length == 0) snippet = BodySnippet(r.Body);
+            result.Add(new EmailSummary(
+                r.EntryId,
+                r.Folder ?? "",
+                DateTimeOffset.FromUnixTimeSeconds(r.EventTime),
+                r.SenderName ?? "",
+                r.SenderEmail ?? "",
+                r.ToAddrs ?? "",
+                r.Subject ?? "",
+                (r.HasAttachments ?? 0) != 0,
+                ParseAttachments(r.AttJson),
+                snippet));
+        }
+        return result;
+    }
+
+    /// <summary>The search_emails filters as SQL (SPEC 11.1). Shared by Search and EmailStats; the only place filters
+    /// become SQL. Ignores Limit and Offset.</summary>
+    /// <exception cref="ArgumentNullException">filter is null.</exception>
+    internal static FilterSql BuildFilter(SearchFilter filter)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
         var p = new DynamicParameters();
         var where = new List<string>();
         var fts = FtsQuery.Build(filter.Query);
@@ -625,47 +685,7 @@ public sealed partial class EmailIndex
             where.Add("COALESCE(e.unread, 0) = @u");
             p.Add("u", un ? 1 : 0);
         }
-
-        // Pick the page of ids first; compute snippet/attachments/body only for those rows.
-        var snippetCol = fts is not null
-            ? "snippet(emails_fts, -1, '**', '**', '…', 16)"
-            : "NULL";
-        var outerFrom = fts is not null
-            ? "page JOIN emails e ON e.id = page.id JOIN emails_fts ON emails_fts.rowid = e.id AND emails_fts MATCH @q"
-            : "page JOIN emails e ON e.id = page.id";
-        var sql = "WITH page AS (SELECT e.id AS id, e.event_time AS t FROM " + from +
-                  (where.Count > 0 ? " WHERE " + string.Join(" AND ", where) : "") +
-                  " ORDER BY e.event_time DESC, e.id DESC LIMIT @take OFFSET @skip) " +
-                  "SELECT e.entry_id AS EntryId, e.folder AS Folder, e.event_time AS EventTime, " +
-                  "e.sender_name AS SenderName, e.sender_email AS SenderEmail, e.to_addrs AS ToAddrs, " +
-                  "e.subject AS Subject, e.has_attachments AS HasAttachments, " +
-                  "(SELECT json_group_array(json_object('p', a.position, 'n', a.filename, 's', a.size, 'i', a.is_inline)) " +
-                  "FROM attachments a WHERE a.email_id = e.id) AS AttJson, " +
-                  snippetCol + " AS Fts, substr(e.body, 1, 1000) AS Body FROM " + outerFrom +
-                  " ORDER BY page.t DESC, page.id DESC";
-        p.Add("take", take);
-        p.Add("skip", skip);
-
-        using var conn = OpenConnection();
-        var rows = conn.Query<SearchRow>(sql, p).ToList();
-        var result = new List<EmailSummary>(rows.Count);
-        foreach (var r in rows)
-        {
-            var snippet = r.Fts is null ? "" : CollapseWhitespace(r.Fts);
-            if (snippet.Length == 0) snippet = BodySnippet(r.Body);
-            result.Add(new EmailSummary(
-                r.EntryId,
-                r.Folder ?? "",
-                DateTimeOffset.FromUnixTimeSeconds(r.EventTime),
-                r.SenderName ?? "",
-                r.SenderEmail ?? "",
-                r.ToAddrs ?? "",
-                r.Subject ?? "",
-                (r.HasAttachments ?? 0) != 0,
-                ParseAttachments(r.AttJson),
-                snippet));
-        }
-        return result;
+        return new FilterSql(from, where.Count > 0 ? " WHERE " + string.Join(" AND ", where) : "", p, fts);
     }
 
     private static string? Trimmed(string? s)
