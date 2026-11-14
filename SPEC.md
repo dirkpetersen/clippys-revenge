@@ -352,13 +352,16 @@ host:
 - One file per **local** date, `clippy-YYYYMMDD.log`, appended as UTF-8.
   Lines read `yyyy-MM-dd HH:mm:ss.fff <TRC|DBG|INF|WRN|ERR|CRT> <category>: <message>`,
   plus the exception type, message and stack trace when there is one.
-  For an `McpException` the message is left out (type and stack trace
-  only; M14.3): tool errors can quote search text, dates, SQL or
-  SQLite's messages back to the model, and the MCP SDK logs every
+  For an `McpException` logged under a category that starts with
+  `ModelContextProtocol` (ordinal) the message is left out (type and
+  stack trace only; M14.3): tool errors can quote search text, dates,
+  SQL or SQLite's messages back to the model, and the MCP SDK logs every
   exception a tool throws (`ModelContextProtocol…`, Error, which passes
   the Warning cap below) with the exception object. The formatted line
   itself (`"<tool>" threw an unhandled exception.`) is still written.
-  Inner exceptions are not written.
+  In every other category (`SyncService`, `SyncEngine`, …) an
+  `McpException` keeps its message, like any other exception (M13/M14
+  review). Inner exceptions are not written.
 - 7 days kept, today included. Older `clippy-YYYYMMDD.log` files are
   deleted when the first line after start-up or after midnight is
   written. Other files in
@@ -1165,13 +1168,15 @@ There is **no attachment content column, ever**. The FTS table is
 **New tables and `query_index` (M14.2).** `query_index` (§11.12) lets
 the model run SQL against this file. Its authorizer
 (`IndexQueryAuthorizer.DecideRead`) allows a no-column read (`count(*)`
-and the like, which reveal only that rows exist) of **any table name it
-doesn't know**, because SQLite reports CTE names the same way. So any
-table added to this schema in the future must also be added to
-`IndexQueryAuthorizer`'s `HiddenTables` set (today `meta`, `sync_state`,
-`ai_decisions`, `dbstat`), or the brief must say why its row count may
-be visible. New `emails`/`attachments` columns are not exposed: the
-column allow-lists in §11.12 are explicit.
+and the like, which reveal only that rows exist) only of names that are
+**not** real tables or views of the opened database (CTE names and
+subquery aliases, which SQLite reports the same way) and of
+`emails`/`attachments` in the views' qualified form. The list of real
+names is read from `main.sqlite_master` on every `query_index`
+connection (M13/M14 review), so a table added to this schema later is
+denied automatically; no hand-kept list needs updating. New
+`emails`/`attachments` columns are not exposed either: the column
+allow-lists in §11.12 are explicit.
 
 ### 9.2 `EmailIndex` API
 
@@ -1703,7 +1708,8 @@ who emailed me last year" take one call instead of paging
     Each address counts at most once per email. Lower-cased. `name`:
     the display name seen in the newest email, `""` when none.
   - `recipient_domain`: as `recipient`, by domain; one count per domain
-    per email.
+    per email. Because entries without a valid address are skipped,
+    `recipient` and `recipient_domain` never have an `(unknown)` group.
   - `folder`: the stored folder path.
   - `month` `yyyy-MM`, `week` ISO `yyyy-Www` (`ISOWeek`), `weekday`
     `Mon`…`Sun`, `hour` `00`…`23`, all from `event_time` in the local
@@ -1756,8 +1762,10 @@ who emailed me last year" take one call instead of paging
   `EmailStats.ToolDescription`, `GroupByParameterDescription`,
   `TopParameterDescription`, `OrderParameterDescription`,
   `IncludeCcParameterDescription` and `MailboxParameterDescription`
-  (Core; exact text in the M14.3 brief). The filter parameters reuse the
-  `search_emails` descriptions.
+  (Core; exact text in the M14.3 brief, except that the `(unknown)`
+  sentence of `ToolDescription` now reads, M13/M14 review:
+  `(unknown) is a sender with no valid address; recipients with no valid address are skipped (no (unknown) group for recipient or recipient_domain).`).
+  The filter parameters reuse the `search_emails` descriptions.
 
 ### 11.12 `query_index(sql, mailbox?, max_rows=200)` (M14)
 
@@ -1786,13 +1794,19 @@ so no fallback to the real FTS table name is needed).
 **Connection** (`IndexQuery`, Core; one per mailbox per call):
 1. A new `SqliteConnection` to the mailbox's database with
    `Mode=ReadOnly`, `Pooling=False` (so the authorizer and pragmas never
-   reach a pooled connection), then `PRAGMA busy_timeout=5000`. A
-   missing file, or a file without the `emails`, `attachments` and
-   `emails_fts` tables (checked in `sqlite_master` before the authorizer
-   is installed and before the views are created), is "unavailable"
-   (below). So is any `SqliteException` during steps 1–3 (rebuilding,
-   locked past the busy timeout, not a database; its message holds the
-   file path and is not passed on).
+   reach a pooled connection) and `DefaultTimeout` = the time left until
+   the call's 10 s deadline, rounded up to whole seconds. The names of
+   all tables and views in `main.sqlite_master` are read once (for the
+   authorizer's no-column rule, below; the temp views of step 2 are not
+   in that list). A missing file, or a file without the `emails`,
+   `attachments` and `emails_fts` tables (checked in `sqlite_master`
+   before the authorizer is installed and before the views are
+   created), is "unavailable" (below). So is any `SqliteException`
+   during steps 1–3 (rebuilding, locked past the busy timeout, not a
+   database; its message holds the file path and is not passed on).
+   The connection is read-only, but the index is a WAL database, so
+   SQLite may create the `-wal` and `-shm` side files next to it if they
+   don't exist; that is expected and changes no data.
 2. Create the three views as `TEMP` views (`CREATE TEMP VIEW mail AS
    SELECT … FROM main.emails`, etc.). `mailbox` is a SQL string literal
    of the normalized key (single quotes doubled). Temp views live only
@@ -1801,10 +1815,15 @@ so no fallback to the real FTS table name is needed).
    created **before** step 3, because `query_only` also blocks the temp
    schema.
 3. `PRAGMA query_only = ON`; `sqlite3_limit(SQLITE_LIMIT_ATTACHED, 0)`;
-   `SQLITE_LIMIT_SQL_LENGTH` 20,000; `SQLITE_LIMIT_LENGTH` 50,000,000
+   `SQLITE_LIMIT_SQL_LENGTH` 20,000; `SQLITE_LIMIT_LENGTH` 16,000,000
    (`IndexQuery.MaxValueBytes`; against `randomblob`/`zeroblob`/`printf`
-   memory bombs inside the 10 s window, M14.2); and
-   `SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION` set to 0 explicitly.
+   memory bombs inside the 10 s window, M14.2, lowered from 50,000,000
+   in the M13/M14 review); `SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION` set
+   to 0 explicitly; and, last, `sqlite3_busy_timeout` = the
+   milliseconds left until the deadline (0 when none are left). It is
+   set last because commands run through Microsoft.Data.Sqlite may reset
+   the busy timeout. So waiting for a locked index counts against the
+   same 10 s, and `mailbox="all"` can't run past it in total.
 4. Install the authorizer (`SQLitePCL.raw.sqlite3_set_authorizer` on
    `connection.Handle`, available in SQLitePCLRaw.core 2.1.13, which
    Microsoft.Data.Sqlite 10.0.15 references; verified 2026-11-14) and a
@@ -1813,7 +1832,29 @@ so no fallback to the real FTS table name is needed).
    Extension loading stays off (`load_extension` is never enabled, and
    the function is denied by the authorizer too).
 
-**Authorizer** (pure decision function `IndexQueryAuthorizer.Decide(action, arg1, arg2, dbName, viewName)`, unit-tested):
+**SQLite heap limit** (`SqliteHeapLimit`, Core; M13/M14 review). A few
+hundred bytes of nested `WITH` clauses or a few computed columns can
+make SQLite allocate gigabytes while preparing or stepping one
+statement, which per-connection limits don't stop. So the process sets
+a **hard heap limit of 1 GiB** (`SqliteHeapLimit.Bytes` =
+1,073,741,824; `sqlite3_hard_heap_limit64`). `SqliteHeapLimit.Ensure()`
+sets it once per process (thread-safe, later calls do nothing; it calls
+`Batteries_V2.Init()` first). `Program.Main` calls it first thing,
+before any index is opened, and `IndexQuery.Run` calls it again at its
+start (so Core tests and any other host get it too). The limit is
+process-wide, not per connection: it also covers the sync writers and
+every other SQLite use in the app. Normal use (an index of about 160 MB,
+small page caches) stays far below it. When the limit is hit, the
+statement fails with `SQLITE_NOMEM`: in `query_index` that is the
+"needs too much memory" error below; if it happens to hit other work at
+the same moment (e.g. a sync batch), that operation fails like any
+other SQLite error (a sync cycle fails and is retried by the next one).
+
+**Authorizer** (pure decision function `IndexQueryAuthorizer.Decide(action, arg1, arg2, dbName, viewName, realTables = null)`, unit-tested;
+`realTables` is the `IReadOnlySet<string>` of table and view names read
+from `main.sqlite_master` in Connection step 1, case-insensitive; null
+means the built-in Clippy schema `emails`, `attachments`, `emails_fts`,
+`meta`, `sync_state`, `ai_decisions`, used by unit tests):
 - Allowed actions: `SQLITE_SELECT`, `SQLITE_READ` (below),
   `SQLITE_FUNCTION` (below), `SQLITE_RECURSIVE`, and `SQLITE_PRAGMA`
   only for FTS5's own internal statement: pragma name `data_version`,
@@ -1851,14 +1892,18 @@ so no fallback to the real FTS table name is needed).
   - **no-column reads**: a READ with an empty column (`count(*)`,
     constant-only select lists, a `FROM` whose columns aren't used)
     reveals at most that rows exist. SQLite reports it for CTE names
-    (there is no schema to tell them apart from tables) and for the
-    views' own flattened `FROM main.emails`/`main.attachments`. Allowed
-    for `emails`/`attachments` only with database name `main` (the
-    views' qualified form; a user's plain `FROM emails` has none) or in
-    a view context, and for any other table name except `meta`,
-    `sync_state`, `ai_decisions`, `dbstat` (the `HiddenTables` set),
-    `sqlite_*` and `pragma_*`. **Any table added to the index schema
-    must be added to `HiddenTables`** (§9.1).
+    and subquery aliases (with no schema to tell them apart from
+    tables) and for the views' own flattened
+    `FROM main.emails`/`main.attachments`. It is an allow-list (M13/M14
+    review): allowed for `emails`/`attachments` only with database name
+    `main` (the views' qualified form; a user's plain `FROM emails` has
+    none; a user who writes `main.emails` sees only a row count) or in a
+    view context, and for any name that is **not** in `realTables`
+    (i.e. CTE names and aliases). Every other real table or view of the
+    database is denied, so a table added to the schema later is hidden
+    without code changes (§9.1). `dbstat` (an eponymous virtual table,
+    never in `sqlite_master`), `sqlite_*` and `pragma_*` are always
+    denied.
   Everything else is denied, including `sync_state`, `meta`,
   `ai_decisions`, `dbstat`, `sqlite_master`/`sqlite_schema`,
   `sqlite_temp_master`, `pragma_*` table-valued functions and
@@ -1895,9 +1940,16 @@ so no fallback to the real FTS table name is needed).
    ("cannot modify mail because it is a view") before it asks the
    authorizer. The text from the first word on is what gets prepared.
 3. `max_rows` is clamped; the mailbox is resolved (§11 mailbox errors).
-4. Per mailbox, `sqlite3_prepare_v2`. A failure is the denied text when
-   the authorizer denied something, else the `SQL error` text. No
-   statement → the "sql is required" text.
+4. Per mailbox, `sqlite3_prepare_v2`. The progress handler also runs
+   while preparing, so a failure is first checked for an interrupt
+   (result code `SQLITE_INTERRUPT`, or the handler fired): the Timeout
+   text, or `OperationCanceledException` when the call was cancelled
+   (`IndexQuery.ThrowIfInterrupted`, the same mapping as while
+   stepping). Otherwise a failure is the denied text when the authorizer
+   denied something, else by primary result code: `SQLITE_NOMEM` → the
+   "needs too much memory" text, `SQLITE_TOOBIG` → the "too large" text,
+   anything else → the `SQL error` text. Errors while stepping map the
+   same way. No statement → the "sql is required" text.
 5. **Lexical tail check**: the text after the first statement may hold
    only whitespace, `;` and comments (the same scanner as step 2); it is
    not prepared again, because `sqlite3_prepare_v2` returns no
@@ -1922,7 +1974,10 @@ so no fallback to the real FTS table name is needed).
 - At most 100 columns (`query_index returns at most 100 columns.`).
 - Text cells longer than 2,000 characters are cut to 2,000 + `…` (one
   character fewer when the cut would split a surrogate pair) and
-  counted in `truncated_cells`. BLOBs become `"[blob, <n> bytes]"`.
+  counted in `truncated_cells`. A text cell is read as raw UTF-8 bytes
+  and at most the first (2,000 + 1) × 3 = 6,003 bytes are decoded (cut
+  back to a UTF-8 character boundary), so a huge value is never copied
+  whole (`IndexQuery.ReadText`). BLOBs become `"[blob, <n> bytes]"`.
 - The size cap is row-granular: a row is added only while the total of
   string cells (text and the blob placeholders, after cutting) stays
   ≤ 1,000,000 characters; numbers, nulls, the `mailbox` column and
@@ -1949,6 +2004,10 @@ NULL as `null`. `truncated_reason` is omitted when not truncated.
 - SQLite errors: `SQL error: <SQLite's message>. query_index reads the views mail, mail_fts and mail_attachments (see the tool description).`
   SQLite's message is trimmed and a trailing `.` dropped; an empty
   message reads `unknown error`.
+- `SQLITE_NOMEM` (e.g. the 1 GiB heap limit was hit; `IndexQueryTexts.OutOfMemory`):
+  `The query needs too much memory. Simplify it: fewer nested WITH clauses, fewer or shorter computed columns.`
+- `SQLITE_TOOBIG` (a value over `SQLITE_LIMIT_LENGTH`; `IndexQueryTexts.TooBig`):
+  `A value in the query is too large (more than 16 MB).`
 - A denied action: `query_index only reads the views mail, mail_fts and mail_attachments with one SELECT. Not allowed here: <what>.`
   where `<what>` is e.g. `PRAGMA`, `ATTACH`, `writing`, `table ai_decisions`,
   `column emails.entry_id` or `function load_extension`.
@@ -1962,8 +2021,8 @@ NULL as `null`. `truncated_reason` is omitted when not truncated.
   (Statement checks).
 
 **Logging and privacy**: the SQL text, cell values and SQLite error
-messages are never logged (like search text, §5.1; `McpException`
-messages are kept out of the log file, §5.1). One Debug line per call
+messages are never logged (like search text, §5.1; the messages of
+`McpException`s the MCP SDK logs are kept out of the log file, §5.1). One Debug line per call
 (M14.3), exactly:
 `query_index: {Rows} rows, {Columns} columns, mailbox {Mailbox}, {Ms} ms, truncated {Reason}, {Cells} cells cut`
 (`{Mailbox}` is `own` or the key, `{Reason}` is `max_rows`, `size` or
@@ -2572,12 +2631,31 @@ Recorded after implementation (2026-11-14, M14.1–M14.3, spec sync):
   data_version` is allowed only for FTS5's own statement; the tail
   check is lexical; a leading-keyword check runs before prepare;
   `SQLITE_LIMIT_LENGTH` is 50 MB and extension loading is switched off
-  explicitly.
+  explicitly. (Superseded by the M13/M14 review entry below: the
+  no-column rule is now an allow-list and the length limit 16 MB.)
 - `McpException` messages are no longer written to the log file (§5.1),
   because the MCP SDK logs every tool exception at Error with the
   exception, and tool errors can quote SQL, SQLite messages, search text
   or dates. This also closed an older leak of invalid `date_from`/
   `date_to` texts into the log.
+
+Recorded after the M13/M14 review (2026-11-14, commit `e132650`):
+- A process-wide SQLite hard heap limit of 1 GiB (`SqliteHeapLimit`,
+  §11.12) backs up `query_index` against memory bombs from nested `WITH`
+  clauses and computed columns; NOMEM maps to its own error text, and
+  `SQLITE_LIMIT_LENGTH` dropped to 16,000,000 with a `TooBig` text.
+- The authorizer's no-column rule became an allow-list: real tables and
+  views are read from `sqlite_master` per connection and denied unless
+  they are `emails`/`attachments` in the views' qualified form; the
+  hand-kept `HiddenTables` set and the §9.1 rule to extend it are gone.
+- The busy timeout is the time left until the 10 s deadline; interrupts
+  during prepare map to the Timeout text; text cells are decoded from
+  a bounded byte prefix.
+- `McpException` messages are left out of the log only for
+  `ModelContextProtocol*` categories (§5.1), so sync errors keep their
+  text.
+- `MeetingOffers` heading sanitizing also removes Unicode format
+  characters (§21.4).
 
 Decided (2026-11-14, draft-only invites, M15; §22, §1.4). The user
 approved removing every send path and the new hard-rule wording
@@ -4327,7 +4405,9 @@ before selection; M13.1), the CET part and the split are left out too
 - The second list is headed `Outside European office hours:` (default,
   `MeetingOffers.OutsideHoursHeading`). In AI drafts, a valid
   `meeting.outside_hours_heading` from the model replaces it: control
-  characters removed, whitespace collapsed, `<`, `>`, `[` and `]`
+  characters and Unicode format characters (category `Cf`, e.g.
+  zero-width spaces and bidi overrides; M13/M14 review) removed,
+  whitespace collapsed, `<`, `>`, `[` and `]`
   removed, trimmed, 1–80 characters with at least one letter, and a `:`
   appended when it doesn't end with one; otherwise the default is used.
   The steps run literally in that order (M13.1): a tab or newline is
