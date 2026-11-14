@@ -185,6 +185,8 @@ public sealed class AiDraftsUiTests : IDisposable
 
     [Theory]
     [InlineData("AiDrafting.Enabled", AiTabField.Enabled)]
+    [InlineData("AiDrafting.MeetingTimes", AiTabField.MeetingTimes)]
+    [InlineData("AiDrafting.MeetingTimeOptions", AiTabField.MeetingTimeOptions)]
     [InlineData("AiDrafting.ExcludeSenders[0]", AiTabField.ExcludeSenders)]
     [InlineData("AiDrafting.ExcludeSenders", AiTabField.ExcludeSenders)]
     [InlineData("AiDrafting.ClaudeCliPath", AiTabField.ClaudeCliPath)]
