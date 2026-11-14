@@ -16,6 +16,7 @@ public sealed partial class AiDraftingSettings
     public const double DefaultMinConfidence = 0.6;
     public const int DefaultMaxAgeDays = 2, MinMaxAgeDays = 1, MaxMaxAgeDays = 14;
     public const int DefaultTimeoutSeconds = 180, MinTimeoutSeconds = 30, MaxTimeoutSeconds = 900;
+    public const int DefaultMeetingTimeOptions = 5, MinMeetingTimeOptions = 1, MaxMeetingTimeOptions = 10;
     public const int MaxSenderEntries = 200;
     public const string FieldPrefix = "AiDrafting";
 
@@ -37,6 +38,12 @@ public sealed partial class AiDraftingSettings
     public int TimeoutSeconds { get; set; } = DefaultTimeoutSeconds;
     public string ClaudeCliPath { get; set; } = "";
     public bool AutoRegenerateStyle { get; set; } = true;
+
+    /// <summary>Offer free times in drafts that answer a meeting request (SPEC 19.2, 21.6).</summary>
+    public bool MeetingTimes { get; set; } = true;
+
+    /// <summary>1-10 options per draft, both lists together (SPEC 19.2, 21.4).</summary>
+    public int MeetingTimeOptions { get; set; } = DefaultMeetingTimeOptions;
 
     [JsonIgnore] public bool HasConsent => ConsentedAtUtc is not null;
 
@@ -112,6 +119,9 @@ public sealed partial class AiDraftingSettings
                     Add("ClaudeCliPath", "Must be the path of claude.exe or of Claude Code's cli.js.");
             }
         }
+
+        if (MeetingTimeOptions < MinMeetingTimeOptions || MeetingTimeOptions > MaxMeetingTimeOptions)
+            Add("MeetingTimeOptions", "Must be between 1 and 10.");
         return e;
     }
 
