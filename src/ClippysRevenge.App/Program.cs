@@ -368,7 +368,7 @@ internal static class Program
             {
                 s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(stores).AddSingleton(invites)
                     .AddSingleton<IFreeBusySource>(new OutlookFreeBusySource(worker))
-                    .AddSingleton(sp => new FreeTimeFinder(sp.GetRequiredService<IFreeBusySource>(), TimeProvider.System, TimeZoneInfo.Local));
+                    .AddSingleton(sp => new FreeTimeFinder(sp.GetRequiredService<IFreeBusySource>(), TimeProvider.System, TimeZoneInfo.Local, logger: loggerFactory.CreateLogger<FreeTimeFinder>()));
                 s.AddSingleton(signatures)
                     .AddSingleton<IDraftWriter>(new OutlookDraftWriter(worker, stores, loggerFactory.CreateLogger<OutlookDraftWriter>()))
                     .AddSingleton<CreateDraftTool>();
