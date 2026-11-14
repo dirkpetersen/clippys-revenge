@@ -113,7 +113,8 @@ public static class InviteTexts
         "Times are local. To book option N of a find_free_times result, or of the times offered in a draft, pass that option's start and end; " +
         "the option lines show a date without a year, so use the next occurrence of that date. " +
         "Every recipient must resolve in Outlook or nothing is created. " +
-        "With mailbox, the meeting is saved in that shared mailbox's calendar (delegate or editor rights needed).";
+        "With mailbox, the meeting is saved in that shared mailbox's calendar (delegate or editor rights needed). " +
+          "Pass reply_to_id (the id of the email that asked for the meeting, from search_emails) to also save a reply draft to that email in Drafts with a highlighted note telling the user to add the link and send the invite; the id is checked first, and an unknown id means nothing is created.";
 
     public const string DisabledMessage =
         "Meeting drafts are disabled in Clippy's Revenge. Ask the user to enable them in the tray settings (Meeting invites: Draft only), then try again.";

@@ -213,6 +213,23 @@ public class SafetySourceScanTests
     }
 
     [Fact]
+    public void CreateMeetingDraftTool_ReplyToId()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/McpTools.cs");
+        Assert.Contains("string? reply_to_id = null", f.Code);
+        Assert.Contains("reply_to_id, cancellationToken)", f.Code);
+    }
+
+    [Fact]
+    public void MeetingNote_uses_the_reply_path()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.Core/MeetingNote.cs");
+        Assert.Contains("IReplyDraftWriter", f.Code);
+        Assert.Contains("DraftMarker.Tool", f.Code);
+        Assert.DoesNotMatch(@"\bOutlook\.|\bMarshal\b|Subject\s*=", f.Code);
+    }
+
+    [Fact]
     public void CreateMeetingDraftTool_Annotations()
     {
         var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/McpTools.cs");

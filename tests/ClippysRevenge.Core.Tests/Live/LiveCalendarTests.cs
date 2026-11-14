@@ -99,7 +99,7 @@ public sealed class LiveCalendarTests(LiveOutlook fx)
 
             var result = await invites.CreateDraftAsync(Recipients.Format([me]), subject,
                 s.ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture), e.ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture),
-                "Automated Clippy's Revenge live test. Never sent; deleted by the test.", null, null, ct);
+                "Automated Clippy's Revenge live test. Never sent; deleted by the test.", null, null, null, ct);
 
             var found = await fx.RunAsync("finding the meeting", FindMeetings);
             foreach (var a in found)
