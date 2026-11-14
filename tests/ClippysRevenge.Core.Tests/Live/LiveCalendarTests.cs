@@ -106,6 +106,7 @@ public sealed class LiveCalendarTests(LiveOutlook fx)
                 scope.Track(new TrackedItem(TrackedKind.Meeting, "", a.EntryId, a.StoreId, a.Subject));
 
             Assert.Equal("saved_as_draft", result.Status);
+            Assert.Equal(DraftInvites.CategoryName, result.Category);
 
             var appt = Assert.Single(found);
             Assert.False(string.IsNullOrEmpty(result.EntryId), "The result has no EntryId.");

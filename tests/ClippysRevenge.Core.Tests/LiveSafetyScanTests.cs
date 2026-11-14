@@ -57,6 +57,18 @@ public class LiveSafetyScanTests
         Assert.DoesNotContain("SendAsync", calendar, StringComparison.Ordinal);
         var fixture = File.ReadAllText(Path.Combine(LiveDir(), "LiveOutlook.cs"));
         Assert.Contains("MeetingInviteMode.DraftOnly", fixture, StringComparison.Ordinal);
+        var invite = File.ReadAllText(Path.Combine(LiveDir(), "LiveDraftInviteTests.cs"));
+        Assert.Contains("CreateDraftAsync", invite, StringComparison.Ordinal);
+        Assert.Contains("CheckDraftInvites", invite, StringComparison.Ordinal);
+        Assert.DoesNotContain("SendAsync", invite, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Live_draft_invite_test_never_opens_windows()
+    {
+        var invite = File.ReadAllText(Path.Combine(LiveDir(), "LiveDraftInviteTests.cs"));
+        Assert.DoesNotContain("OpenDraftInvite", invite, StringComparison.Ordinal);
+        Assert.DoesNotContain("OutlookDraftInviteWindow", invite, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -5,7 +5,7 @@
 .DESCRIPTION
   Pre-checks Outlook (running, responding), sets CLIPPY_LIVE=1, builds, runs
   `dotnet test --filter live=outlook` with a hard timeout, and prints a summary.
-  The tests create drafts and one DraftOnly meeting, delete them again, and check that
+  The tests create drafts and two unsent meeting drafts (create_meeting_draft), delete them again, and check that
   nothing was sent. Results and leftovers are printed at the end.
 
   Exit codes: 0 ok; 1 test or build failures; 2 preconditions; 3 Outlook not responding;
