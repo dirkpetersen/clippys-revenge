@@ -41,6 +41,7 @@
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookCalendar.Events.cs"   Link="AppLinked\OutlookCalendar.Events.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookCalendar.FreeBusy.cs" Link="AppLinked\OutlookCalendar.FreeBusy.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookCalendar.Invites.cs"  Link="AppLinked\OutlookCalendar.Invites.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookCalendar.DraftInvites.cs" Link="AppLinked\OutlookCalendar.DraftInvites.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookFreeBusySource.cs"    Link="AppLinked\OutlookFreeBusySource.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\SignatureRegistry.cs"        Link="AppLinked\SignatureRegistry.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookAiMailbox.cs"         Link="AppLinked\OutlookAiMailbox.cs" />

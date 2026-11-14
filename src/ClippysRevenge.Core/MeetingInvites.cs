@@ -5,7 +5,7 @@ namespace ClippysRevenge.Core;
 
 /// <summary>The create_meeting_draft flow (SPEC §22.1), behind IMeetingCalendar. Never sends.</summary>
 public sealed class MeetingInvites(IMeetingCalendar calendar, Func<Settings> settings, ActivityHub hub,
-    TimeZoneInfo timeZone, TimeProvider? time = null)
+    TimeZoneInfo timeZone, TimeProvider? time = null, IDraftInviteTracker? tracker = null)
 {
     private const string TimeFormat = "yyyy-MM-ddTHH:mm:sszzz";
     private readonly TimeProvider _time = time ?? TimeProvider.System;
@@ -61,6 +61,19 @@ public sealed class MeetingInvites(IMeetingCalendar calendar, Func<Settings> set
         hub.Event(ActivityKind.Invite, InviteTexts.SavedEvent(r.Attendees.Count, req.Start, req.End), mailbox: ctx.Mailbox);
         ctx.Recorded = true;
 
+        if (tracker is not null && m.EntryId.Length > 0)
+        {
+            try
+            {
+                tracker.Track(new DraftInviteEntry(m.EntryId, m.StoreId, req.Mailbox, _time.GetUtcNow()),
+                    new DraftInviteDetails(req.Subject, req.Start, req.End));
+            }
+            catch (Exception)
+            {
+                // Track never throws; a bug there must not fail a saved meeting.
+            }
+        }
+
         return new MeetingDraftResult
         {
             Message = InviteTexts.Saved(req.Mailbox),
@@ -70,7 +83,7 @@ public sealed class MeetingInvites(IMeetingCalendar calendar, Func<Settings> set
             Mailbox = req.Mailbox,
             Organizer = Recipients.Format([new Recipient(r.OrganizerName, r.OrganizerEmail)]),
             Recipients = Recipients.Format(r.Attendees.Select(a => new Recipient(a.Name, a.Email))),
-            Category = null,
+            Category = m.Categorized ? DraftInvites.CategoryName : null,
             EntryId = m.EntryId,
             StoreId = m.StoreId,
         };

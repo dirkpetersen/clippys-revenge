@@ -26,6 +26,7 @@ public class MeetingInvitesTests
             []);
         public Exception? ResolveThrows { get; set; }
         public Exception? CreateThrows { get; set; }
+        public CreatedMeeting Created { get; set; } = new("E1", "S1");
 
         public Task<ResolvedInvite> ResolveAsync(MeetingRequest request, CancellationToken ct)
         {
@@ -39,7 +40,19 @@ public class MeetingInvitesTests
         {
             Creates.Add((request, ct.CanBeCanceled));
             if (CreateThrows is not null) throw CreateThrows;
-            return Task.FromResult(new CreatedMeeting("E1", "S1"));
+            return Task.FromResult(Created);
+        }
+    }
+
+    private sealed class FakeTracker : IDraftInviteTracker
+    {
+        public List<(DraftInviteEntry Entry, DraftInviteDetails? Details)> Calls { get; } = [];
+        public Exception? Throws { get; set; }
+
+        public void Track(DraftInviteEntry entry, DraftInviteDetails? details)
+        {
+            Calls.Add((entry, details));
+            if (Throws is not null) throw Throws;
         }
     }
 
@@ -48,11 +61,12 @@ public class MeetingInvitesTests
         public FakeCalendar Cal { get; } = new();
         public Settings Settings { get; } = new();
         public ActivityHub Hub { get; } = new();
+        public FakeTracker Tracker { get; } = new();
         public MeetingInvites Svc { get; }
 
         public Rig()
         {
-            Svc = new MeetingInvites(Cal, () => Settings, Hub, Tz, new FixedTime());
+            Svc = new MeetingInvites(Cal, () => Settings, Hub, Tz, new FixedTime(), Tracker);
         }
 
         public Task<MeetingDraftResult> Create(string? recipients = R2, string? subject = "Sync", string? start = "2026-11-17T13:00",
@@ -236,6 +250,91 @@ public class MeetingInvitesTests
         Assert.Equal("meeting draft not created: ".Length + 200, s.Length);
         Assert.EndsWith("…", s);
     }
+
+    [Fact]
+    public async Task Category_set_when_categorized()
+    {
+        var t = new Rig();
+        t.Cal.Created = new CreatedMeeting("E1", "S1", true);
+        var r = await t.Create();
+        Assert.Equal("Clippy draft invite", r.Category);
+        Assert.Contains("\"category\":\"Clippy draft invite\"", JsonSerializer.Serialize(r));
+    }
+
+    [Fact]
+    public async Task Category_null_when_not_categorized()
+    {
+        var t = new Rig();
+        t.Cal.Created = new CreatedMeeting("E1", "S1", false);
+        var r = await t.Create();
+        Assert.Null(r.Category);
+        Assert.Contains("\"category\":null", JsonSerializer.Serialize(r));
+        Assert.Single(t.Tracker.Calls);
+    }
+
+    [Fact]
+    public async Task Tracks_after_save()
+    {
+        var t = new Rig();
+        await t.Create();
+        var (entry, details) = Assert.Single(t.Tracker.Calls);
+        Assert.Equal("E1", entry.EntryId);
+        Assert.Equal("S1", entry.StoreId);
+        Assert.Equal("", entry.Mailbox);
+        Assert.Equal(new FixedTime().GetUtcNow(), entry.CreatedUtc);
+        Assert.Equal(new DraftInviteDetails("Sync", new DateTime(2026, 11, 17, 13, 0, 0), new DateTime(2026, 11, 17, 14, 30, 0)), details);
+
+        var s = new Rig();
+        await s.Create(mailbox: " Help@X.edu ");
+        Assert.Equal("help@x.edu", Assert.Single(s.Tracker.Calls).Entry.Mailbox);
+    }
+
+    [Fact]
+    public async Task No_track_without_entry_id()
+    {
+        var t = new Rig();
+        t.Cal.Created = new CreatedMeeting("", "S1", true);
+        var r = await t.Create();
+        Assert.Empty(t.Tracker.Calls);
+        Assert.Equal("saved_as_draft", r.Status);
+    }
+
+    [Fact]
+    public async Task No_track_on_failure()
+    {
+        var a = new Rig();
+        a.Cal.Resolved = a.Cal.Resolved with { Unresolved = ["x@y.org"] };
+        await Assert.ThrowsAsync<McpException>(() => a.Create());
+        var b = new Rig();
+        b.Settings.MeetingInviteMode = MeetingInviteMode.Disabled;
+        await Assert.ThrowsAsync<McpException>(() => b.Create());
+        var c = new Rig();
+        c.Cal.CreateThrows = new InvalidOperationException("boom");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => c.Create());
+        Assert.Empty(a.Tracker.Calls);
+        Assert.Empty(b.Tracker.Calls);
+        Assert.Empty(c.Tracker.Calls);
+    }
+
+    [Fact]
+    public async Task Tracker_throwing_does_not_fail_the_tool()
+    {
+        var t = new Rig();
+        t.Tracker.Throws = new InvalidOperationException("bug");
+        var r = await t.Create();
+        Assert.Equal("saved_as_draft", r.Status);
+        Assert.Equal(ActivityKind.Invite, Assert.Single(t.Hub.GetEvents()).Kind);
+    }
+
+    [Fact]
+    public async Task No_tracker_is_fine()
+    {
+        var cal = new FakeCalendar { Created = new CreatedMeeting("E1", "S1", true) };
+        var svc = new MeetingInvites(cal, () => new Settings(), new ActivityHub(), Tz, new FixedTime(), tracker: null);
+        var r = await svc.CreateDraftAsync(R2, "Sync", "2026-11-17T13:00", "2026-11-17T14:30", null, null, null, TestContext.Current.CancellationToken);
+        Assert.Equal("saved_as_draft", r.Status);
+    }
+
 
     [Fact]
     public async Task Body_never_in_events()
