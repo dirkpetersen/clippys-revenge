@@ -4,7 +4,7 @@ namespace ClippysRevenge.Core;
 
 public enum TrayIconKey
 {
-    Idle, Serving, Busy, Paused, Unavailable, Confirm, Error,
+    Idle, Serving, Busy, Paused, Unavailable, Error,
     Backfill0, Backfill1, Backfill2, Backfill3,
 }
 
@@ -133,10 +133,6 @@ public sealed class TrayPresenter
             case ActivityState.Error:
                 icon = TrayIconKey.Error;
                 tip = label.Length == 0 ? p + "error" : p + "error: " + label;
-                break;
-            case ActivityState.AwaitingConfirmation:
-                icon = TrayIconKey.Confirm;
-                tip = p + "waiting for you to confirm a meeting invite";
                 break;
             case ActivityState.OutlookUnavailable:
                 icon = TrayIconKey.Unavailable;

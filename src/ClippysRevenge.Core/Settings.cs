@@ -36,8 +36,6 @@ public sealed class Settings
     public const int DefaultSyncIntervalSeconds = 300;
     public const int MinSyncIntervalSeconds = 30, MaxSyncIntervalSeconds = 3600;
     public const int DefaultWorkStartHour = 8, DefaultWorkEndHour = 17;
-    public const int DefaultInviteConfirmTimeoutSeconds = 120;
-    public const int MinInviteConfirmTimeoutSeconds = 30, MaxInviteConfirmTimeoutSeconds = 900;
     public const int MaxTimeZoneLabelLength = 16;
     public const string AttachmentFolderName = "Clippy's Revenge";
     public static IReadOnlyList<string> DefaultIndexedFolders { get; } = ["Inbox", "Sent Items"];
@@ -86,8 +84,8 @@ public sealed class Settings
     public bool BusinessDaysOnly { get; set; } = true;
     public string TimeZoneLabel { get; set; } = "";
     public bool TentativeIsBusy { get; set; } = true;
-    public MeetingInviteMode MeetingInviteMode { get; set; } = MeetingInviteMode.Send;
-    public int InviteConfirmTimeoutSeconds { get; set; } = DefaultInviteConfirmTimeoutSeconds;
+    [JsonConverter(typeof(MeetingInviteModeJsonConverter))]
+    public MeetingInviteMode MeetingInviteMode { get; set; } = MeetingInviteMode.DraftOnly;
     public string AttachmentDir { get; set; }
     public List<string> AllowedFolders { get; set; }
     public bool StartWithWindows { get; set; } = true;
@@ -120,10 +118,7 @@ public sealed class Settings
             || TimeZoneLabel.Any(char.IsControl))
             Add("TimeZoneLabel", "Must be empty or at most 16 printable characters.");
         if (!Enum.IsDefined(MeetingInviteMode))
-            Add("MeetingInviteMode", "Must be Send, DraftOnly or Disabled.");
-        if (InviteConfirmTimeoutSeconds < MinInviteConfirmTimeoutSeconds
-            || InviteConfirmTimeoutSeconds > MaxInviteConfirmTimeoutSeconds)
-            Add("InviteConfirmTimeoutSeconds", "Must be between 30 and 900.");
+            Add("MeetingInviteMode", "Must be DraftOnly or Disabled.");
 
         var pathError = PathError(AttachmentDir);
         if (pathError is not null) Add("AttachmentDir", pathError);
@@ -284,7 +279,6 @@ public sealed class Settings
         TimeZoneLabel = c.TimeZoneLabel;
         TentativeIsBusy = c.TentativeIsBusy;
         MeetingInviteMode = c.MeetingInviteMode;
-        InviteConfirmTimeoutSeconds = c.InviteConfirmTimeoutSeconds;
         AttachmentDir = c.AttachmentDir;
         AllowedFolders = c.AllowedFolders;
         StartWithWindows = c.StartWithWindows;

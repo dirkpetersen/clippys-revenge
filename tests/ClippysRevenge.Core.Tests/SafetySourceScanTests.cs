@@ -5,7 +5,7 @@ using Xunit;
 namespace ClippysRevenge.Core.Tests;
 
 /// <summary>
-/// Source scan of the hard rules (SPEC section 1, CLAUDE.md): one Send, no Outlook launch via COM,
+/// Source scan of the hard rules (SPEC section 1, CLAUDE.md): no Send, no Outlook launch via COM,
 /// loopback only, no Graph, replies only via ReplySubject. Comments are always stripped; string
 /// literals are blanked for code checks and kept for literal checks.
 /// </summary>
@@ -166,40 +166,70 @@ public class SafetySourceScanTests
 
     // ---- Send ----
 
+    private const string SendRegex = @"\.\s*Send\s*\(";
+
     [Fact]
-    public void ExactlyOneSend_InCreateMeeting_UnderInviteActionSend()
+    public void NoSend_Anywhere() =>
+        AssertNone(Find(f => f.Code, SendRegex),
+            "Clippy never sends anything: no .Send( in src/ (CLAUDE.md hard rule, SPEC §1.4, §22).");
+
+    [Fact]
+    public void NoSendByLateBinding()
     {
-        var hits = Find(f => f.Code, @"\.\s*Send\s*\(");
-        Assert.True(hits.Count == 1, "Expected exactly one .Send in src, found:" + Environment.NewLine + string.Join(Environment.NewLine, hits));
-
-        var file = Scan.Value.Files.Single(f => Regex.IsMatch(f.Code, @"\.\s*Send\s*\("));
-        Assert.Matches(@"^src/ClippysRevenge\.App/OutlookCalendar[^/]*\.cs$", file.Rel);
-        Assert.Matches(@"\.Send\s*\(\s*\)\s*;", file.Code);
-
-        var idx = Regex.Match(file.Code, @"\.\s*Send\s*\(").Index;
-        var where = $"{file.Rel}:{LineOf(file.Code, idx)}";
-        var before = file.Code[..idx];
-        var decl = Regex.Matches(before, @"\bCreateMeeting\s*\(");
-        Assert.True(decl.Count > 0, $"{where}: .Send is not inside CreateMeeting.");
-        // No other member declaration may start between CreateMeeting and the Send.
-        var afterDecl = before[decl[^1].Index..];
-        Assert.DoesNotMatch(@"\n\s*(public|private|internal|protected)\s[^;={]*\([^;]*\)\s*\n\s*\{", afterDecl[1..]);
-
-        var cases = Regex.Matches(before, @"\b(case\s+[^:\n]+:|default\s*:)");
-        Assert.True(cases.Count > 0, $"{where}: .Send is not under a switch case.");
-        var lastCase = cases[^1].Value;
-        Assert.True(lastCase.Replace(" ", "") == "caseInviteAction.Send:",
-            $"{where}: .Send must sit directly under 'case InviteAction.Send:', found '{lastCase}'.");
+        var lits = Scan.Value.Files.SelectMany(f => f.Literals.Select(l => (f.Rel, Text: l[(l.IndexOf('|') + 1)..])))
+            .Where(x => string.Equals(x.Text.Trim(), "Send", StringComparison.OrdinalIgnoreCase))
+            .Select(x => $"{x.Rel}: \"{x.Text}\"").ToList();
+        AssertNone(lits, "No string literal may equal \"Send\" (late-bound send).");
+        AssertNone(Find(f => f.Code, @"\bInvokeMember\b"), "InvokeMember is forbidden (late-bound send).");
     }
 
     [Fact]
-    public void Send_IsOnlyReachedViaInviteGateDecision()
+    public void SendMatchers_CatchPlantedViolations()
     {
-        var file = Scan.Value.Files.Single(f => f.Rel.EndsWith("OutlookCalendar.Invites.cs", StringComparison.Ordinal));
-        Assert.Matches(@"switch\s*\(\s*decision\.Action\s*\)", file.Code);
-        Assert.Matches(@"decision\.Action\s+is\s+not\s*\(\s*InviteAction\.Send\s+or\s+InviteAction\.SaveDraft\s*\)", file.Code);
+        Assert.Matches(SendRegex, "item.Send();");
+        Assert.Matches(SendRegex, "item . Send ()");
+        Assert.Matches(SendRegex, "((Outlook.AppointmentItem)o).Send();");
+        Assert.DoesNotMatch(SendRegex, "client.SendAsync(req)");
+        Assert.DoesNotMatch(SendRegex, "x.Sender(");
+        Assert.DoesNotMatch(SendRegex, "Send(x)");
+        Assert.DoesNotMatch(SendRegex, Strip("// item.Send()\nvar s = \"item.Send()\";", blankStrings: true, lits: null));
+
+        var lits = new List<string>();
+        Strip("var v = \"Send\";", blankStrings: false, lits);
+        Assert.Contains(lits, l => l[(l.IndexOf('|') + 1)..] == "Send");
+        Assert.Matches(@"\bInvokeMember\b", "t.InvokeMember(\"x\")");
     }
 
+    [Fact]
+    public void RemovedInviteTypes_Absent()
+    {
+        AssertNone(Find(f => f.Code,
+            @"\b(InviteGate|InviteDecision|InviteAction|InviteChoice|InviteConfirmForm|InviteConfirmQueue|InviteConfirmPresenter|IInviteConfirmer|AwaitingConfirmation|InviteConfirmTimeoutSeconds)\b"),
+            "The send/confirm types were removed in M15.1.");
+        var files = Scan.Value.Files.Select(f => Path.GetFileName(f.Rel)).ToList();
+        foreach (var gone in new[] { "InviteGate.cs", "InviteConfirm.cs", "InviteConfirmForm.cs", "InviteConfirmPresenter.cs" })
+            Assert.DoesNotContain(gone, files);
+        AssertNone(Find(f => f.WithStrings, @"""[^""\n]*send_meeting_invite[^""\n]*"""), "send_meeting_invite no longer exists.");
+    }
+
+    [Fact]
+    public void CreateMeetingDraftTool_Annotations()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/McpTools.cs");
+        Assert.Contains("Name = \"create_meeting_draft\", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false", f.WithStrings);
+        Assert.Contains("[Description(InviteTexts.ToolDescription)]", f.WithStrings);
+        Assert.DoesNotMatch(@"\bbool\s+teams\b", f.Code);
+    }
+
+    [Fact]
+    public void CreateMeeting_SavesOnly()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel.EndsWith("OutlookCalendar.Invites.cs", StringComparison.Ordinal));
+        Assert.Single(Regex.Matches(f.Code, @"\.\s*Save\s*\(\s*\)"));
+        var idx = f.Code.IndexOf("CreateMeeting(", StringComparison.Ordinal);
+        Assert.True(idx >= 0);
+        Assert.DoesNotMatch(@"\bdecision\b", f.Code[idx..]);
+    }
     // ---- Outlook launch ----
 
     [Fact]

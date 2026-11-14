@@ -19,7 +19,7 @@
   <img alt="MCP server" src="https://img.shields.io/badge/MCP-streamable%20HTTP-6E56CF">
   <img alt="Works from WSL" src="https://img.shields.io/badge/works%20from-WSL-E95420?logo=ubuntu&logoColor=white">
   <br>
-  <img alt="Never sends email" src="https://img.shields.io/badge/never-sends%20email-2EA043">
+  <img alt="Never sends anything" src="https://img.shields.io/badge/never-sends%20anything-2EA043">
   <img alt="Never deletes email" src="https://img.shields.io/badge/never-deletes%20email-2EA043">
   <img alt="Localhost only" src="https://img.shields.io/badge/network-localhost%20only-2EA043">
   <a href="https://github.com/dirkpetersen/clippys-revenge/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/dirkpetersen/clippys-revenge"></a>
@@ -148,7 +148,7 @@ a configured shared mailbox's address; search tools also accept `all`).
 | `reply_draft` | Saves a reply or reply-all draft (never sends) |
 | `list_events` | Calendar events in a date range |
 | `find_free_times` | Free/busy based meeting slot suggestions for you and others, ranked by your calendar, with ready-to-paste options (optionally with CET) |
-| `send_meeting_invite` | Creates a meeting. The only sending tool; see below |
+| `create_meeting_draft` | Saves a meeting unsent in your calendar; you add the Teams or Zoom link and send it from Outlook |
 | `index_status` | Index size, sync state and last sync time per mailbox |
 | `email_stats` | Counts mail grouped by sender, domain, recipient, folder, month, week, weekday or hour (counts and names only) |
 | `query_index` | One read-only SELECT over the views `mail`, `mail_fts` and `mail_attachments`, with full-text search and snippets |
@@ -163,10 +163,10 @@ a configured shared mailbox's address; search tools also accept `all`).
 - **Browsers are blocked.** Any request with an `Origin` header gets a 401,
   so web pages cannot call the server. The 401 has no `WWW-Authenticate`
   header, so MCP clients don't start OAuth.
-- **No sending of mail.** Tools only ever save drafts. The one exception is
-  `send_meeting_invite`, which sends only after you click Send in a
-  confirmation dialog (mode `Send`), or just saves a draft (`DraftOnly`), or
-  is off (`Disabled`).
+- **Never sends anything.** Mail tools only save drafts, and
+  `create_meeting_draft` saves the meeting unsent in your calendar (or is
+  off, `Disabled`). You add the Teams or Zoom link and send it from
+  Outlook. Clippy has no send call at all.
 - **Attachments' content is never indexed.** Only file names are stored.
 - **File access is restricted by `PathPolicy`.** Every path a tool reads or
   writes must be inside an allowed folder: the attachment folder

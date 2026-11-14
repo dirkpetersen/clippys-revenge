@@ -16,8 +16,8 @@ internal sealed class OutlookMeetingCalendar(OutlookWorker worker, OutlookStores
             .ConfigureAwait(false);
     }
 
-    public Task<CreatedMeeting> CreateAsync(MeetingRequest request, InviteDecision decision, CancellationToken ct) =>
-        worker.RunAsync(app => OutlookCalendar.CreateMeeting(app, request, decision), WorkPriority.Interactive, ct);
+    public Task<CreatedMeeting> CreateAsync(MeetingRequest request, CancellationToken ct) =>
+        worker.RunAsync(app => OutlookCalendar.CreateMeeting(app, request), WorkPriority.Interactive, ct);
 }
 
 internal static partial class OutlookCalendar
@@ -72,7 +72,7 @@ internal static partial class OutlookCalendar
                     if (rc is not null) Marshal.ReleaseComObject(rc);
                 }
             }
-            return new ResolvedInvite(orgName, orgEmail, attendees, unresolved, TeamsAddinUsable(app));
+            return new ResolvedInvite(orgName, orgEmail, attendees, unresolved);
         }
         finally
         {
@@ -104,19 +104,9 @@ internal static partial class OutlookCalendar
     private static bool IsAccessFailure(Exception ex) =>
         ex is UnauthorizedAccessException || (ex is COMException c && !ComErrors.IsOutlookGone(c));
 
-    // M8.4 brief, Teams option A: the Outlook object model has no supported call to add a Teams meeting,
-    // so v1 never adds one. Kept as a seam in case an add-in route is confirmed later.
-    private static bool TeamsAddinUsable(Outlook.Application app) => false;
-
-    /// <summary>
-    /// Creates the meeting and either sends or saves it, per the decision. Worker thread. The only place in
-    /// the codebase that sends anything: it runs after InviteGate and the user's confirmation.
-    /// </summary>
-    public static CreatedMeeting CreateMeeting(Outlook.Application app, MeetingRequest req, InviteDecision decision)
+    /// <summary>Creates the meeting and saves it unsent. Worker thread. Never sends (SPEC §1.4, §22).</summary>
+    public static CreatedMeeting CreateMeeting(Outlook.Application app, MeetingRequest req)
     {
-        if (decision.Action is not (InviteAction.Send or InviteAction.SaveDraft))
-            throw new InvalidOperationException("CreateMeeting needs a Send or SaveDraft decision.");
-
         var shared = req.Mailbox.Length > 0;
         Outlook.NameSpace? session = null;
         Outlook.Recipient? owner = null;
@@ -181,23 +171,38 @@ internal static partial class OutlookCalendar
                     throw new McpException(InviteTexts.Unresolved(bad));
                 }
 
-                switch (decision.Action)
-                {
-                    case InviteAction.Send:
-                        item.Send();
-                        break;
-                    case InviteAction.SaveDraft:
-                        item.Save();
-                        break;
-                    default:
-                        throw new InvalidOperationException("Unexpected invite action.");
-                }
+                item.Save();
             }
             catch (Exception ex) when (shared && IsAccessFailure(ex))
             {
                 throw new McpException(InviteTexts.NoCalendarRights(req.Mailbox));
             }
-            return new CreatedMeeting(false);
+
+            // Read the ids in their own guard: a failure after a successful save is not "no calendar rights".
+            string entryId = "", storeId = "";
+            object? parent = null;
+            try
+            {
+                entryId = item.EntryID ?? "";
+                if (folder is not null)
+                {
+                    storeId = folder.StoreID ?? "";
+                }
+                else
+                {
+                    parent = item.Parent;
+                    if (parent is Outlook.MAPIFolder pf) storeId = pf.StoreID ?? "";
+                }
+            }
+            catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
+            {
+                // Saved; ids unknown.
+            }
+            finally
+            {
+                if (parent is not null && Marshal.IsComObject(parent)) Marshal.ReleaseComObject(parent);
+            }
+            return new CreatedMeeting(entryId, storeId);
         }
         finally
         {

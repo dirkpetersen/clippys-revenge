@@ -72,11 +72,10 @@ internal sealed partial class SettingsForm : Form
     private readonly TextBox _sync = new();
 
     // Scheduling
-    private readonly TextBox _workStart = new(), _workEnd = new(), _timeZone = new(), _inviteTimeout = new();
+    private readonly TextBox _workStart = new(), _workEnd = new(), _timeZone = new();
     private readonly CheckBox _businessDays = new() { Text = "Business days only" };
     private readonly CheckBox _tentative = new() { Text = "Tentative counts as busy" };
     private readonly Label _tzAuto = new() { ForeColor = SystemColors.GrayText };
-    private readonly RadioButton _inviteSend = new() { Text = "Send (with confirmation)" };
     private readonly RadioButton _inviteDraft = new() { Text = "Draft only" };
     private readonly RadioButton _inviteOff = new() { Text = "Disabled" };
 
@@ -295,23 +294,18 @@ internal sealed partial class SettingsForm : Form
         Put(p, _timeZone, 150, 112, 100, 24);
         Put(p, _tzAuto, 260, 116, 300, 20);
         Lbl(p, "Meeting invites", 8, 152, 130);
-        Put(p, _inviteSend, 150, 152, 250, 24);
-        Put(p, _inviteDraft, 150, 178, 250, 24);
-        Put(p, _inviteOff, 150, 204, 250, 24);
-        Lbl(p, "Confirmation timeout (s)", 8, 244, 160);
-        Put(p, _inviteTimeout, 180, 244, 60, 24);
+        Put(p, _inviteDraft, 150, 152, 250, 24);
+        Put(p, _inviteOff, 150, 178, 250, 24);
         _tabs.TabPages.Add(p);
 
         _workStart.TextChanged += (_, _) => IntField("WorkStartHour", _workStart, v => _editor.Draft.WorkStartHour = v);
         _workEnd.TextChanged += (_, _) => IntField("WorkEndHour", _workEnd, v => _editor.Draft.WorkEndHour = v);
-        _inviteTimeout.TextChanged += (_, _) => IntField("InviteConfirmTimeoutSeconds", _inviteTimeout, v => _editor.Draft.InviteConfirmTimeoutSeconds = v);
-        foreach (var t in new[] { _workStart, _workEnd, _inviteTimeout, _timeZone }) t.Validated += (_, _) => RefreshErrors();
+        foreach (var t in new[] { _workStart, _workEnd, _timeZone }) t.Validated += (_, _) => RefreshErrors();
         _businessDays.CheckedChanged += (_, _) => { if (!_binding) _editor.Draft.BusinessDaysOnly = _businessDays.Checked; };
         _tentative.CheckedChanged += (_, _) => { if (!_binding) _editor.Draft.TentativeIsBusy = _tentative.Checked; };
         _timeZone.TextChanged += (_, _) => { if (!_binding) _editor.Draft.TimeZoneLabel = _timeZone.Text; };
         void Mode(RadioButton r, MeetingInviteMode m) =>
             r.CheckedChanged += (_, _) => { if (!_binding && r.Checked) _editor.Draft.MeetingInviteMode = m; };
-        Mode(_inviteSend, MeetingInviteMode.Send);
         Mode(_inviteDraft, MeetingInviteMode.DraftOnly);
         Mode(_inviteOff, MeetingInviteMode.Disabled);
     }
@@ -407,13 +401,11 @@ internal sealed partial class SettingsForm : Form
             _sync.Text = d.SyncIntervalSeconds.ToString(CultureInfo.InvariantCulture);
             _workStart.Text = d.WorkStartHour.ToString(CultureInfo.InvariantCulture);
             _workEnd.Text = d.WorkEndHour.ToString(CultureInfo.InvariantCulture);
-            _inviteTimeout.Text = d.InviteConfirmTimeoutSeconds.ToString(CultureInfo.InvariantCulture);
             _businessDays.Checked = d.BusinessDaysOnly;
             _tentative.Checked = d.TentativeIsBusy;
             _timeZone.Text = d.TimeZoneLabel;
             _tzAuto.Text = SettingsTexts.TimeZoneAutomatic(TimeZoneLabels.For(_s.TimeZone));
-            _inviteSend.Checked = d.MeetingInviteMode == MeetingInviteMode.Send;
-            _inviteDraft.Checked = d.MeetingInviteMode == MeetingInviteMode.DraftOnly;
+            _inviteDraft.Checked = d.MeetingInviteMode != MeetingInviteMode.Disabled;
             _inviteOff.Checked = d.MeetingInviteMode == MeetingInviteMode.Disabled;
             _attachDir.Text = d.AttachmentDir;
             _allowed.Items.Clear();
@@ -829,8 +821,7 @@ internal sealed partial class SettingsForm : Form
             "WorkStartHour" => _workStart,
             "WorkEndHour" => _workEnd,
             "TimeZoneLabel" => _timeZone,
-            "MeetingInviteMode" => _inviteSend,
-            "InviteConfirmTimeoutSeconds" => _inviteTimeout,
+            "MeetingInviteMode" => _inviteDraft,
             "AttachmentDir" => _attachDir,
             "LogLevel" => _logLevel,
             "Updates" => _updates,
@@ -840,8 +831,8 @@ internal sealed partial class SettingsForm : Form
 
     private void ShowErrors(IReadOnlyList<SettingsError> errors)
     {
-        foreach (var c in new Control[] { _port, _retention, _sync, _workStart, _workEnd, _timeZone, _inviteSend,
-                     _inviteTimeout, _attachDir, _logLevel, _updates, _tree, _allowed, _picker })
+        foreach (var c in new Control[] { _port, _retention, _sync, _workStart, _workEnd, _timeZone, _inviteDraft,
+                     _attachDir, _logLevel, _updates, _tree, _allowed, _picker })
             _errors.SetError(c, "");
         foreach (var c in AiErrorControls()) _errors.SetError(c, "");
         _errors.SetError(_status, "");

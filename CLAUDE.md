@@ -1,4 +1,4 @@
-﻿# CLAUDE.md
+# CLAUDE.md
 
 Guidance for Claude Code in this repository.
 
@@ -15,10 +15,10 @@ reference material only.
 
 ## Hard rules — never relax these
 
-- **Never send email.** `MailItem` drafts only ever `.Save()`. The single
-  `.Send()` in the codebase is in `OutlookCalendar.CreateMeeting`, and it
-  only runs after `InviteGate` says `Send`, which needs the user's click in
-  `InviteConfirmForm` (SPEC §6.6, §11.9). A test scans the source for this.
+- **Never send anything.** Clippy has no `.Send()` call. Mail drafts only
+  `.Save()`; meetings are saved unsent in the calendar for the user to
+  finish and send in Outlook. A test scans `src/` for `.Send(` (SPEC §1.4,
+  §22).
 - **Never delete email.** The app never calls `Delete`, `PermanentDelete`
   or `EmptyDeletedItems` on Outlook items or folders, and never moves
   existing mail. The one `.Move(` puts a reply draft Clippy just created
@@ -78,8 +78,9 @@ dotnet publish src/ClippysRevenge.App -c Release -r win-x64 --self-contained \
 `zensical build --clean --strict` to check. Docs must match `SPEC.md`.
 
 **Live Outlook tests** (`[Trait("live","outlook")]`) touch the user's real
-mailbox (they create drafts and a `DraftOnly` meeting). Run them only when
-the user asks, with `CLIPPY_LIVE=1` set. They must never send anything.
+mailbox (they create drafts and an unsent meeting via
+`create_meeting_draft`). Run them only when the user asks, with
+`CLIPPY_LIVE=1` set. They must never send anything.
 
 ## Version and release
 

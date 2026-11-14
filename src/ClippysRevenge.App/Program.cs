@@ -330,7 +330,7 @@ internal static class Program
             () => settings, updateClient, updateStore, updatePaths, running, installed,
             Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory,
             IsBusy: () => hub.IsActive(ActivityState.Serving) || hub.IsActive(ActivityState.Drafting)
-                || hub.IsActive(ActivityState.AwaitingConfirmation) || tray.IsSettingsOpen,
+                || tray.IsSettingsOpen,
             ReadExeVersion: UpdateRestarter.ReadExeVersion,
             RequestInstall: async (stagedUpdate, ct) =>
             {
@@ -349,10 +349,7 @@ internal static class Program
             },
             hub, balloons, startedUtc, Logger: loggerFactory.CreateLogger<UpdateService>(),
             // Update now is the user's own action; an open Settings window (About starts from there) must not block it.
-            IsBusyManual: () => hub.IsActive(ActivityState.Serving) || hub.IsActive(ActivityState.Drafting)
-                || hub.IsActive(ActivityState.AwaitingConfirmation)));
-
-        var inviteQueue = new InviteConfirmQueue(new InviteConfirmPresenter(SynchronizationContext.Current!), hub);
+            IsBusyManual: () => hub.IsActive(ActivityState.Serving) || hub.IsActive(ActivityState.Drafting)));
 
         instance.StartListening(() =>
         {
@@ -361,7 +358,7 @@ internal static class Program
         });
 
         var invites = new MeetingInvites(new OutlookMeetingCalendar(worker, stores, () => settings),
-            new QueueInviteConfirmer(inviteQueue, () => settings, TimeZoneInfo.Local), () => settings, hub, balloons, TimeZoneInfo.Local);
+            () => settings, hub, TimeZoneInfo.Local);
 
         var host = new McpHttpHost(new McpHostOptions
         {
@@ -417,7 +414,6 @@ internal static class Program
         }
 
         Application.Run(tray);
-        inviteQueue.Dispose();
 
         // Process entry point after the message loop ended: the one allowed blocking wait.
         // Task.Run avoids the WinForms SynchronizationContext.

@@ -257,7 +257,7 @@ public sealed class SettingsEditor
         if (field.StartsWith("Port", StringComparison.Ordinal)) return SettingsTab.Connection;
         string[] index = ["RetentionMonths", "SyncIntervalSeconds", "IndexedFolders", "SharedMailboxes"];
         string[] sched = ["WorkStartHour", "WorkEndHour", "BusinessDaysOnly", "TimeZoneLabel", "TentativeIsBusy",
-            "MeetingInviteMode", "InviteConfirmTimeoutSeconds"];
+            "MeetingInviteMode"];
         if (index.Any(p => field.StartsWith(p, StringComparison.Ordinal))) return SettingsTab.Index;
         if (sched.Any(p => field.StartsWith(p, StringComparison.Ordinal))) return SettingsTab.Scheduling;
         return SettingsTab.General;

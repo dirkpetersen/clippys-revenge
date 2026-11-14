@@ -170,7 +170,7 @@ public class ActivityHubTests
         var sorted = Enum.GetValues<ActivityState>().OrderByDescending(s => s).ToArray();
         Assert.Equal(
             [
-                ActivityState.Error, ActivityState.AwaitingConfirmation, ActivityState.OutlookUnavailable,
+                ActivityState.Error, ActivityState.OutlookUnavailable,
                 ActivityState.Backfilling, ActivityState.Syncing, ActivityState.Purging,
                 ActivityState.Paused, ActivityState.Drafting, ActivityState.Serving, ActivityState.Idle,
             ],
@@ -334,14 +334,12 @@ public class ActivityHubTests
     }
 
     [Fact]
-    public void Report_IgnoresServingAndConfirmationScopes()
+    public void Report_IgnoresServingScope()
     {
         using var hub = new ActivityHub(new ManualTimeProvider());
         using var backfill = hub.Begin(ActivityState.Backfilling, "Inbox");
         using var serving = hub.Begin(ActivityState.Serving, "search_emails");
-        var confirm = hub.Begin(ActivityState.AwaitingConfirmation, "invite");
         hub.Report(20, 100);
-        confirm.Dispose();
         Assert.Equal(ActivityState.Backfilling, hub.State);
         Assert.Equal(new ActivityProgress(20, 100, "Inbox"), hub.Progress);
     }
@@ -590,7 +588,7 @@ public class ActivityHubTests
         {
             for (var n = 0; n < 1000; n++)
             {
-                using (hub.Begin((ActivityState)(1 + i % 8), "t"))
+                using (hub.Begin((ActivityState)(1 + i % 7), "t"))
                 {
                 }
             }

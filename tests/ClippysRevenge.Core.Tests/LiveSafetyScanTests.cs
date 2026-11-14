@@ -2,8 +2,8 @@ namespace ClippysRevenge.Core.Tests;
 
 /// <summary>
 /// Not a live test: runs in CI on Linux and Windows. Scans the live Outlook test sources and the test
-/// project file for the hard rules (CLAUDE.md): no Send, no launch, no Outlook instantiation, and only
-/// DraftOnly invites. The M10.1 scan of src/ lives in SafetySourceScanTests and is not affected.
+/// project file for the hard rules (CLAUDE.md): no Send, no launch, no Outlook instantiation, and meetings
+/// only through create_meeting_draft. The M10.1 scan of src/ lives in SafetySourceScanTests and is not affected.
 /// </summary>
 public class LiveSafetyScanTests
 {
@@ -48,11 +48,11 @@ public class LiveSafetyScanTests
     }
 
     [Fact]
-    public void Live_tests_force_draft_only()
+    public void Live_tests_create_meeting_drafts_only()
     {
         var calendar = File.ReadAllText(Path.Combine(LiveDir(), "LiveCalendarTests.cs"));
-        Assert.Contains("DraftOnlyCalendar", calendar, StringComparison.Ordinal);
-        Assert.Contains("RefusingConfirmer", calendar, StringComparison.Ordinal);
+        Assert.Contains("CreateDraftAsync", calendar, StringComparison.Ordinal);
+        Assert.DoesNotContain("SendAsync", calendar, StringComparison.Ordinal);
         var fixture = File.ReadAllText(Path.Combine(LiveDir(), "LiveOutlook.cs"));
         Assert.Contains("MeetingInviteMode.DraftOnly", fixture, StringComparison.Ordinal);
     }

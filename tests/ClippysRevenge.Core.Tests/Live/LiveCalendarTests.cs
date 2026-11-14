@@ -7,8 +7,7 @@ using Outlook = Microsoft.Office.Interop.Outlook;
 namespace ClippysRevenge.Core.Tests.Live;
 
 /// <summary>
-/// DraftOnly meeting, list_events windows, free/busy and find_free_times (SPEC §6.6, §11.7 to §11.9).
-/// The meeting only ever goes through DraftOnlyCalendar, which refuses anything but SaveDraft.
+/// Unsent meeting draft, list_events windows, free/busy and find_free_times (SPEC §22.1, §11.7, §11.8).
 /// </summary>
 [Collection(LiveOutlookCollection.Name)]
 [Trait("live", "outlook")]
@@ -84,7 +83,7 @@ public sealed class LiveCalendarTests(LiveOutlook fx)
     }
 
     [Fact(Timeout = 180_000)]
-    public async Task Meeting_draft_only_is_saved_not_sent_and_listed()
+    public async Task Meeting_draft_is_saved_unsent_and_listed()
     {
         await fx.RequireReadyAsync(TestContext.Current.CancellationToken);
         var me = await fx.MeAsync();
@@ -96,22 +95,21 @@ public sealed class LiveCalendarTests(LiveOutlook fx)
 
         await fx.WithCleanupAsync([""], Outlook.OlDefaultFolders.olFolderCalendar, async scope =>
         {
-            var calendar = new DraftOnlyCalendar(new OutlookMeetingCalendar(fx.Worker, fx.Stores, () => fx.Settings));
-            var invites = new MeetingInvites(calendar, new RefusingConfirmer(), () => fx.Settings, fx.Hub, new BalloonCenter(), tz);
+            var invites = new MeetingInvites(new OutlookMeetingCalendar(fx.Worker, fx.Stores, () => fx.Settings), () => fx.Settings, fx.Hub, tz);
 
-            var sendResult = await invites.SendAsync(Recipients.Format([me]), subject,
+            var result = await invites.CreateDraftAsync(Recipients.Format([me]), subject,
                 s.ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture), e.ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture),
-                "Automated Clippy's Revenge live test. Never sent; deleted by the test.", null, false, null, ct);
+                "Automated Clippy's Revenge live test. Never sent; deleted by the test.", null, null, ct);
 
             var found = await fx.RunAsync("finding the meeting", FindMeetings);
             foreach (var a in found)
                 scope.Track(new TrackedItem(TrackedKind.Meeting, "", a.EntryId, a.StoreId, a.Subject));
 
-            Assert.Equal("saved_as_draft", sendResult.Status);
-            Assert.Equal("draft_only_mode", sendResult.Reason);
-            Assert.Equal(InviteAction.SaveDraft, calendar.LastDecision?.Action);
+            Assert.Equal("saved_as_draft", result.Status);
 
             var appt = Assert.Single(found);
+            Assert.False(string.IsNullOrEmpty(result.EntryId), "The result has no EntryId.");
+            Assert.Equal(appt.EntryId, result.EntryId);
             Assert.Equal(Outlook.OlMeetingStatus.olMeeting, appt.MeetingStatus);
             Assert.Equal(s, appt.Start);
             Assert.Equal(e, appt.End);

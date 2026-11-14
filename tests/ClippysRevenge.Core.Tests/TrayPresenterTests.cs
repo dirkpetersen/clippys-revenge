@@ -68,15 +68,6 @@ public class TrayPresenterTests
     }
 
     [Fact]
-    public void AwaitingConfirmation()
-    {
-        var (p, _) = Make();
-        var v = p.Update(ActivityState.AwaitingConfirmation, ActivityProgress.None, TrayStats.Unknown, null);
-        Assert.Equal("Clippy — waiting for you to confirm a meeting invite", v.Tooltip);
-        Assert.Equal(TrayIconKey.Confirm, v.Icon);
-    }
-
-    [Fact]
     public void OutlookUnavailable()
     {
         var (p, _) = Make();
@@ -105,7 +96,6 @@ public class TrayPresenterTests
     [InlineData(ActivityState.Purging)]
     [InlineData(ActivityState.Syncing)]
     [InlineData(ActivityState.Backfilling)]
-    [InlineData(ActivityState.AwaitingConfirmation)]
     [InlineData(ActivityState.Error)]
     public void ShowStartOutlook_FalseElsewhere(ActivityState s)
     {

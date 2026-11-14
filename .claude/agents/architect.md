@@ -28,7 +28,7 @@ Your output for a task is a brief at `docs/briefs/<task-id>.md`, e.g.
 Rules:
 - Keep it small. One app project, one Core library, one test project.
   Anything that doesn't need COM, the registry or WinForms goes in Core.
-- Never weaken a hard rule in CLAUDE.md (no sending mail, attach-only COM,
+- Never weaken a hard rule in CLAUDE.md (never send anything, attach-only COM,
   `Re:: `, localhost + token, no attachment content, PathPolicy, no Graph).
 - If the spec is ambiguous, decide when the choice is low-risk and
   reversible, then record it in SPEC.md and in the brief under "Spec

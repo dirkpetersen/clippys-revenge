@@ -5,29 +5,16 @@ using ModelContextProtocol;
 
 namespace ClippysRevenge.Core;
 
-// Types shared with the confirmation queue (InviteConfirm.cs, M8.3).
-public sealed record InvitePreview(
-    string OrganizerName, string OrganizerEmail, string Mailbox,
-    string Subject, DateTime Start, DateTime End,
-    string? Location, bool TeamsRequested, bool TeamsAvailable,
-    IReadOnlyList<InviteAttendee> Attendees, string Body);
+/// <summary>One resolved meeting attendee.</summary>
+public sealed record InviteAttendee(string Name, string Email, bool External);
 
-public sealed record InviteConfirmation(InviteChoice? Choice, bool TimedOut);
-
-public interface IInviteConfirmer
-{
-    /// <summary>Throws OperationCanceledException when ct fires (dialog closed, nothing chosen).</summary>
-    Task<InviteConfirmation> ConfirmAsync(InvitePreview preview, TimeSpan timeout, CancellationToken ct);
-}
-
-/// <summary>A validated send_meeting_invite request (SPEC §11.9).</summary>
+/// <summary>A validated create_meeting_draft request (SPEC §22.1).</summary>
 public sealed partial record MeetingRequest(
     IReadOnlyList<Recipient> Recipients,
     string Subject,
     DateTime Start, DateTime End,
     string Body,
     string? Location,
-    bool Teams,
     string Mailbox)
 {
     [GeneratedRegex(@"^\d{4}-\d{2}-\d{2}$", RegexOptions.CultureInvariant)]
@@ -40,7 +27,7 @@ public sealed partial record MeetingRequest(
 
     /// <summary>Throws McpException (only) for bad input.</summary>
     public static MeetingRequest Create(string? recipients, string? subject, string? start, string? end,
-        string? body, string? location, bool teams, string? mailbox, TimeZoneInfo tz, DateTimeOffset now)
+        string? body, string? location, string? mailbox, TimeZoneInfo tz, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(tz);
 
@@ -71,7 +58,7 @@ public sealed partial record MeetingRequest(
 
         var normBody = (body ?? "").Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "\r\n");
         var loc = string.IsNullOrWhiteSpace(location) ? null : location.Trim();
-        return new MeetingRequest(parsed, subj, s, e, normBody, loc, teams, MailboxIndexes.Normalize(mailbox));
+        return new MeetingRequest(parsed, subj, s, e, normBody, loc, MailboxIndexes.Normalize(mailbox));
     }
 
     private static DateTime ParseLocal(string name, string? text, string example, string emptyHint, TimeZoneInfo tz)
@@ -98,18 +85,19 @@ public sealed partial record MeetingRequest(
 public sealed record ResolvedInvite(
     string OrganizerName, string OrganizerEmail,
     IReadOnlyList<InviteAttendee> Attendees,
-    IReadOnlyList<string> Unresolved,
-    bool TeamsAvailable);
+    IReadOnlyList<string> Unresolved);
 
-public sealed record CreatedMeeting(bool TeamsAdded);
+/// <summary>The saved meeting's ids. Empty strings when Outlook saved it but the ids couldn't be read.</summary>
+public sealed record CreatedMeeting(string EntryId, string StoreId);
 
 public interface IMeetingCalendar
 {
     /// <summary>COM, Interactive. Validates the mailbox (throws McpException) and resolves recipients. Creates nothing.</summary>
     Task<ResolvedInvite> ResolveAsync(MeetingRequest request, CancellationToken ct);
 
-    /// <summary>COM, Interactive. decision.Action must be Send or SaveDraft; otherwise InvalidOperationException.</summary>
-    Task<CreatedMeeting> CreateAsync(MeetingRequest request, InviteDecision decision, CancellationToken ct);
+    /// <summary>COM, Interactive. Creates the meeting and saves it unsent; never sends. Throws McpException
+    /// for unresolved recipients (nothing saved) or missing calendar rights.</summary>
+    Task<CreatedMeeting> CreateAsync(MeetingRequest request, CancellationToken ct);
 }
 
 public static class AttendeeKinds
@@ -120,11 +108,18 @@ public static class AttendeeKinds
 
 public static class InviteTexts
 {
-    public const string Cancelled = "The user declined this invite. Do not retry unless they ask.";
+    public const string ToolDescription =
+        "Saves a meeting unsent in the calendar. Nothing is sent: Clippy can't add a Teams or Zoom link, so the user opens the meeting in Outlook, adds the link and sends the invite there. " +
+        "Times are local. To book option N of a find_free_times result, or of the times offered in a draft, pass that option's start and end; " +
+        "the option lines show a date without a year, so use the next occurrence of that date. " +
+        "Every recipient must resolve in Outlook or nothing is created. " +
+        "With mailbox, the meeting is saved in that shared mailbox's calendar (delegate or editor rights needed).";
 
-    public const string TeamsUnavailable =
-        "A Teams meeting was requested, but Clippy's Revenge can't add one through the Teams add-in on this PC, " +
-        "so the invite has no Teams link. If one is needed, the user can open the meeting in Outlook and click Teams Meeting.";
+    public const string DisabledMessage =
+        "Meeting drafts are disabled in Clippy's Revenge. Ask the user to enable them in the tray settings (Meeting invites: Draft only), then try again.";
+
+    public const string DisabledReason = "meeting drafts are disabled";
+    public const string CancelledReason = "the request was cancelled";
 
     public static string Unresolved(IEnumerable<string> entries) =>
         $"These recipients could not be resolved in Outlook: {string.Join("; ", entries)}. Nothing was created. Check the addresses and try again.";
@@ -133,26 +128,37 @@ public static class InviteTexts
         $"The user doesn't have delegate or editor rights on the calendar of {smtp}, so the meeting can't be organized from it. " +
         "Ask the user to get editor or delegate access from the mailbox owner, or leave mailbox empty to organize it from their own calendar.";
 
-    public static string Calendar(string mailbox) => mailbox.Length == 0 ? "your calendar" : $"the {mailbox} calendar";
+    /// <summary>"your calendar" for "", else "the calendar of &lt;mailbox&gt;".</summary>
+    public static string Calendar(string mailbox) => mailbox.Length == 0 ? "your calendar" : $"the calendar of {mailbox}";
 
-    public static string SentBalloon(int attendees) =>
-        $"It looks like you're trying to schedule a meeting. I sent {attendees} invite{(attendees == 1 ? "" : "s")}.";
+    public static string Saved(string mailbox) =>
+        $"The meeting was saved in {Calendar(mailbox)} without sending. It has no Teams or Zoom link: the user adds one in Outlook and sends the invite. It is listed in the Clippy tray under Draft invites.";
 
-    public static string TimeoutBalloon(string subject) =>
-        $"It looks like you stepped away. I saved \"{subject}\" as a draft — review it in Outlook.";
+    /// <summary>"ddd M/d HH:mm–HH:mm", invariant culture, U+2013.</summary>
+    public static string When(DateTime start, DateTime end) =>
+        string.Create(CultureInfo.InvariantCulture, $"{start:ddd} {start:M/d} {start:HH:mm}–{end:HH:mm}");
+
+    public static string SavedEvent(int attendees, DateTime start, DateTime end) =>
+        $"meeting draft saved for {attendees} attendee{(attendees == 1 ? "" : "s")}: {When(start, end)}";
+
+    public static string NotCreatedEvent(string reason) => $"meeting draft not created: {reason}";
 }
 
-public sealed record MeetingInviteResult
+public sealed record MeetingDraftResult
 {
-    [JsonPropertyName("status")] public required string Status { get; init; }
-    [JsonPropertyName("reason"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Reason { get; init; }
+    [JsonPropertyName("status")] public string Status { get; init; } = "saved_as_draft";
     [JsonPropertyName("message")] public required string Message { get; init; }
-    [JsonPropertyName("subject"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Subject { get; init; }
-    [JsonPropertyName("start"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Start { get; init; }
-    [JsonPropertyName("end"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? End { get; init; }
-    [JsonPropertyName("mailbox"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Mailbox { get; init; }
-    [JsonPropertyName("organizer"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Organizer { get; init; }
-    [JsonPropertyName("recipients"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Recipients { get; init; }
-    [JsonPropertyName("teams"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? Teams { get; init; }
-    [JsonPropertyName("note"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Note { get; init; }
+    [JsonPropertyName("subject")] public required string Subject { get; init; }
+    [JsonPropertyName("start")] public required string Start { get; init; }
+    [JsonPropertyName("end")] public required string End { get; init; }
+    [JsonPropertyName("mailbox")] public required string Mailbox { get; init; }
+    [JsonPropertyName("organizer")] public required string Organizer { get; init; }
+    [JsonPropertyName("recipients")] public required string Recipients { get; init; }
+    /// <summary>Always written, also as null (M15.2 sets it).</summary>
+    [JsonPropertyName("category"), JsonIgnore(Condition = JsonIgnoreCondition.Never)] public string? Category { get; init; }
+    [JsonPropertyName("note_draft_id"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? NoteDraftId { get; init; }
+    [JsonPropertyName("note_error"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? NoteError { get; init; }
+    /// <summary>Not serialized. The created meeting, for tracking (M15.2) and tests.</summary>
+    [JsonIgnore] public string EntryId { get; init; } = "";
+    [JsonIgnore] public string StoreId { get; init; } = "";
 }

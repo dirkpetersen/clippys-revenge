@@ -27,7 +27,6 @@ public static class ActivityView
         ActivityState.Syncing => "Syncing",
         ActivityState.Backfilling => "Indexing your mail",
         ActivityState.OutlookUnavailable => "Waiting for Outlook",
-        ActivityState.AwaitingConfirmation => "Waiting for your confirmation",
         ActivityState.Error => "Error",
         _ => state.ToString(),
     };

@@ -94,7 +94,6 @@ public static class TrayIconArt
         TrayIconKey.Idle => Rgb(0x2E, 0x7D, 0x32),
         TrayIconKey.Serving => Rgb(0x66, 0xBB, 0x6A),
         TrayIconKey.Paused or TrayIconKey.Unavailable => Rgb(0x75, 0x75, 0x75),
-        TrayIconKey.Confirm => Rgb(0xFF, 0xB3, 0x00),
         TrayIconKey.Error => Rgb(0xC6, 0x28, 0x28),
         _ => Rgb(0x15, 0x65, 0xC0),
     };

@@ -91,7 +91,7 @@ internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker, IL
     private static string MailboxLabel(string key) => key.Length == 0 ? "own" : key;
 
     private const string FindFreeTimesDescription =
-        "Finds meeting times when everyone is free, from Outlook free/busy. Paste recipients as \"Last, First <email>; ...\" (separate with \";\"). Returns \"suggestions\": whole free blocks, numbered, with start/end (local time, ISO with offset), ranked so that times right before or after the calendar owner's meetings come first, then times next to tentative meetings, then the rest, each group in date order (\"adjacent\" says which), plus a ready-to-show \"text\". Also returns \"offers\": up to max_suggestions options of exactly duration_minutes, in the same ranking, and \"offer_text\" with one option per line. When proposing times in an email, paste offer_text as is, without reordering or retyping the times, and set offer_cet=true when the person you are writing to is in Europe. People whose free/busy can't be read (e.g. outside the organization) are listed in unknown_attendees and ignored. Nothing is booked. To book a suggestion or offer, pass its start and end to send_meeting_invite.";
+        "Finds meeting times when everyone is free, from Outlook free/busy. Paste recipients as \"Last, First <email>; ...\" (separate with \";\"). Returns \"suggestions\": whole free blocks, numbered, with start/end (local time, ISO with offset), ranked so that times right before or after the calendar owner's meetings come first, then times next to tentative meetings, then the rest, each group in date order (\"adjacent\" says which), plus a ready-to-show \"text\". Also returns \"offers\": up to max_suggestions options of exactly duration_minutes, in the same ranking, and \"offer_text\" with one option per line. When proposing times in an email, paste offer_text as is, without reordering or retyping the times, and set offer_cet=true when the person you are writing to is in Europe. People whose free/busy can't be read (e.g. outside the organization) are listed in unknown_attendees and ignored. Nothing is booked. To book a suggestion or offer, pass its start and end to create_meeting_draft.";
 
 #pragma warning disable IDE1006
     [McpServerTool(Name = "find_free_times", ReadOnly = true, Idempotent = true)]
@@ -116,23 +116,19 @@ internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker, IL
                settings, cancellationToken);
 #pragma warning restore IDE1006
 
-    private const string SendMeetingInviteDescription =
-        "Creates a meeting and sends the invite to the attendees. This is the only tool that can send anything. In Send mode the user is asked to confirm in a dialog, and the invite goes out immediately once they click Send; they may instead save it as a draft or cancel. If the result is \"cancelled\", do not retry unless the user asks. In Draft only mode the meeting is saved in the calendar unsent and the user sends it from Outlook. Times are local; pass the start and end from find_free_times. Every recipient must resolve in Outlook or nothing is created.";
-
-    [McpServerTool(Name = "send_meeting_invite", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true)]
-    [Description(SendMeetingInviteDescription)]
-    public Task<MeetingInviteResult> SendMeetingInvite(
+    [McpServerTool(Name = "create_meeting_draft", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description(InviteTexts.ToolDescription)]
+    public Task<MeetingDraftResult> CreateMeetingDraft(
         MeetingInvites invites,
         [Description("Attendees as \"Name <email>; Name <email>\" or bare emails, separated by \";\" (never \",\"). Paste the list as given.")] string recipients,
         [Description("Meeting subject.")] string subject,
         [Description("Local start date-time, e.g. 2026-03-01T14:30, or the start of a find_free_times suggestion.")] string start,
         [Description("Local end date-time, e.g. 2026-03-01T15:30, or the end of a find_free_times suggestion.")] string end,
-        [Description("Optional plain-text invite body.")] string? body = null,
+        [Description("Optional plain-text body of the meeting.")] string? body = null,
         [Description("Optional location, e.g. a room.")] string? location = null,
-        [Description("Accepted for compatibility, but no Teams link is ever added (Outlook has no supported API for it); the result has teams=false and a note telling the user to click Teams Meeting in Outlook if they need one.")] bool teams = false,
-        [Description("Optional SMTP address of a configured shared mailbox to organize the meeting from. Empty = the user's own calendar.")] string? mailbox = null,
+        [Description("Optional SMTP address of a configured shared mailbox whose calendar gets the meeting. Empty = the user's own calendar.")] string? mailbox = null,
         CancellationToken cancellationToken = default)
-        => invites.SendAsync(recipients, subject, start, end, body, location, teams, mailbox, cancellationToken);
+        => invites.CreateDraftAsync(recipients, subject, start, end, body, location, mailbox, cancellationToken);
 }
 
 public sealed record ListEventsResult(
