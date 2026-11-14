@@ -145,6 +145,54 @@ public sealed class LiveClaudeGuardTests
         Assert.Empty(fake.Requests);
     }
 
+    private static readonly string WithNote =
+        "You write replies. " + DraftPrompt.NoStyleGuideText + "\n\n" + DraftPrompt.MeetingNote.Replace("{name}", "Sam");
+
+    [Fact]
+    public async Task Guard_passes_a_request_with_the_meeting_note_when_required()
+    {
+        var fake = new FakeDraftModel();
+        fake.Enqueue(FakeDraftModel.Ok("""{"ok":true}"""));
+        var guard = new GuardedModel(fake, "M", Token, meetingNote: true);
+
+        await guard.RunAsync(Request(system: WithNote), TestContext.Current.CancellationToken);
+
+        Assert.Null(guard.Tripped);
+        Assert.Equal(1, guard.Calls);
+        Assert.Single(fake.Requests);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Guard_refuses_a_wrong_meeting_note_before_the_model_runs(bool required, bool promptHasNote)
+    {
+        var fake = new FakeDraftModel();
+        var guard = new GuardedModel(fake, "M", Token, meetingNote: required);
+
+        var result = await guard.RunAsync(Request(system: promptHasNote ? WithNote : null), TestContext.Current.CancellationToken);
+
+        Assert.Equal(new ModelResult.Failed(ModelFailure.BadInput, null), result);
+        Assert.Equal("meeting-note", guard.Tripped);
+        Assert.Equal(0, guard.Calls);
+        Assert.Empty(fake.Requests);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Guard_without_a_meeting_note_check_accepts_both_prompts(bool promptHasNote)
+    {
+        var fake = new FakeDraftModel();
+        fake.Enqueue(FakeDraftModel.Ok("""{"ok":true}"""));
+        var guard = new GuardedModel(fake, "M", Token);
+
+        await guard.RunAsync(Request(system: promptHasNote ? WithNote : null), TestContext.Current.CancellationToken);
+
+        Assert.Null(guard.Tripped);
+        Assert.Equal(1, guard.Calls);
+    }
+
     // ---- 11 FixedSelectionMailbox
 
     [Fact]
