@@ -1189,6 +1189,32 @@ connection; the library pools them.
 - `UpsertBatch(IReadOnlyList<IndexedEmail>)` writes in one transaction with
   `INSERT … ON CONFLICT(entry_id) DO UPDATE` (**never** `INSERT OR REPLACE`,
   which changes the rowid), and replaces that email's attachment rows.
+  - **Body cap** (M13/M14 review round 2): FTS5 needs roughly 20 bytes of
+    heap per byte of text, so a body longer than
+    `EmailIndex.MaxIndexedBodyChars` = 2,000,000 UTF-16 units is cut to
+    that length (one unit fewer when the cut would split a surrogate
+    pair) and `EmailIndex.BodyCutMarker` is appended, exactly
+    `\n\n[Clippy indexed only the first 2,000,000 characters of this email.]`
+    (`EmailIndex.CapBody`). Shorter bodies are stored unchanged. Every
+    reader of the stored body sees the marker: `get_message` when it
+    reads from the index (§11.2), AI drafting only when the cut is within
+    the part it reads (it reads at most 20,000 characters, so in practice
+    never), and `query_index` through `mail.body` (§11.12, where the
+    2,000-character cell cut normally hides it). Search snippets don't
+    show it (they come from the body start or the matched terms).
+  - **Batch isolation**: when the batch transaction fails with
+    `SQLITE_NOMEM` or `SQLITE_TOOBIG` (primary result code 7 or 18, e.g.
+    the §11.12 heap limit), the batch is redone item by item, each in its
+    own transaction. An item that still fails with NOMEM/TOOBIG is skipped
+    and logged at Warning, exactly
+    `Index: skipped one email that SQLite could not store (SQLite error {Code}, {Type}).`
+    (`{Code}` is the SQLite error code, `{Type}` is `IndexedEmail`; never
+    subject, sender, entry id or body). The batch then returns normally,
+    so sync advances the folder's watermark (§10) and one huge item can't
+    stall the folder. Any other error still fails the batch.
+  - `EmailIndex.Logger` (`static ILogger?`) is the process-wide logger
+    for these warnings; `Program.Main` sets it once at startup before the
+    indexes are opened. Null (tests, other hosts) logs nothing.
 - `Delete(IEnumerable<string> entryIds)`.
 - `SetUnread(IEnumerable<(string entryId, bool unread)>)`.
 - `PurgeOlderThan(DateTimeOffset cutoff)` → count. It runs `VACUUM` when
@@ -1312,7 +1338,8 @@ connection; the library pools them.
      changes during the backfill is picked up by the changes pass.
   3. **Changes pass:** `EnumerateChanged(folder, modified_watermark, cutoff)`,
      in ascending `LastModificationTime`, in batches of 50 → `ReadForIndex`
-     → `UpsertBatch`. Advance `modified_watermark` after each batch. This
+     → `UpsertBatch`. Advance `modified_watermark` after each batch (also
+     when `UpsertBatch` skipped an item it couldn't store, §9.2). This
      picks up new mail, edits, and older mail moved into the folder. It
      reports as `Syncing`.
   4. **Backfill pass:** while `oldest_synced > cutoff`, use
@@ -1469,7 +1496,10 @@ file name, size, inline flag) in position order.
 ### 11.2 `get_message(id)`
 
 Returns the full email from the index. If the email isn't indexed yet, it
-falls back to a live read through COM.
+falls back to a live read through COM. A very long body (over 2,000,000
+characters) was cut when indexed and ends with the marker line
+`[Clippy indexed only the first 2,000,000 characters of this email.]`
+(§9.2); the COM fallback is not affected by this cap.
 
 ### 11.3 `get_attachment(id, filename?, position?, save_dir?)` → `{path, filename, size}`
 
@@ -1829,6 +1859,19 @@ so no fallback to the real FTS table name is needed).
    Microsoft.Data.Sqlite 10.0.15 references; verified 2026-11-14) and a
    progress handler (`sqlite3_progress_handler`, every 1,000 VM steps)
    that stops the statement after the deadline or on cancellation.
+   The progress handler runs only every 1,000 VM steps, and one step can
+   take seconds (e.g. huge temp B-tree keys), so a one-shot **deadline
+   timer** (`System.Threading.Timer`, due at the time left until the
+   deadline, at once when none is left) and a cancellation registration
+   on the call's token both call `sqlite3_interrupt` on the connection
+   (M13/M14 review round 2). Either one marks the call as interrupted, so
+   the result maps to the Timeout text or `OperationCanceledException` as
+   for the progress handler (Statement checks step 4). A lock and a
+   `finished` flag, set before the timer and registration are disposed
+   when the mailbox's statement ends, keep them from touching the
+   connection afterwards. The progress handler stays. SQLite has no cap
+   on how much a statement spills to temp storage, and none is set; the
+   timer is what bounds it.
    Extension loading stays off (`load_extension` is never enabled, and
    the function is denied by the authorizer too).
 
@@ -1965,7 +2008,7 @@ means the built-in Clippy schema `emails`, `attachments`, `emails_fts`,
 - Wall clock 10 s for the whole call (all mailboxes together) →
   `The query ran longer than 10 seconds and was stopped. Add a date range, a folder or a LIMIT, or use email_stats for counts.`
   Checked by the progress handler, every 100 rows, and before and after
-  each mailbox. Cancellation of the call is an
+  each mailbox, and enforced by the deadline timer (Connection step 4). Cancellation of the call is an
   `OperationCanceledException`, not this text.
 - `max_rows` 1–1000 (clamped), default 200. `truncated: true`,
   `truncated_reason: "max_rows"` only when another row really exists
@@ -2656,6 +2699,22 @@ Recorded after the M13/M14 review (2026-11-14, commit `e132650`):
   text.
 - `MeetingOffers` heading sanitizing also removes Unicode format
   characters (§21.4).
+
+Recorded after the M13/M14 review round 2 (2026-11-14, commit `85ae281`):
+- Indexed bodies are capped at 2,000,000 characters (surrogate-safe) with
+  a marker line, so FTS5 indexing of one huge email stays well under the
+  1 GiB heap limit (§9.2, §11.2).
+- `UpsertBatch` retries a batch item by item on `SQLITE_NOMEM`/`TOOBIG`
+  and skips items that still fail (Warning with code and type only), so
+  the folder's watermark still advances (§9.2, §10). `EmailIndex.Logger`
+  carries the warning.
+- `query_index` adds a deadline timer and a cancellation registration
+  that call `sqlite3_interrupt`, because one VM step can outlast the
+  progress handler's interval; the progress handler stays, and the timer
+  is the bound on temp spills (§11.12). `ReadText` steps back at most 3
+  UTF-8 continuation bytes.
+- Heading cleaning iterates runes, so tag characters and lone surrogates
+  are removed (§21.4).
 
 Decided (2026-11-14, draft-only invites, M15; §22, §1.4). The user
 approved removing every send path and the new hard-rule wording
@@ -4406,7 +4465,11 @@ before selection; M13.1), the CET part and the split are left out too
   `MeetingOffers.OutsideHoursHeading`). In AI drafts, a valid
   `meeting.outside_hours_heading` from the model replaces it: control
   characters and Unicode format characters (category `Cf`, e.g.
-  zero-width spaces and bidi overrides; M13/M14 review) removed,
+  zero-width spaces and bidi overrides; M13/M14 review) removed. The
+  cleaning iterates Unicode scalar values (runes, `Rune.DecodeFromUtf16`),
+  not UTF-16 units, so supplementary-plane `Cf` characters such as the
+  tag characters U+E0000–U+E007F are dropped too, and a lone surrogate
+  is dropped (M13/M14 review round 2). Then:
   whitespace collapsed, `<`, `>`, `[` and `]`
   removed, trimmed, 1–80 characters with at least one letter, and a `:`
   appended when it doesn't end with one; otherwise the default is used.
