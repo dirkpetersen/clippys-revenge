@@ -616,7 +616,11 @@ public sealed class LiveOutlook : IAsyncLifetime
     /// delete exactly the tracked items, check that no token item is left in <paramref name="leftIn"/> of the
     /// mailboxes, and assert nothing was sent. A cleanup problem fails the test unless the body already failed.
     /// </summary>
-    internal async Task WithCleanupAsync(string[] mailboxes, Outlook.OlDefaultFolders leftIn, Func<Scope, Task> body)
+    internal Task WithCleanupAsync(string[] mailboxes, Outlook.OlDefaultFolders leftIn, Func<Scope, Task> body) =>
+        WithCleanupAsync(mailboxes, [leftIn], body);
+
+    /// <summary>Same as the single-folder version, but checks every folder in <paramref name="leftIn"/> of every mailbox for token items.</summary>
+    internal async Task WithCleanupAsync(string[] mailboxes, Outlook.OlDefaultFolders[] leftIn, Func<Scope, Task> body)
     {
         var befores = new List<SentSnapshot>();
         foreach (var m in mailboxes) befores.Add(await SnapshotSentAsync(m).ConfigureAwait(false));
@@ -642,9 +646,13 @@ public sealed class LiveOutlook : IAsyncLifetime
                 foreach (var m in mailboxes)
                 {
                     var key = m;
-                    var left = await Worker.RunAsync(app => TokenSubjectsIn(app, key, leftIn), WorkPriority.Interactive,
-                        CancellationToken.None, TimeSpan.FromSeconds(30)).ConfigureAwait(false);
-                    if (left.Count > 0) problem += $"{left.Count} test item(s) are still in {leftIn} of '{key}'. ";
+                    foreach (var folder in leftIn)
+                    {
+                        var which = folder;
+                        var left = await Worker.RunAsync(app => TokenSubjectsIn(app, key, which), WorkPriority.Interactive,
+                            CancellationToken.None, TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+                        if (left.Count > 0) problem += $"{left.Count} test item(s) are still in {which} of '{key}'. ";
+                    }
                 }
                 foreach (var b in befores) await AssertNothingSentAsync(b).ConfigureAwait(false);
             }

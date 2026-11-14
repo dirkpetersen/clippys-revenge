@@ -176,6 +176,27 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void Load_MigratesSendToDraftOnly()
+    {
+        var s = Store();
+        s.Load();
+        File.WriteAllText(s.SettingsPath, "{\"MeetingInviteMode\":\"Send\",\"InviteConfirmTimeoutSeconds\":120}");
+        var before = File.ReadAllBytes(s.SettingsPath);
+        var r = s.Load();
+        Assert.Equal(MeetingInviteMode.DraftOnly, r.Settings.MeetingInviteMode);
+        Assert.Empty(r.Warnings);
+        Assert.False(r.FirstRun);
+        Assert.False(File.Exists(s.SettingsPath + ".bad"));
+        Assert.Equal(before, File.ReadAllBytes(s.SettingsPath));
+
+        s.Save(r.Settings);
+        var text = File.ReadAllText(s.SettingsPath);
+        Assert.Contains("\"DraftOnly\"", text);
+        Assert.DoesNotContain("\"Send\"", text);
+        Assert.DoesNotContain("InviteConfirmTimeoutSeconds", text);
+    }
+
+    [Fact]
     public void Save_Invalid_ThrowsWithoutWriting()
     {
         var s = Store();

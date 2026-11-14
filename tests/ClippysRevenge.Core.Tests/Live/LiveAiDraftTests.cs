@@ -19,34 +19,6 @@ namespace ClippysRevenge.Core.Tests.Live;
 [Trait("os", "windows")]
 public sealed class LiveAiDraftTests(LiveOutlook fx)
 {
-    /// <summary>Outlook's own reply to the unsent source, in memory only (discarded). Worker thread only.</summary>
-    private static (string? Html, int HResult) OutlooksOwnReply(Outlook.Application app, string id, string storeId)
-    {
-        Outlook.NameSpace? session = null;
-        Outlook.MailItem? item = null;
-        Outlook.MailItem? reply = null;
-        try
-        {
-            session = app.Session;
-            item = (Outlook.MailItem)session.GetItemFromID(id, storeId);
-            reply = item.Reply();
-            var html = reply.HTMLBody ?? "";
-            try { reply.Close(Outlook.OlInspectorClose.olDiscard); }
-            catch (COMException) { /* never opened in a window; nothing to close */ }
-            return (html, 0);
-        }
-        catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
-        {
-            return (null, ex.HResult);
-        }
-        finally
-        {
-            LiveDrafts.Rel(reply);
-            LiveDrafts.Rel(item);
-            LiveDrafts.Rel(session);
-        }
-    }
-
     [Fact(Timeout = 300_000)]
     public async Task Manual_draft_round_trip_saves_ai_reply_and_sends_nothing()
     {
@@ -90,7 +62,7 @@ public sealed class LiveAiDraftTests(LiveOutlook fx)
 
             // 4.2 Baseline: Outlook's own reply to it (nothing is saved). Before any Claude call.
             var (baselineHtml, baselineHResult) = await fx.RunAsync("checking Outlook's own reply",
-                app => OutlooksOwnReply(app, src.Id, ownStore));
+                app => LiveDrafts.TryOwnReply(app, src.Id, ownStore));
             if (baselineHtml is null)
             {
                 fx.Result("ai-reply-baseline",
@@ -259,7 +231,7 @@ public sealed class LiveAiDraftTests(LiveOutlook fx)
 
             // 5.2 Baseline: Outlook can reply to an unsent item (nothing is saved). Before any Claude call.
             var (baselineHtml, baselineHResult) = await fx.RunAsync("checking Outlook's own reply",
-                app => OutlooksOwnReply(app, src.Id, ownStore));
+                app => LiveDrafts.TryOwnReply(app, src.Id, ownStore));
             if (baselineHtml is null)
             {
                 fx.Result("ai-meeting-baseline",

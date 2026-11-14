@@ -2,8 +2,8 @@ namespace ClippysRevenge.Core.Tests;
 
 /// <summary>
 /// Not a live test: runs in CI on Linux and Windows. Scans the live Outlook test sources and the test
-/// project file for the hard rules (CLAUDE.md): no Send, no launch, no Outlook instantiation, and only
-/// DraftOnly invites. The M10.1 scan of src/ lives in SafetySourceScanTests and is not affected.
+/// project file for the hard rules (CLAUDE.md): no Send, no launch, no Outlook instantiation, and meetings
+/// only through create_meeting_draft. The M10.1 scan of src/ lives in SafetySourceScanTests and is not affected.
 /// </summary>
 public class LiveSafetyScanTests
 {
@@ -43,18 +43,32 @@ public class LiveSafetyScanTests
     public void Linked_app_sources_exclude_launcher()
     {
         var csproj = File.ReadAllText(Path.Combine(RepoRoot(), "tests", "ClippysRevenge.Core.Tests", "ClippysRevenge.Core.Tests.csproj"));
+        // The one allowed tray source needs only System.Drawing (SPEC 22.6).
+        csproj = csproj.Replace("Tray\\TrayBadgeRenderer.cs", "", StringComparison.Ordinal);
         foreach (var token in new[] { "OutlookLauncher.cs", "Program.cs", "McpTools", "Tray\\", "Tray/" })
             Assert.DoesNotContain(token, csproj, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Live_tests_force_draft_only()
+    public void Live_tests_create_meeting_drafts_only()
     {
         var calendar = File.ReadAllText(Path.Combine(LiveDir(), "LiveCalendarTests.cs"));
-        Assert.Contains("DraftOnlyCalendar", calendar, StringComparison.Ordinal);
-        Assert.Contains("RefusingConfirmer", calendar, StringComparison.Ordinal);
+        Assert.Contains("CreateDraftAsync", calendar, StringComparison.Ordinal);
+        Assert.DoesNotContain("SendAsync", calendar, StringComparison.Ordinal);
         var fixture = File.ReadAllText(Path.Combine(LiveDir(), "LiveOutlook.cs"));
         Assert.Contains("MeetingInviteMode.DraftOnly", fixture, StringComparison.Ordinal);
+        var invite = File.ReadAllText(Path.Combine(LiveDir(), "LiveDraftInviteTests.cs"));
+        Assert.Contains("CreateDraftAsync", invite, StringComparison.Ordinal);
+        Assert.Contains("CheckDraftInvites", invite, StringComparison.Ordinal);
+        Assert.DoesNotContain("SendAsync", invite, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Live_draft_invite_test_never_opens_windows()
+    {
+        var invite = File.ReadAllText(Path.Combine(LiveDir(), "LiveDraftInviteTests.cs"));
+        Assert.DoesNotContain("OpenDraftInvite", invite, StringComparison.Ordinal);
+        Assert.DoesNotContain("OutlookDraftInviteWindow", invite, StringComparison.Ordinal);
     }
 
     [Fact]

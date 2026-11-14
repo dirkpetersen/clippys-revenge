@@ -54,6 +54,17 @@ public class OutlookConnectionTests
     }
 
     [Fact]
+    public void IsItemNotFound()
+    {
+        Assert.True(ComErrors.IsItemNotFound(new COMException("x", unchecked((int)0x8004010F))));
+        Assert.True(ComErrors.IsItemNotFound(new COMException("x", unchecked((int)0x80040107))));
+        Assert.False(ComErrors.IsItemNotFound(new COMException("x", unchecked((int)0x80004005))));
+        Assert.False(ComErrors.IsItemNotFound(new COMException("x", ComErrors.RPC_E_DISCONNECTED)));
+        Assert.False(ComErrors.IsItemNotFound(new InvalidOperationException("x", new COMException("x", unchecked((int)0x8004010F)))));
+        Assert.Throws<ArgumentNullException>(() => ComErrors.IsItemNotFound(null!));
+    }
+
+    [Fact]
     public void IsNotRunning()
     {
         Assert.True(ComErrors.IsNotRunning(ComErrors.MK_E_UNAVAILABLE));

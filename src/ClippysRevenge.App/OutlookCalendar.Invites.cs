@@ -1,12 +1,14 @@
 using System.Runtime.InteropServices;
 using ClippysRevenge.Core;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using Outlook = Microsoft.Office.Interop.Outlook;
 
 namespace ClippysRevenge.App;
 
 /// <summary>Worker wrappers for <see cref="IMeetingCalendar"/> (M8.4).</summary>
-internal sealed class OutlookMeetingCalendar(OutlookWorker worker, OutlookStores stores, Func<Settings> settings) : IMeetingCalendar
+internal sealed class OutlookMeetingCalendar(OutlookWorker worker, OutlookStores stores, Func<Settings> settings,
+    ILogger? log = null) : IMeetingCalendar
 {
     public async Task<ResolvedInvite> ResolveAsync(MeetingRequest request, CancellationToken ct)
     {
@@ -16,8 +18,8 @@ internal sealed class OutlookMeetingCalendar(OutlookWorker worker, OutlookStores
             .ConfigureAwait(false);
     }
 
-    public Task<CreatedMeeting> CreateAsync(MeetingRequest request, InviteDecision decision, CancellationToken ct) =>
-        worker.RunAsync(app => OutlookCalendar.CreateMeeting(app, request, decision), WorkPriority.Interactive, ct);
+    public Task<CreatedMeeting> CreateAsync(MeetingRequest request, CancellationToken ct) =>
+        worker.RunAsync(app => OutlookCalendar.CreateMeeting(app, request, log), WorkPriority.Interactive, ct);
 }
 
 internal static partial class OutlookCalendar
@@ -72,7 +74,7 @@ internal static partial class OutlookCalendar
                     if (rc is not null) Marshal.ReleaseComObject(rc);
                 }
             }
-            return new ResolvedInvite(orgName, orgEmail, attendees, unresolved, TeamsAddinUsable(app));
+            return new ResolvedInvite(orgName, orgEmail, attendees, unresolved);
         }
         finally
         {
@@ -104,19 +106,9 @@ internal static partial class OutlookCalendar
     private static bool IsAccessFailure(Exception ex) =>
         ex is UnauthorizedAccessException || (ex is COMException c && !ComErrors.IsOutlookGone(c));
 
-    // M8.4 brief, Teams option A: the Outlook object model has no supported call to add a Teams meeting,
-    // so v1 never adds one. Kept as a seam in case an add-in route is confirmed later.
-    private static bool TeamsAddinUsable(Outlook.Application app) => false;
-
-    /// <summary>
-    /// Creates the meeting and either sends or saves it, per the decision. Worker thread. The only place in
-    /// the codebase that sends anything: it runs after InviteGate and the user's confirmation.
-    /// </summary>
-    public static CreatedMeeting CreateMeeting(Outlook.Application app, MeetingRequest req, InviteDecision decision)
+    /// <summary>Creates the meeting and saves it unsent. Worker thread. Never sends (SPEC §1.4, §22).</summary>
+    public static CreatedMeeting CreateMeeting(Outlook.Application app, MeetingRequest req, ILogger? log = null)
     {
-        if (decision.Action is not (InviteAction.Send or InviteAction.SaveDraft))
-            throw new InvalidOperationException("CreateMeeting needs a Send or SaveDraft decision.");
-
         var shared = req.Mailbox.Length > 0;
         Outlook.NameSpace? session = null;
         Outlook.Recipient? owner = null;
@@ -124,6 +116,7 @@ internal static partial class OutlookCalendar
         Outlook.Items? items = null;
         Outlook.AppointmentItem? item = null;
         Outlook.Recipients? recips = null;
+        var categorized = false;
         try
         {
             try
@@ -181,23 +174,40 @@ internal static partial class OutlookCalendar
                     throw new McpException(InviteTexts.Unresolved(bad));
                 }
 
-                switch (decision.Action)
-                {
-                    case InviteAction.Send:
-                        item.Send();
-                        break;
-                    case InviteAction.SaveDraft:
-                        item.Save();
-                        break;
-                    default:
-                        throw new InvalidOperationException("Unexpected invite action.");
-                }
+                EnsureDraftCategory(app, log);
+                categorized = TrySetDraftCategory(item, log);
+                item.Save();
             }
             catch (Exception ex) when (shared && IsAccessFailure(ex))
             {
                 throw new McpException(InviteTexts.NoCalendarRights(req.Mailbox));
             }
-            return new CreatedMeeting(false);
+
+            // Read the ids in their own guard: a failure after a successful save is not "no calendar rights".
+            string entryId = "", storeId = "";
+            object? parent = null;
+            try
+            {
+                entryId = item.EntryID ?? "";
+                if (folder is not null)
+                {
+                    storeId = folder.StoreID ?? "";
+                }
+                else
+                {
+                    parent = item.Parent;
+                    if (parent is Outlook.MAPIFolder pf) storeId = pf.StoreID ?? "";
+                }
+            }
+            catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
+            {
+                // Saved; ids unknown.
+            }
+            finally
+            {
+                if (parent is not null && Marshal.IsComObject(parent)) Marshal.ReleaseComObject(parent);
+            }
+            return new CreatedMeeting(entryId, storeId, categorized);
         }
         finally
         {
@@ -207,6 +217,64 @@ internal static partial class OutlookCalendar
             if (folder is not null) Marshal.ReleaseComObject(folder);
             if (owner is not null) Marshal.ReleaseComObject(owner);
             if (session is not null) Marshal.ReleaseComObject(session);
+        }
+    }
+
+    private static volatile bool s_draftCategoryKnown;
+
+    /// <summary>Makes sure Clippy's category is in the own master category list (orange). Never recolours or renames
+    /// an existing one. Worker thread. Outlook-gone errors propagate.</summary>
+    private static void EnsureDraftCategory(Outlook.Application app, ILogger? log)
+    {
+        if (s_draftCategoryKnown) return;
+        Outlook.NameSpace? session = null;
+        Outlook.Categories? cats = null;
+        try
+        {
+            session = app.Session;
+            cats = session.Categories;
+            var found = false;
+            for (var i = 1; i <= cats.Count && !found; i++)
+            {
+                var c = cats[i];
+                try
+                {
+                    found = string.Equals(c.Name, DraftInvites.CategoryName, StringComparison.OrdinalIgnoreCase);
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(c);
+                }
+            }
+            if (!found)
+            {
+                var added = cats.Add(DraftInvites.CategoryName, Outlook.OlCategoryColor.olCategoryColorOrange);
+                if (added is not null) Marshal.ReleaseComObject(added);
+            }
+            s_draftCategoryKnown = true;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException || (ex is COMException c && !ComErrors.IsOutlookGone(c)))
+        {
+            log?.LogWarning("Adding the draft-invite category to the master category list failed ({Type}).", ex.GetType().Name);
+        }
+        finally
+        {
+            if (cats is not null) Marshal.ReleaseComObject(cats);
+            if (session is not null) Marshal.ReleaseComObject(session);
+        }
+    }
+
+    private static bool TrySetDraftCategory(Outlook.AppointmentItem item, ILogger? log)
+    {
+        try
+        {
+            item.Categories = DraftInvites.CategoryName;
+            return true;
+        }
+        catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
+        {
+            log?.LogWarning("Setting the draft-invite category failed ({Type}).", ex.GetType().Name);
+            return false;
         }
     }
 }

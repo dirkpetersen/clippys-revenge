@@ -41,7 +41,6 @@ public class TrayIconArtTests
     [InlineData(TrayIconKey.Serving, 0x66, 0xBB, 0x6A)]
     [InlineData(TrayIconKey.Busy, 0x15, 0x65, 0xC0)]
     [InlineData(TrayIconKey.Paused, 0x75, 0x75, 0x75)]
-    [InlineData(TrayIconKey.Confirm, 0xFF, 0xB3, 0x00)]
     [InlineData(TrayIconKey.Error, 0xC6, 0x28, 0x28)]
     public void ClipColor(TrayIconKey key, int r, int g, int b)
     {
@@ -149,7 +148,7 @@ public class TrayIconArtTests
     public void FileNames()
     {
         Assert.Equal("backfill2.ico", TrayIconArt.FileName(TrayIconKey.Backfill2));
-        Assert.Equal(11, Enum.GetValues<TrayIconKey>().Select(TrayIconArt.FileName).Distinct().Count());
+        Assert.Equal(10, Enum.GetValues<TrayIconKey>().Select(TrayIconArt.FileName).Distinct().Count());
     }
 
     private static string? FindRoot()
@@ -186,5 +185,24 @@ public class TrayIconArtTests
             Assert.True(File.Exists(path) && File.ReadAllBytes(path).AsSpan().SequenceEqual(expected),
                 $"{name} differs from TrayIconArt; run with CLIPPY_REGEN_ICONS=1 to regenerate.");
         }
+    }
+
+    [Fact]
+    public void CheckedInIcons_ExactlyTheGeneratedSet()
+    {
+        var root = FindRoot();
+        Assert.NotNull(root);
+        var dir = Path.Combine(root, "src", "ClippysRevenge.App", "Tray", "Icons");
+        var onDisk = Directory.GetFiles(dir, "*.ico").Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray();
+        var expected = Enum.GetValues<TrayIconKey>().Select(TrayIconArt.FileName).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(expected, onDisk);
+    }
+
+    [Fact]
+    public void RemovedStates_Absent()
+    {
+        Assert.DoesNotContain("AwaitingConfirmation", Enum.GetNames<ActivityState>());
+        Assert.DoesNotContain("Confirm", Enum.GetNames<TrayIconKey>());
+        Assert.Equal(["DraftOnly", "Disabled"], Enum.GetNames<MeetingInviteMode>());
     }
 }

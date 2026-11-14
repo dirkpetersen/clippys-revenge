@@ -30,8 +30,8 @@ public class SettingsTests
         Assert.True(s.BusinessDaysOnly);
         Assert.Equal("", s.TimeZoneLabel);
         Assert.True(s.TentativeIsBusy);
-        Assert.Equal(MeetingInviteMode.Send, s.MeetingInviteMode);
-        Assert.Equal(120, s.InviteConfirmTimeoutSeconds);
+        Assert.Equal(MeetingInviteMode.DraftOnly, s.MeetingInviteMode);
+        Assert.Null(typeof(Settings).GetProperty("InviteConfirmTimeoutSeconds"));
         Assert.Equal(att, s.AttachmentDir);
         Assert.Equal(new[] { att, Docs }, s.AllowedFolders);
         Assert.True(s.StartWithWindows);
@@ -97,18 +97,6 @@ public class SettingsTests
     }
 
     [Theory]
-    [InlineData(29, false)]
-    [InlineData(30, true)]
-    [InlineData(900, true)]
-    [InlineData(901, false)]
-    public void InviteConfirmTimeoutSeconds_Bounds(int v, bool ok)
-    {
-        var s = S(); s.InviteConfirmTimeoutSeconds = v;
-        if (ok) Assert.Empty(s.Validate());
-        else AssertOnly(s, new SettingsError("InviteConfirmTimeoutSeconds", "Must be between 30 and 900."));
-    }
-
-    [Theory]
     [InlineData(0, 24, null, null)]
     [InlineData(8, 17, null, null)]
     [InlineData(17, 17, "WorkEndHour", "Must be later than the work start hour.")]
@@ -140,7 +128,7 @@ public class SettingsTests
     public void EnumsOutOfRange()
     {
         var s = S(); s.MeetingInviteMode = (MeetingInviteMode)7;
-        AssertOnly(s, new SettingsError("MeetingInviteMode", "Must be Send, DraftOnly or Disabled."));
+        AssertOnly(s, new SettingsError("MeetingInviteMode", "Must be DraftOnly or Disabled."));
         var t = S(); t.LogLevel = (LogLevel)42;
         AssertOnly(t, new SettingsError("LogLevel", "Must be one of Trace, Debug, Information, Warning, Error, Critical, None."));
     }
@@ -350,7 +338,7 @@ public class SettingsTests
             ],
             WorkStartHour = 9, WorkEndHour = 18, BusinessDaysOnly = false, TimeZoneLabel = "PT",
             TentativeIsBusy = false, MeetingInviteMode = MeetingInviteMode.DraftOnly,
-            InviteConfirmTimeoutSeconds = 60, AttachmentDir = Path.Combine(Profile, "Att"),
+            AttachmentDir = Path.Combine(Profile, "Att"),
             AllowedFolders = [Path.Combine(Profile, "One")], StartWithWindows = false,
             NotifyOnErrors = false, LogLevel = LogLevel.Warning,
         };
@@ -365,7 +353,6 @@ public class SettingsTests
         Assert.Equal(s.TimeZoneLabel, r.TimeZoneLabel);
         Assert.Equal(s.TentativeIsBusy, r.TentativeIsBusy);
         Assert.Equal(s.MeetingInviteMode, r.MeetingInviteMode);
-        Assert.Equal(s.InviteConfirmTimeoutSeconds, r.InviteConfirmTimeoutSeconds);
         Assert.Equal(s.AttachmentDir, r.AttachmentDir);
         Assert.Equal(s.AllowedFolders, r.AllowedFolders);
         Assert.Equal(s.StartWithWindows, r.StartWithWindows);
@@ -387,8 +374,72 @@ public class SettingsTests
     public void Json_EnumsAsNames()
     {
         var j = S().ToJson();
-        Assert.Contains("\"MeetingInviteMode\": \"Send\"", j);
+        Assert.Contains("\"MeetingInviteMode\": \"DraftOnly\"", j);
+        Assert.DoesNotContain("\"Send\"", j);
         Assert.Contains("\"LogLevel\": \"Information\"", j);
+    }
+
+    [Theory]
+    [InlineData("\"Send\"", MeetingInviteMode.DraftOnly)]
+    [InlineData("\"send\"", MeetingInviteMode.DraftOnly)]
+    [InlineData("\"DraftOnly\"", MeetingInviteMode.DraftOnly)]
+    [InlineData("\"draftonly\"", MeetingInviteMode.DraftOnly)]
+    [InlineData("\"Disabled\"", MeetingInviteMode.Disabled)]
+    [InlineData("\"disabled\"", MeetingInviteMode.Disabled)]
+    [InlineData("\" Disabled \"", MeetingInviteMode.Disabled)]
+    [InlineData("\"\"", MeetingInviteMode.DraftOnly)]
+    [InlineData("\"Bogus\"", MeetingInviteMode.DraftOnly)]
+    [InlineData("null", MeetingInviteMode.DraftOnly)]
+    [InlineData("0", MeetingInviteMode.DraftOnly)]
+    [InlineData("1", MeetingInviteMode.DraftOnly)]
+    [InlineData("2", MeetingInviteMode.Disabled)]
+    [InlineData("7", MeetingInviteMode.DraftOnly)]
+    [InlineData("1.5", MeetingInviteMode.DraftOnly)]
+    public void Json_InviteMode_Migration(string literal, MeetingInviteMode expected) =>
+        Assert.Equal(expected, Settings.FromJson("{\"MeetingInviteMode\": " + literal + "}").MeetingInviteMode);
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("[]")]
+    [InlineData("true")]
+    public void Json_InviteMode_NonScalar_Throws(string literal) =>
+        Assert.ThrowsAny<JsonException>(() => Settings.FromJson("{\"MeetingInviteMode\": " + literal + "}"));
+
+    [Theory]
+    [InlineData("120")]
+    [InlineData("5")]
+    [InlineData("-1")]
+    [InlineData("\"x\"")]
+    [InlineData("{}")]
+    public void Json_OldTimeoutIgnored(string literal)
+    {
+        var s = Settings.FromJson("{\"Port\": 9000, \"InviteConfirmTimeoutSeconds\": " + literal + "}");
+        Assert.Equal(9000, s.Port);
+        Assert.Empty(s.Validate());
+        Assert.DoesNotContain("InviteConfirmTimeoutSeconds", s.ToJson());
+    }
+
+    [Fact]
+    public void Json_PreM15File()
+    {
+        var s = Settings.FromJson(
+            "{\"MeetingInviteMode\": \"Send\", \"InviteConfirmTimeoutSeconds\": 120, \"Port\": 9001, \"LogLevel\": \"Debug\"}");
+        Assert.Equal(MeetingInviteMode.DraftOnly, s.MeetingInviteMode);
+        Assert.Equal(9001, s.Port);
+        Assert.Equal(LogLevel.Debug, s.LogLevel);
+        Assert.Empty(s.Validate());
+        var j = s.ToJson();
+        Assert.DoesNotContain("\"Send\"", j);
+        Assert.DoesNotContain("InviteConfirmTimeoutSeconds", j);
+    }
+
+    [Theory]
+    [InlineData(MeetingInviteMode.Disabled)]
+    [InlineData(MeetingInviteMode.DraftOnly)]
+    public void Json_InviteMode_RoundTrip(MeetingInviteMode mode)
+    {
+        var s = S(); s.MeetingInviteMode = mode;
+        Assert.Equal(mode, Settings.FromJson(s.ToJson()).MeetingInviteMode);
     }
 
     [Fact]
@@ -432,7 +483,6 @@ public class SettingsTests
 
     [Theory]
     [InlineData("{")]
-    [InlineData("{\"MeetingInviteMode\":\"Bogus\"}")]
     public void Json_Invalid_Throws(string json) =>
         Assert.ThrowsAny<JsonException>(() => Settings.FromJson(json));
 

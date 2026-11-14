@@ -469,10 +469,16 @@ public class ComWorkerTests
     private sealed class ListLogger : Microsoft.Extensions.Logging.ILogger
     {
         public readonly ConcurrentQueue<string> Lines = new();
+        public readonly ManualResetEventSlim StillRunning = new(false);
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
         public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
         public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
-            TState state, Exception? exception, Func<TState, Exception?, string> formatter) => Lines.Enqueue(formatter(state, exception));
+            TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            var line = formatter(state, exception);
+            Lines.Enqueue(line);
+            if (line.Contains("still running")) StillRunning.Set();
+        }
     }
 
     [Fact]
@@ -484,16 +490,28 @@ public class ComWorkerTests
         using var w = new ComWorker<FakeApp>(attacher, hub, new ComWorkerOptions
         {
             Logger = log,
-            SlowCallThreshold = TimeSpan.FromMilliseconds(50),
+            SlowCallThreshold = TimeSpan.FromSeconds(1),
             ProbeInterval = TimeSpan.FromHours(1),
         });
         w.Start();
-        await w.RunAsync(_ => { Thread.Sleep(200); return 1; }, WorkPriority.Interactive, Ct);
+        await w.RunAsync(_ =>
+        {
+            Assert.True(log.StillRunning.Wait(TimeSpan.FromSeconds(15)));
+            Thread.Sleep(20);
+            return 1;
+        }, WorkPriority.Interactive, Ct);
         Assert.Contains(log.Lines, l => l.Contains("took") && l.Contains("COM call"));
         Assert.Contains(log.Lines, l => l.Contains("still running"));
 
-        var before = log.Lines.Count(l => l.Contains("COM call"));
-        await w.RunAsync(_ => 2, WorkPriority.Interactive, Ct);
-        Assert.Equal(before, log.Lines.Count(l => l.Contains("COM call")));
+        // A fast call on a worker with the default threshold logs no "COM call" line.
+        var log2 = new ListLogger();
+        using var w2 = new ComWorker<FakeApp>(new FakeAttacher { Running = true }, hub, new ComWorkerOptions
+        {
+            Logger = log2,
+            ProbeInterval = TimeSpan.FromHours(1),
+        });
+        w2.Start();
+        await w2.RunAsync(_ => 2, WorkPriority.Interactive, Ct);
+        Assert.DoesNotContain(log2.Lines, l => l.Contains("COM call"));
     }
 }

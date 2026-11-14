@@ -5,7 +5,7 @@ using Xunit;
 namespace ClippysRevenge.Core.Tests;
 
 /// <summary>
-/// Source scan of the hard rules (SPEC section 1, CLAUDE.md): one Send, no Outlook launch via COM,
+/// Source scan of the hard rules (SPEC section 1, CLAUDE.md): no Send, no Outlook launch via COM,
 /// loopback only, no Graph, replies only via ReplySubject. Comments are always stripped; string
 /// literals are blanked for code checks and kept for literal checks.
 /// </summary>
@@ -166,40 +166,87 @@ public class SafetySourceScanTests
 
     // ---- Send ----
 
+    private const string SendRegex = @"\.\s*Send\s*\(";
+
     [Fact]
-    public void ExactlyOneSend_InCreateMeeting_UnderInviteActionSend()
+    public void NoSend_Anywhere() =>
+        AssertNone(Find(f => f.Code, SendRegex),
+            "Clippy never sends anything: no .Send( in src/ (CLAUDE.md hard rule, SPEC §1.4, §22).");
+
+    [Fact]
+    public void NoSendByLateBinding()
     {
-        var hits = Find(f => f.Code, @"\.\s*Send\s*\(");
-        Assert.True(hits.Count == 1, "Expected exactly one .Send in src, found:" + Environment.NewLine + string.Join(Environment.NewLine, hits));
-
-        var file = Scan.Value.Files.Single(f => Regex.IsMatch(f.Code, @"\.\s*Send\s*\("));
-        Assert.Matches(@"^src/ClippysRevenge\.App/OutlookCalendar[^/]*\.cs$", file.Rel);
-        Assert.Matches(@"\.Send\s*\(\s*\)\s*;", file.Code);
-
-        var idx = Regex.Match(file.Code, @"\.\s*Send\s*\(").Index;
-        var where = $"{file.Rel}:{LineOf(file.Code, idx)}";
-        var before = file.Code[..idx];
-        var decl = Regex.Matches(before, @"\bCreateMeeting\s*\(");
-        Assert.True(decl.Count > 0, $"{where}: .Send is not inside CreateMeeting.");
-        // No other member declaration may start between CreateMeeting and the Send.
-        var afterDecl = before[decl[^1].Index..];
-        Assert.DoesNotMatch(@"\n\s*(public|private|internal|protected)\s[^;={]*\([^;]*\)\s*\n\s*\{", afterDecl[1..]);
-
-        var cases = Regex.Matches(before, @"\b(case\s+[^:\n]+:|default\s*:)");
-        Assert.True(cases.Count > 0, $"{where}: .Send is not under a switch case.");
-        var lastCase = cases[^1].Value;
-        Assert.True(lastCase.Replace(" ", "") == "caseInviteAction.Send:",
-            $"{where}: .Send must sit directly under 'case InviteAction.Send:', found '{lastCase}'.");
+        var lits = Scan.Value.Files.SelectMany(f => f.Literals.Select(l => (f.Rel, Text: l[(l.IndexOf('|') + 1)..])))
+            .Where(x => string.Equals(x.Text.Trim(), "Send", StringComparison.OrdinalIgnoreCase))
+            .Select(x => $"{x.Rel}: \"{x.Text}\"").ToList();
+        AssertNone(lits, "No string literal may equal \"Send\" (late-bound send).");
+        AssertNone(Find(f => f.Code, @"\bInvokeMember\b"), "InvokeMember is forbidden (late-bound send).");
     }
 
     [Fact]
-    public void Send_IsOnlyReachedViaInviteGateDecision()
+    public void SendMatchers_CatchPlantedViolations()
     {
-        var file = Scan.Value.Files.Single(f => f.Rel.EndsWith("OutlookCalendar.Invites.cs", StringComparison.Ordinal));
-        Assert.Matches(@"switch\s*\(\s*decision\.Action\s*\)", file.Code);
-        Assert.Matches(@"decision\.Action\s+is\s+not\s*\(\s*InviteAction\.Send\s+or\s+InviteAction\.SaveDraft\s*\)", file.Code);
+        Assert.Matches(SendRegex, "item.Send();");
+        Assert.Matches(SendRegex, "item . Send ()");
+        Assert.Matches(SendRegex, "((Outlook.AppointmentItem)o).Send();");
+        Assert.DoesNotMatch(SendRegex, "client.SendAsync(req)");
+        Assert.DoesNotMatch(SendRegex, "x.Sender(");
+        Assert.DoesNotMatch(SendRegex, "Send(x)");
+        Assert.DoesNotMatch(SendRegex, Strip("// item.Send()\nvar s = \"item.Send()\";", blankStrings: true, lits: null));
+
+        var lits = new List<string>();
+        Strip("var v = \"Send\";", blankStrings: false, lits);
+        Assert.Contains(lits, l => l[(l.IndexOf('|') + 1)..] == "Send");
+        Assert.Matches(@"\bInvokeMember\b", "t.InvokeMember(\"x\")");
     }
 
+    [Fact]
+    public void RemovedInviteTypes_Absent()
+    {
+        AssertNone(Find(f => f.Code,
+            @"\b(InviteGate|InviteDecision|InviteAction|InviteChoice|InviteConfirmForm|InviteConfirmQueue|InviteConfirmPresenter|IInviteConfirmer|AwaitingConfirmation|InviteConfirmTimeoutSeconds)\b"),
+            "The send/confirm types were removed in M15.1.");
+        var files = Scan.Value.Files.Select(f => Path.GetFileName(f.Rel)).ToList();
+        foreach (var gone in new[] { "InviteGate.cs", "InviteConfirm.cs", "InviteConfirmForm.cs", "InviteConfirmPresenter.cs" })
+            Assert.DoesNotContain(gone, files);
+        AssertNone(Find(f => f.WithStrings, @"""[^""\n]*send_meeting_invite[^""\n]*"""), "send_meeting_invite no longer exists.");
+    }
+
+    [Fact]
+    public void CreateMeetingDraftTool_ReplyToId()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/McpTools.cs");
+        Assert.Contains("string? reply_to_id = null", f.Code);
+        Assert.Contains("reply_to_id, cancellationToken)", f.Code);
+    }
+
+    [Fact]
+    public void MeetingNote_uses_the_reply_path()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.Core/MeetingNote.cs");
+        Assert.Contains("IReplyDraftWriter", f.Code);
+        Assert.Contains("DraftMarker.Tool", f.Code);
+        Assert.DoesNotMatch(@"\bOutlook\.|\bMarshal\b|Subject\s*=", f.Code);
+    }
+
+    [Fact]
+    public void CreateMeetingDraftTool_Annotations()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/McpTools.cs");
+        Assert.Contains("Name = \"create_meeting_draft\", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false", f.WithStrings);
+        Assert.Contains("[Description(InviteTexts.ToolDescription)]", f.WithStrings);
+        Assert.DoesNotMatch(@"\bbool\s+teams\b", f.Code);
+    }
+
+    [Fact]
+    public void CreateMeeting_SavesOnly()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel.EndsWith("OutlookCalendar.Invites.cs", StringComparison.Ordinal));
+        Assert.Single(Regex.Matches(f.Code, @"\.\s*Save\s*\(\s*\)"));
+        var idx = f.Code.IndexOf("CreateMeeting(", StringComparison.Ordinal);
+        Assert.True(idx >= 0);
+        Assert.DoesNotMatch(@"\bdecision\b", f.Code[idx..]);
+    }
     // ---- Outlook launch ----
 
     [Fact]
@@ -303,6 +350,18 @@ public class SafetySourceScanTests
     }
 
     [Fact]
+    public void No_unowned_icon_handles() =>
+        AssertNone(Find(f => f.Code, @"\bGetHicon\s*\(|\bFromHandle\s*\("),
+            "Badged icons come from an in-memory .ico: no GetHicon / Icon.FromHandle (SPEC 22.6).");
+
+    [Fact]
+    public void Badge_renderer_has_no_pinvoke()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/Tray/TrayBadgeRenderer.cs");
+        Assert.DoesNotMatch(@"\bDllImport\b|\bLibraryImport\b", f.Code);
+    }
+
+    [Fact]
     public void AiUi_NeverSignsInAndNeverShowsTheKey()
     {
         const string TrayDir = "src/ClippysRevenge.App/Tray/";
@@ -361,9 +420,47 @@ public class SafetySourceScanTests
 
     // ---- Mail items ----
 
+    // ---- Draft invite window (M15.4, SPEC 22.3) ----
+
+    private const string OpenInviteApp = "src/ClippysRevenge.App/OutlookCalendar.OpenInvite.cs";
+    private const string DisplayRegex = @"\.\s*Display\s*\(";
+
     [Fact]
-    public void NoDisplayCalls() =>
-        AssertNone(Find(f => f.Code, @"\.\s*Display\s*\("), ".Display( is forbidden: drafts are saved, never shown.");
+    public void Display_OnlyInOpenDraftInvite()
+    {
+        var hits = Find(f => f.Code, DisplayRegex);
+        Assert.True(hits.Count == 1 && hits[0].StartsWith(OpenInviteApp + ":", StringComparison.Ordinal),
+            ".Display( is allowed once, in OpenDraftInvite (SPEC 22.3); drafts are saved, never shown. Found:"
+            + Environment.NewLine + string.Join(Environment.NewLine, hits));
+    }
+
+    [Fact]
+    public void OpenDraftInvite_WritesNothing()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == OpenInviteApp);
+        Assert.DoesNotMatch(@"\.\s*(Save|Send|Close|Move|Delete|PermanentDelete|Copy)\s*\(", f.Code);
+        Assert.DoesNotMatch(@"\b\w+\s*\.\s*\w+\s*=(?![=>])", f.Code);
+        Assert.Contains("Display(false)", f.Code);
+    }
+
+    [Fact]
+    public void OpenInviteFile_NeverCreatesOutlook()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == OpenInviteApp);
+        foreach (var bad in new[] { "new Outlook.Application", "Activator.CreateInstance", "CoCreateInstance", "GetActiveObject" })
+        {
+            Assert.DoesNotContain(bad, f.Code);
+        }
+    }
+
+    [Fact]
+    public void DisplayMatcher_CatchesPlantedViolations()
+    {
+        Assert.Matches(DisplayRegex, "item.Display(false);");
+        Assert.Matches(DisplayRegex, "item . Display ();");
+        Assert.DoesNotMatch(DisplayRegex, "x.DisplayName");
+        Assert.DoesNotMatch(DisplayRegex, "Display(false);");
+    }
 
     [Fact]
     public void NeverDeletesOutlookItems()
@@ -384,6 +481,64 @@ public class SafetySourceScanTests
         Assert.True(hits.Count == 1 && hits[0].StartsWith("src/ClippysRevenge.App/OutlookMail.Reply.cs:", StringComparison.Ordinal)
                 && hits[0].EndsWith("reply.Move(drafts", StringComparison.Ordinal),
             "The only Outlook .Move( allowed is the new reply draft into Drafts, found:" + Environment.NewLine + string.Join(Environment.NewLine, hits));
+    }
+
+    // ---- Draft invite category (M15.2, SPEC 22.2) ----
+
+    private const string DraftInvitesApp = "src/ClippysRevenge.App/OutlookCalendar.DraftInvites.cs";
+    private const string InvitesApp = "src/ClippysRevenge.App/OutlookCalendar.Invites.cs";
+    private const string CategoriesAssign = @"\.\s*Categories\s*=(?![=>])";
+    private const string AnyAssign = @"\b\w+\s*\.\s*(\w+)\s*=(?![=>])";
+
+    [Fact]
+    public void CategoriesWrites_OnlyInCreateMeetingAndCheck()
+    {
+        var hits = Find(f => f.Code, CategoriesAssign);
+        Assert.Equal(2, hits.Count);
+        Assert.Single(hits, h => h.StartsWith(InvitesApp + ":", StringComparison.Ordinal));
+        Assert.Single(hits, h => h.StartsWith(DraftInvitesApp + ":", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void DraftInviteCheck_IsCategoriesOnlySave()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == DraftInvitesApp);
+        Assert.Single(Regex.Matches(f.Code, @"\.\s*Save\s*\(\s*\)"));
+        var assigns = Regex.Matches(f.Code, AnyAssign);
+        var m = Assert.Single(assigns);
+        Assert.Equal("Categories", m.Groups[1].Value);
+        Assert.DoesNotMatch(@"\.\s*(Close|Display|Send|Move|Delete|PermanentDelete)\s*\(", f.Code);
+    }
+
+    [Fact]
+    public void MasterCategories_NeverRecolouredOrRemoved()
+    {
+        var files = Scan.Value.Files.Where(f => f.Rel.StartsWith("src/ClippysRevenge.App/OutlookCalendar", StringComparison.Ordinal)).ToList();
+        Assert.Contains(files, f => f.Rel == InvitesApp);
+        Assert.Contains(files, f => f.Rel == DraftInvitesApp);
+        var bad = files.SelectMany(f => Regex.Matches(f.Code, @"\.\s*Color\s*=(?!=)|\.\s*Remove\s*\(")
+            .Select(m => $"{f.Rel}:{LineOf(f.Code, m.Index)}: {m.Value}")).ToList();
+        AssertNone(bad, "Master-list categories are never recoloured or removed.");
+        Assert.Contains("OlCategoryColor.olCategoryColorOrange", files.Single(f => f.Rel == InvitesApp).Code);
+    }
+
+    [Fact]
+    public void CategoryName_IsTheSpecString()
+    {
+        Assert.Equal("Clippy draft invite", DraftInvites.CategoryName);
+        Assert.EndsWith("/8229000B", DraftInvites.FInvitedProperty);
+        Assert.Contains("{00062002-0000-0000-C000-000000000046}", DraftInvites.FInvitedProperty);
+    }
+
+    [Fact]
+    public void CategoryScanMatchers_CatchPlantedViolations()
+    {
+        Assert.Matches(CategoriesAssign, "item.Categories = x;");
+        Assert.DoesNotMatch(CategoriesAssign, "if (item.Categories == x) {}");
+        Assert.DoesNotMatch(CategoriesAssign, "var c = item.Categories;");
+        var m = Regex.Match("item.Subject = \"x\";", AnyAssign);
+        Assert.True(m.Success);
+        Assert.Equal("Subject", m.Groups[1].Value);
     }
 
     // ---- Graph ----

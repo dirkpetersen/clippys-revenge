@@ -77,10 +77,12 @@ touched.
 
 ## An invite wasn't sent
 
-- Check the mode in Settings, Scheduling. **Draft only** saves the meeting
-  without sending, and **Disabled** refuses.
-- If the confirmation dialog timed out, the meeting was saved as a draft in
-  your calendar. Open it in Outlook and send it.
+Clippy never sends invites. It saves the meeting unsent in your calendar. Open it from
+**Draft invites** in the tray (or from your calendar), add the Zoom or Teams link and
+send it in Outlook.
+
+- Check the mode in Settings, Scheduling. **Draft only** saves the meeting,
+  and **Disabled** refuses.
 - If a recipient didn't resolve in Outlook, nothing was created.
 
 ## An update failed or was rolled back

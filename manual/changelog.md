@@ -3,6 +3,30 @@
 The full list of releases, with downloads, is on
 [GitHub](https://github.com/dirkpetersen/clippys-revenge/releases).
 
+## v0.0.8
+
+2026-11-14
+
+- **Clippy never sends anything now.** `send_meeting_invite` and its confirmation
+  dialog are gone. The new tool `create_meeting_draft` saves the meeting unsent in
+  your calendar. You add the Zoom or Teams link and send it in Outlook. See
+  [Meeting drafts](calendar.md#meeting-drafts) and
+  [`create_meeting_draft`](tools.md#create_meeting_draft).
+- Meeting drafts get the orange category **Clippy draft invite**. Clippy removes it
+  once you have sent the meeting. Other categories stay.
+- With `reply_to_id`, Claude also leaves a highlighted note in a reply draft in Drafts,
+  so you don't forget to send the invite.
+- New tray item **Draft invites (n)** lists your meeting drafts. Click one to open it
+  in Outlook.
+- New yellow **attention badge** in the top-right corner of the tray icon, with the
+  number of draft invites. The tooltip says what needs your attention.
+- Settings, Scheduling: **Meeting invites** is now **Draft only** or **Disabled**. The
+  **Send** mode and the confirmation timeout are removed, and a saved **Send** loads
+  as **Draft only**. The amber tray icon is gone.
+- The writing-style skill's meeting section tells Claude Code to call
+  `create_meeting_draft` when you pick one of the offered times. Unedited skills get
+  it automatically at the next start.
+
 ## v0.0.7
 
 2026-11-14

@@ -320,8 +320,8 @@ public static class StyleSkillText
         return s.Length == 0 ? "the user" : s;
     }
 
-    /// <summary>The current section's start marker line. M15.3 changes this to "... v2 -->" (SPEC 22.5).</summary>
-    public const string MeetingStartMarker = "<!-- clippy:meeting-times v1 -->";
+    /// <summary>The current section's start marker line (SPEC 22.5).</summary>
+    public const string MeetingStartMarker = "<!-- clippy:meeting-times v2 -->";
     /// <summary>Any version's start marker line starts with this (after trimming).</summary>
     public const string MeetingMarkerPrefix = "<!-- clippy:meeting-times";
     public const string MeetingEndMarker = "<!-- /clippy:meeting-times -->";
@@ -347,7 +347,7 @@ public static class StyleSkillText
                + MeetingSection(displayName, meetingPhrasing);
     }
 
-    // One piece per bullet, so M15.3 (SPEC 22.5) can change the version and the last bullet in place.
+    // One piece per bullet. v2 (SPEC 22.5): the last bullet tells Claude Code to call create_meeting_draft with reply_to_id.
     private static string[] MeetingBullets(string name) =>
     [
         "- Never make up times or guess " + name + "'s availability. Get them from the Clippy's Revenge MCP server: call `find_free_times` with the people who should attend (the sender, plus the others on the email when they are invited too), `duration_minutes` from the email (60 when it doesn't say), and `offer_cet: true` when the person you are writing to is in Europe.",
@@ -355,7 +355,7 @@ public static class StyleSkillText
         "- The options are already ranked: times right before or after " + name + "'s meetings come first, then times next to tentative meetings, then the rest, each group in date order. Don't reorder them.",
         "- For someone in Europe, each option also shows the time in CET (always labelled CET, also in summer). Options between 08:00 and 18:00 CET come first. If there aren't enough, the others follow in a second list headed \"Outside European office hours:\"; translate that heading into the language of the reply.",
         "- If `find_free_times` finds no time or isn't available, write that " + name + " will suggest times, and list none.",
-        "- Don't book a meeting or create an invite unless " + name + " asks.",
+        "- When " + name + " picks one of the offered times (for example \"make the invite for option 2\"), call `create_meeting_draft` with that option's start and end, the attendees, a subject, and `reply_to_id` set to the `id` of the email that asked for the meeting. Clippy saves the invite unsent in the calendar, marks it \"Clippy draft invite\" and leaves a note in Drafts; " + name + " adds the Teams or Zoom link in Outlook and sends it. Never create an invite unless " + name + " asks.",
     ];
 
     /// <summary>The fixed section of SPEC 21.7, from the start marker line through the end marker line plus "\n".</summary>

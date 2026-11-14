@@ -11,7 +11,6 @@ public enum ActivityState
     Syncing = 5,
     Backfilling = 6,
     OutlookUnavailable = 7,
-    AwaitingConfirmation = 8,
     Error = 9,
 }
 

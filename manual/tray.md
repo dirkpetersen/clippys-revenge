@@ -13,11 +13,20 @@ The icon shows what the app is doing. Hover over it for a short description.
 | Blue | Indexing: pulling new mail, purging old mail, or the first backfill (animated) |
 | Grey | Indexing is paused |
 | Grey with `!` | Outlook is not running, or not responding |
-| Amber | Waiting for you to confirm a meeting invite |
 | Red | Error. The tooltip gives the short reason |
 
 Double-click the icon to open the Activity window.
 
+### Attention badge
+
+When something needs you, a small **yellow badge** with a number appears in the
+**top-right** corner of the icon, on top of whatever color the icon has. It shows 1 to
+9, or `9+` for more. For now it counts your [draft invites](calendar.md#meeting-drafts):
+meeting drafts that Claude saved and that you haven't sent yet.
+
+The tooltip adds ` Â· 1 draft invite needs your attention` (or `Â· 3 draft invites need
+your attention`). The badge goes away when the count reaches zero. While Outlook isn't
+running, it keeps the last count, because the meetings still wait for you.
 ## Tray menu
 
 Right-click the icon.
@@ -31,6 +40,7 @@ Right-click the icon.
 | **Rebuild index…** | Deletes the index and reads your mail from Outlook again. Asks whether to rebuild **My mailbox** or **All mailboxes** |
 | **Shared mailboxes** | Check a mailbox to index it; uncheck to stop. See [shared mailboxes](indexing.md#shared-mailboxes) |
 | **AI drafts** | Submenu: **Draft replies automatically** (a check mark; asks for [consent](ai-drafts.md#consent-and-what-is-sent) the first time), **Draft a reply to the selected email**, **Show Drafts in Outlook** (hidden while Outlook isn't running) and **AI drafts settings...**. See [AI drafts](ai-drafts.md) |
+| **Draft invites (n)** | Shown only while meeting drafts are waiting. One line per meeting, sorted by start, such as `Tue 10/15 10:00–11:00  Project sync`. Click a line to open the meeting in Outlook, add the Zoom or Teams link and send it. While Outlook isn't running, the lines are greyed out and the last line says **Start Outlook to open them**. If a meeting is gone, a balloon says `That draft invite is no longer in your calendar.` See [Meeting drafts](calendar.md#meeting-drafts) |
 | **Copy "claude mcp add" command** | Puts the full setup command on the clipboard |
 | **Copy auth token** | Copies the token |
 | **Regenerate auth token…** | Replaces the token after you confirm. Claude Code must be set up again |
@@ -103,8 +113,9 @@ These are the defaults for [`find_free_times`](tools.md#find_free_times) and
 - **Work hours** (default 8 to 17) and **business days only** (default on).
 - **Time-zone label** used in suggestions, such as `PT`. Empty means automatic.
 - **Tentative counts as busy** (default on).
-- **Meeting invites**: **Send** (with confirmation), **Draft only**, or **Disabled**.
-- **Confirmation timeout** in seconds (30 to 900, default 120).
+- **Meeting invites**: **Draft only** (default) or **Disabled**. Clippy never sends
+  invites; it only saves them in your calendar. A saved `Send` from an older
+  version now loads as **Draft only**, and the confirmation timeout is gone.
 
 ### General
 
@@ -122,7 +133,6 @@ Settings are stored in `%APPDATA%\ClippysRevenge\settings.json`.
 
 The app shows a short balloon for the first run, when an initial index finishes,
 when Outlook has been unavailable for more than two minutes, for errors lasting
-more than two minutes (if **Notify on errors** is on), and when an invite is sent
-or saved as a draft after a timeout. After an AI drafting pass it says how many replies are in your Drafts folder; click it to open Drafts. Balloons are limited to one per minute.
+more than two minutes (if **Notify on errors** is on), and when you click a draft invite that is no longer in your calendar. After an AI drafting pass it says how many replies are in your Drafts folder; click it to open Drafts. Balloons are limited to one per minute.
 
 Updates add four more balloons: a newer version is available, a newer version is downloaded and waits for the next start, Clippy was just updated, and an update didn't start so Clippy went back to the old version. See [Updates](updates.md).

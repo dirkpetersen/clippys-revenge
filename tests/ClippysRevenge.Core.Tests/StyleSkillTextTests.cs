@@ -11,9 +11,9 @@ public class StyleSkillTextTests
 
     private static string Text(int n) => new string('a', n);
 
-    // SPEC 21.7 v1 section, copied by hand (not built from production constants).
+    // SPEC 21.7 / 22.5 v2 section, copied by hand (not built from production constants).
     private static readonly string SpecSection = """
-<!-- clippy:meeting-times v1 -->
+<!-- clippy:meeting-times v2 -->
 ## Offering meeting times
 
 This section is written by Clippy's Revenge and replaced when the skill is regenerated.
@@ -31,7 +31,7 @@ When an email asks for or suggests a meeting or a call and <name> wants to meet,
 - The options are already ranked: times right before or after <name>'s meetings come first, then times next to tentative meetings, then the rest, each group in date order. Don't reorder them.
 - For someone in Europe, each option also shows the time in CET (always labelled CET, also in summer). Options between 08:00 and 18:00 CET come first. If there aren't enough, the others follow in a second list headed "Outside European office hours:"; translate that heading into the language of the reply.
 - If `find_free_times` finds no time or isn't available, write that <name> will suggest times, and list none.
-- Don't book a meeting or create an invite unless <name> asks.
+- When <name> picks one of the offered times (for example "make the invite for option 2"), call `create_meeting_draft` with that option's start and end, the attendees, a subject, and `reply_to_id` set to the `id` of the email that asked for the meeting. Clippy saves the invite unsent in the calendar, marks it "Clippy draft invite" and leaves a note in Drafts; <name> adds the Teams or Zoom link in Outlook and sends it. Never create an invite unless <name> asks.
 
 ### How <name> offers times
 
@@ -56,6 +56,15 @@ When an email asks for or suggests a meeting or a call and <name> wants to meet,
         Assert.EndsWith("<!-- /clippy:meeting-times -->\n", s);
         Assert.Contains("10:00–11:00 PT", s);
         Assert.Contains("\n  1. Tue 11/18  10:00–11:00 PT  (19:00–20:00 CET)\n", s);
+    }
+
+    [Fact]
+    public void MeetingSection_v2_bullet()
+    {
+        var s = Sec("Ann", null);
+        Assert.Contains("- When Ann picks one of the offered times (for example \"make the invite for option 2\"), call `create_meeting_draft` with that option's start and end, the attendees, a subject, and `reply_to_id` set to the `id` of the email that asked for the meeting. Clippy saves the invite unsent in the calendar, marks it \"Clippy draft invite\" and leaves a note in Drafts; Ann adds the Teams or Zoom link in Outlook and sends it. Never create an invite unless Ann asks.\n\n### How Ann offers times", s);
+        Assert.DoesNotContain("Don't book a meeting", s);
+        Assert.Equal("<!-- clippy:meeting-times v2 -->", StyleSkillText.MeetingStartMarker);
     }
 
     [Fact]

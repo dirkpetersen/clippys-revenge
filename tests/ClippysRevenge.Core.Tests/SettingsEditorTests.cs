@@ -34,7 +34,6 @@ public class SettingsEditorTests
         src.TimeZoneLabel = "PT"; handled++;
         src.TentativeIsBusy = !src.TentativeIsBusy; handled++;
         src.MeetingInviteMode = MeetingInviteMode.Disabled; handled++;
-        src.InviteConfirmTimeoutSeconds++; handled++;
         src.AttachmentDir += "2"; handled++;
         src.AllowedFolders = [.. src.AllowedFolders, Path.Combine(Path.GetTempPath(), "more")]; handled++;
         src.StartWithWindows = !src.StartWithWindows; handled++;
@@ -254,7 +253,7 @@ public class SettingsEditorTests
     [InlineData("SharedMailboxes[0].Smtp", SettingsTab.Index)]
     [InlineData("WorkEndHour", SettingsTab.Scheduling)]
     [InlineData("TimeZoneLabel", SettingsTab.Scheduling)]
-    [InlineData("InviteConfirmTimeoutSeconds", SettingsTab.Scheduling)]
+    [InlineData("MeetingInviteMode", SettingsTab.Scheduling)]
     [InlineData("AllowedFolders[2]", SettingsTab.General)]
     [InlineData("LogLevel", SettingsTab.General)]
     [InlineData("", SettingsTab.General)]

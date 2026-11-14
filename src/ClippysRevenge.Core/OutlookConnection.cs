@@ -69,6 +69,16 @@ public static class ComErrors
     public const int RPC_S_CALL_FAILED = unchecked((int)0x800706BE);
     public const int CO_E_CLASSSTRING = unchecked((int)0x800401F3);
     public const int REGDB_E_CLASSNOTREG = unchecked((int)0x80040154);
+    public const int MAPI_E_NOT_FOUND = unchecked((int)0x8004010F);
+    public const int MAPI_E_INVALID_ENTRYID = unchecked((int)0x80040107);
+
+    /// <summary>True when ex itself is a COMException with MAPI_E_NOT_FOUND or MAPI_E_INVALID_ENTRYID
+    /// (GetItemFromID on an item that no longer exists). Inner exceptions are not inspected.</summary>
+    public static bool IsItemNotFound(Exception ex)
+    {
+        ArgumentNullException.ThrowIfNull(ex);
+        return ex is System.Runtime.InteropServices.COMException c && c.HResult is MAPI_E_NOT_FOUND or MAPI_E_INVALID_ENTRYID;
+    }
 
     public static bool IsGoneHResult(int hr) =>
         hr is MK_E_UNAVAILABLE or RPC_E_DISCONNECTED or RPC_E_SERVERCALL_RETRYLATER or RPC_S_SERVER_UNAVAILABLE or RPC_S_CALL_FAILED;

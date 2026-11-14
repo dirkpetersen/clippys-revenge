@@ -11,7 +11,7 @@ public class MeetingRequestTests
 
     private static MeetingRequest Make(string? recipients = R2, string? subject = "Sync", string? start = "2026-11-17T13:00",
         string? end = "2026-11-17T14:30", string? body = null, string? location = null, string? mailbox = null) =>
-        MeetingRequest.Create(recipients, subject, start, end, body, location, false, mailbox, Tz, Now);
+        MeetingRequest.Create(recipients, subject, start, end, body, location, mailbox, Tz, Now);
 
     private static string Err(Func<MeetingRequest> f) => Assert.Throws<McpException>(f).Message;
 

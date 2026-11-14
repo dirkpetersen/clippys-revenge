@@ -208,7 +208,6 @@ public class BalloonTests
     [InlineData(ActivityState.Purging)]
     [InlineData(ActivityState.Syncing)]
     [InlineData(ActivityState.Backfilling)]
-    [InlineData(ActivityState.AwaitingConfirmation)]
     public void OtherStates_Null(ActivityState state)
     {
         var clock = new ManualTimeProvider();

@@ -15,8 +15,8 @@ the range, read its brief in `docs/briefs/` if it has one (tasks tagged
 sections it cites are the brief), plus `CLAUDE.md`.
 
 Check, in order:
-1. **Hard rules** (always blocking): any `.Send()` other than the one in
-   `OutlookCalendar.CreateMeeting` after `InviteGate`; anything that can
+1. **Hard rules** (always blocking): any `.Send(` anywhere in `src/`
+   (Clippy sends nothing; meetings are only saved); anything that can
    launch Outlook; a non-loopback bind; the token in logs or settings.json;
    attachment bytes in the index; a tool file path that skips `PathPolicy`;
    a reply subject not built by `ReplySubject.Normalize`; Graph API use.

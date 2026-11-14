@@ -234,6 +234,89 @@ public class StyleSkillFilesTests : IDisposable
         Assert.Empty(Directory.GetFiles(_root, "*.tmp", SearchOption.AllDirectories));
     }
 
+    // The v1 section (before M15.3), copied by hand as a fixture.
+    private static string V1Section(string name, string phrasing) => """
+<!-- clippy:meeting-times v1 -->
+## Offering meeting times
+
+This section is written by Clippy's Revenge and replaced when the skill is regenerated.
+
+When an email asks for or suggests a meeting or a call and <name> wants to meet, offer concrete times in the reply:
+
+- Never make up times or guess <name>'s availability. Get them from the Clippy's Revenge MCP server: call `find_free_times` with the people who should attend (the sender, plus the others on the email when they are invited too), `duration_minutes` from the email (60 when it doesn't say), and `offer_cet: true` when the person you are writing to is in Europe.
+- Paste the tool's `offer_text` unchanged, one option per line, so <name> can delete the lines that don't suit:
+
+  ```
+  1. Tue 11/18  10:00–11:00 PT  (19:00–20:00 CET)
+  2. Wed 11/19  14:00–15:00 PT  (23:00–00:00 CET)
+  ```
+
+- The options are already ranked: times right before or after <name>'s meetings come first, then times next to tentative meetings, then the rest, each group in date order. Don't reorder them.
+- For someone in Europe, each option also shows the time in CET (always labelled CET, also in summer). Options between 08:00 and 18:00 CET come first. If there aren't enough, the others follow in a second list headed "Outside European office hours:"; translate that heading into the language of the reply.
+- If `find_free_times` finds no time or isn't available, write that <name> will suggest times, and list none.
+- Don't book a meeting or create an invite unless <name> asks.
+
+### How <name> offers times
+
+<phrasing>
+<!-- /clippy:meeting-times -->
+
+""".ReplaceLineEndings("\n").Replace("<name>", name).Replace("<phrasing>", phrasing);
+
+    [Fact]
+    public void Refresh_updates_an_unedited_v1_skill()
+    {
+        var phrasing = "I ask \"Does one of these work?\"";
+        var old = _files.Write(Legacy("BODY") + "\n" + V1Section("Dirk Petersen", phrasing), Gen, 143, Newest);
+        Assert.Equal(MeetingSectionRefresh.Updated, _files.RefreshMeetingSection(TimeZoneInfo.Utc));
+        var expected = new UTF8Encoding(false).GetBytes(StyleSkillText.Render("Dirk Petersen", D, 143, "BODY", phrasing));
+        Assert.Equal(expected, File.ReadAllBytes(_paths.UserSkillFile));
+        Assert.Equal(expected, File.ReadAllBytes(_paths.AppCopyFile));
+        var st = _files.ReadState()!;
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(expected)), st.Hash);
+        Assert.NotEqual(old.Hash, st.Hash);
+        Assert.Equal(Gen, st.GeneratedUtc);
+        Assert.Equal(143, st.SampleCount);
+        Assert.Equal(Newest, st.NewestSentUtc);
+        var now = File.ReadAllText(_paths.UserSkillFile);
+        var marker = Assert.Single(now.Split('\n'), l => l.StartsWith(StyleSkillText.MeetingMarkerPrefix, StringComparison.Ordinal));
+        Assert.Equal("<!-- clippy:meeting-times v2 -->", marker);
+        Assert.DoesNotContain("meeting-times v1", now);
+        Assert.DoesNotContain("Don't book a meeting", now);
+        Assert.Contains("create_meeting_draft", now);
+        Assert.Contains("reply_to_id", now);
+        Assert.Equal("BODY", _files.ReadBodyForPrompt());
+
+        var user = File.ReadAllBytes(_paths.UserSkillFile);
+        var state = File.ReadAllBytes(_paths.StateFile);
+        Assert.Equal(MeetingSectionRefresh.AlreadyCurrent, _files.RefreshMeetingSection(TimeZoneInfo.Utc));
+        Assert.Equal(user, File.ReadAllBytes(_paths.UserSkillFile));
+        Assert.Equal(state, File.ReadAllBytes(_paths.StateFile));
+    }
+
+    [Fact]
+    public void Refresh_leaves_an_edited_v1_skill_alone()
+    {
+        _files.Write(Legacy("BODY") + "\n" + V1Section("Dirk Petersen", "I ask \"Does one of these work?\""), Gen, 143, Newest);
+        File.AppendAllText(_paths.UserSkillFile, "x");
+        var user = File.ReadAllBytes(_paths.UserSkillFile);
+        var app = File.ReadAllBytes(_paths.AppCopyFile);
+        var state = File.ReadAllBytes(_paths.StateFile);
+        Assert.Equal(MeetingSectionRefresh.NotApplicable, _files.RefreshMeetingSection(TimeZoneInfo.Utc));
+        Assert.Equal(user, File.ReadAllBytes(_paths.UserSkillFile));
+        Assert.Equal(app, File.ReadAllBytes(_paths.AppCopyFile));
+        Assert.Equal(state, File.ReadAllBytes(_paths.StateFile));
+        Assert.Contains("meeting-times v1", File.ReadAllText(_paths.UserSkillFile));
+    }
+
+    [Fact]
+    public void Refresh_v1_with_default_phrasing()
+    {
+        _files.Write(Legacy("BODY") + "\n" + V1Section("Dirk Petersen", StyleSkillText.DefaultMeetingPhrasing), Gen, 143, Newest);
+        Assert.Equal(MeetingSectionRefresh.Updated, _files.RefreshMeetingSection(TimeZoneInfo.Utc));
+        Assert.Equal(StyleSkillText.Render("Dirk Petersen", D, 143, "BODY", null), File.ReadAllText(_paths.UserSkillFile));
+    }
+
     [Fact]
     public void Refresh_twice_is_a_no_op_the_second_time()
     {

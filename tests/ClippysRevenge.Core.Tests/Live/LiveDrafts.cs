@@ -63,6 +63,35 @@ internal static class LiveDrafts
         }
     }
 
+    /// <summary>Outlook's own reply to an item, in memory only (closed with olDiscard, never saved). Worker thread only.
+    /// (null, HResult) when Outlook can't reply to it (non-"Outlook gone" COMException).</summary>
+    internal static (string? Html, int HResult) TryOwnReply(Outlook.Application app, string id, string storeId)
+    {
+        Outlook.NameSpace? session = null;
+        Outlook.MailItem? item = null;
+        Outlook.MailItem? reply = null;
+        try
+        {
+            session = app.Session;
+            item = (Outlook.MailItem)session.GetItemFromID(id, storeId);
+            reply = item.Reply();
+            var html = reply.HTMLBody ?? "";
+            try { reply.Close(Outlook.OlInspectorClose.olDiscard); }
+            catch (COMException) { /* never opened in a window; nothing to close */ }
+            return (html, 0);
+        }
+        catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
+        {
+            return (null, ex.HResult);
+        }
+        finally
+        {
+            Rel(reply);
+            Rel(item);
+            Rel(session);
+        }
+    }
+
     /// <summary>The ClippyDraft property; a COMException (not set) gives null.</summary>
     internal static string? ReadMarker(Outlook.MailItem item)
     {

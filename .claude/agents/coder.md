@@ -22,8 +22,9 @@ Rules:
   brief is wrong or impossible, stop and say why instead of improvising.
 - Never edit `SPEC.md`, `docs/PLAN.md`, `.github/` or `Directory.Build.props`
   unless the brief says so.
-- Hard rules: no `.Send()` on a `MailItem`, ever. No `new
-  Outlook.Application()`, `Activator.CreateInstance` or `CoCreateInstance`.
+- Hard rules: no `.Send()` anywhere, ever (mail drafts and meetings only
+  `.Save()`). No `new Outlook.Application()`, `Activator.CreateInstance` or
+  `CoCreateInstance`.
   Bind loopback only. Never log the token. Every tool file path goes
   through `PathPolicy`. Attachment content is never stored.
 - Conventions: file-scoped namespaces, nullable on, warnings are errors,

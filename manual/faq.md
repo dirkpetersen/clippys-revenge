@@ -11,9 +11,21 @@ Not supported. An Exchange or Microsoft 365 mailbox is required.
 
 ## Can it send email?
 
-No. It saves drafts and you send them from Outlook. The only thing that can send is
-a [meeting invite](calendar.md#meeting-invites), and only after you click **Send**
-in a confirmation dialog, unless you set invites to draft only or off.
+No. Clippy never sends anything, neither mail nor meetings. It saves drafts and
+you send them from Outlook. Meeting invites are saved unsent in your calendar too.
+See [Meeting drafts](calendar.md#meeting-drafts).
+
+## Why can't Clippy send a meeting invite?
+
+Outlook's object model can't add a Teams or Zoom link, and you would add one by hand
+anyway. So Clippy saves the meeting unsent, marks it with the orange category
+**Clippy draft invite**, and lists it under **Draft invites** in the tray. You open
+it, add the link and send it. Clippy then removes its category.
+
+## What is the yellow number on the tray icon?
+
+The [attention badge](tray.md#attention-badge). It counts meeting drafts waiting for
+you to add a link and send them. It disappears when you have sent them all.
 
 ## Can it delete or move my mail?
 

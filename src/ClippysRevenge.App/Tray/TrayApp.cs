@@ -12,6 +12,12 @@ internal sealed record AiTrayServices(
     AiDraftingToggler Toggler,
     AiStatusChecker Checker);
 
+internal sealed record DraftInviteTrayServices(
+    DraftInvites Invites,
+    IDraftInviteWindow Window,
+    Func<OutlookConnectionState> State,     // worker.State
+    TimeZoneInfo TimeZone);
+
 internal sealed record TrayServices(
     ActivityHub Hub,
     BalloonCenter Balloons,
@@ -31,10 +37,12 @@ internal sealed record TrayServices(
     SharedMailboxToggler? SharedToggler = null,
     Func<SettingsTab, Form>? CreateSettingsForm = null,
     AiTrayServices? Ai = null,
-    Func<AboutForm>? CreateAboutForm = null);
+    Func<AboutForm>? CreateAboutForm = null,
+    DraftInviteTrayServices? DraftInvites = null,
+    AttentionCount? Attention = null);
 
 /// <summary>Tray icon and menu (SPEC 6.1, 6.2). All UI objects are touched on the UI thread only.</summary>
-internal sealed class TrayApp : ApplicationContext
+internal sealed partial class TrayApp : ApplicationContext
 {
     private readonly TrayServices _s;
     private readonly SynchronizationContext _ui;
@@ -61,6 +69,9 @@ internal sealed class TrayApp : ApplicationContext
     private readonly ToolStripMenuItem _startWithWindows = new("Start with Windows") { CheckOnClick = false };
 
     private TrayIconKey _shownKey = TrayIconKey.Idle;
+    private TrayBadgeRenderer? _badge;
+    private string _badgeText = "";    // wanted
+    private string _shownBadge = "";   // on screen
     private bool _animated;
     private int _frame;
     private int _renderQueued;
@@ -96,6 +107,11 @@ internal sealed class TrayApp : ApplicationContext
             throw;
         }
 
+        if (_s.Attention is not null)
+        {
+            _badge = new TrayBadgeRenderer(AttentionBadge.PickIconSize(SystemInformation.SmallIconSize.Width));
+        }
+
         BuildMenu();
 
         _notify = new NotifyIcon
@@ -129,7 +145,12 @@ internal sealed class TrayApp : ApplicationContext
         _houseTimer.Start();
 
         _s.Hub.Changed += OnHubChanged;
+        if (_s.Attention is not null)
+        {
+            _s.Attention.Changed += OnHubChanged;
+        }
         _s.Balloons.Shown += OnBalloon;
+        AttachDraftInvites();
         Render();
     }
 
@@ -292,7 +313,9 @@ internal sealed class TrayApp : ApplicationContext
             }
         }
 
-        var view = _presenter.Update(state, progress, _s.GetStats(), lastTool);
+        var count = _s.Attention?.Total ?? 0;
+        var view = _presenter.Update(state, progress, _s.GetStats(), lastTool, attentionCount: count);
+        _badgeText = AttentionBadge.Text(count);
         if (view.Animated)
         {
             if (!_animated)
@@ -301,6 +324,10 @@ internal sealed class TrayApp : ApplicationContext
                 _frame = 0;
                 SetIcon(TrayIconKey.Backfill0);
                 _animTimer.Start();
+            }
+            else
+            {
+                SetIcon(TrayIconKey.Backfill0 + _frame);
             }
         }
         else
@@ -325,12 +352,30 @@ internal sealed class TrayApp : ApplicationContext
 
     private void SetIcon(TrayIconKey key)
     {
-        if (key == _shownKey)
+        var wanted = _badge is null ? "" : _badgeText;
+        if (key == _shownKey && wanted == _shownBadge)
         {
             return;
         }
+        Icon? icon = null;
+        var shown = "";
+        if (_badgeText.Length > 0 && _badge is not null)
+        {
+            try
+            {
+                icon = _badge.Get(key, _badgeText);
+                shown = _badgeText;
+            }
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or ArgumentException or OutOfMemoryException)
+            {
+                // GDI+ failed: no badge from now on (no retry every tick), plain icons only.
+                _badge.Dispose();
+                _badge = null;
+            }
+        }
         _shownKey = key;
-        _notify.Icon = _icons.Get(key);
+        _shownBadge = shown;
+        _notify.Icon = icon ?? _icons.Get(key);
     }
 
     private void BuildMenu()
@@ -383,11 +428,12 @@ internal sealed class TrayApp : ApplicationContext
             _startWithWindows.Checked = _s.GetSettings().StartWithWindows;
             _syncNow.Enabled = _s.SyncNow is not null && !_s.GetStats().Paused;
             ApplyAiMenu();
+            OnMenuOpeningDraftInvites();
         };
 
         _menu.Items.AddRange([
             _status1, _status2, new ToolStripSeparator(),
-            _startOutlook, _syncNow, _pause, _rebuild, _shared, _ai, new ToolStripSeparator(),
+            _startOutlook, _syncNow, _pause, _rebuild, _shared, _ai, _invites, new ToolStripSeparator(),
             copyCmd, copyToken, regen, new ToolStripSeparator(),
             activity, settings, logs, data, new ToolStripSeparator(),
             _startWithWindows, about, exit,
@@ -732,7 +778,12 @@ internal sealed class TrayApp : ApplicationContext
         {
             _disposed = true;
             _s.Hub.Changed -= OnHubChanged;
+            if (_s.Attention is not null)
+            {
+                _s.Attention.Changed -= OnHubChanged;
+            }
             _s.Balloons.Shown -= OnBalloon;
+            DetachDraftInvites();
             _animTimer.Stop();
             _animTimer.Dispose();
             _houseTimer.Stop();
@@ -744,6 +795,7 @@ internal sealed class TrayApp : ApplicationContext
             _notify.Dispose();
             _menu.Dispose();
             _icons.Dispose();
+            _badge?.Dispose();
         }
         base.Dispose(disposing);
     }
