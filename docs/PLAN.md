@@ -140,7 +140,7 @@ v0.0.1 release.
 ## M14 Index statistics and read-only SQL (SPEC §11.11, §11.12, §17; user-approved 2026-11-14) — deps: M12
 - Review: [ ] pending
 - Parallel tracks: **A** M14.1 · **B** M14.2 (independent; neither needs M13). M14.3 joins A and B. M14.4 docs, M14.5 the user's check last.
-- [~] M14.1 `email_stats` Core: one shared WHERE builder for `Search` and stats (no second filter mapping), `EmailStats` (all `group_by` values, recipient splitting with `include_cc`, `order`, `top`, `mailbox=all` merge, `total`/`distinct`/`truncated`, local time buckets with an injected zone) + tests and a `[PerfFact]` 100k-row benchmark (§11.11, §17) `{arch:brief}` (deps: none)
+- [x] M14.1 `email_stats` Core: one shared WHERE builder for `Search` and stats (no second filter mapping), `EmailStats` (all `group_by` values, recipient splitting with `include_cc`, `order`, `top`, `mailbox=all` merge, `total`/`distinct`/`truncated`, local time buckets with an injected zone) + tests and a `[PerfFact]` 100k-row benchmark (§11.11, §17) `{arch:brief}` (deps: none)
 - [~] M14.2 `query_index` Core: `IndexQuery` (read-only, non-pooled connection, temp views `mail`/`mail_fts`/`mail_attachments`, `query_only`, limits, SQLitePCLRaw authorizer + progress handler, one-statement and read-only checks, 10 s deadline, row/cell/size caps, result shaping, error texts), `IndexQueryAuthorizer.Decide` table tests, FTS `MATCH`/`snippet`/`highlight`/`bm25`/`rank` through the view, file unchanged after queries (§11.12) `{arch:brief}` (deps: none)
 - [ ] M14.3 App tools: `email_stats` and `query_index` in `McpTools` with the pinned descriptions (views, limits, examples), `mailbox` handling (`all` per mailbox), no SQL or cell text in logs; safety scan: no logger call in `IndexQuery.cs`/`EmailStats.cs` takes the SQL or cell values (§11.11, §11.12, §5.1, §15) `{arch:brief}` (deps: M14.1, M14.2)
 - [ ] M14.4 User docs: `manual/tools.md` (both tools, view reference, examples), `security.md` (same data as `search_emails`/`get_message`, read-only layers), `faq.md` ("top senders", "mail per month"), `changelog.md`, README; `zensical build --clean --strict` passes `{arch:skip}` (deps: M14.3)
@@ -223,3 +223,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-14 M13.3 model contract for meeting times: ReplySchema meeting, MeetingAsk, prompt note, settings (0bd9587); 3015 tests
 2026-11-14 M13.1 meeting-times primitives: ranking, offers, sender region, HTML insertion (e34533e); 3117 tests
 2026-11-14 M13.5 style skill meeting-times section v1, meeting_phrasing, refresh of existing skills (cbbc5b6); 3148 tests
+2026-11-14 M14.1 email_stats Core + shared filter builder (07b8c4b); perf 100k: sender 125 ms, recipient 454 ms; 3199 tests
