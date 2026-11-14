@@ -28,12 +28,10 @@ of us are free".
 ## Safety promises
 
 !!! success "What Clippy will not do"
-    - It **never sends email.** New mail and replies are saved as drafts only.
-      You review and send them from Outlook.
+    - It **never sends anything.** New mail and replies are saved as drafts, and
+      meetings are saved unsent in your calendar. You review and send them from
+      Outlook.
     - It **never deletes or moves your email.**
-    - The one thing that can send is a **meeting invite**, and only after you
-      click **Send** in a confirmation dialog. You can set invites to
-      "draft only" or turn them off.
     - It **never starts Outlook by itself.** Only the tray's **Start Outlook**
       item does, when you click it.
     - It listens on **127.0.0.1 only**, and every request needs a secret token.

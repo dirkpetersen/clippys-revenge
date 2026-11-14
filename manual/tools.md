@@ -15,7 +15,7 @@ Claude can and can't do.
 | [`reply_draft`](#reply_draft) | Save a reply draft |
 | [`list_events`](#list_events) | List calendar events |
 | [`find_free_times`](#find_free_times) | Suggest meeting times from free/busy |
-| [`send_meeting_invite`](#send_meeting_invite) | Create a meeting (the only tool that can send) |
+| [`create_meeting_draft`](#create_meeting_draft) | Save a meeting unsent in your calendar. Nothing is sent |
 | [`index_status`](#index_status) | Show index and sync state |
 | [`email_stats`](#email_stats) | Count mail by sender, domain, folder or time |
 | [`query_index`](#query_index) | Run one read-only SELECT over the index |
@@ -374,36 +374,52 @@ list headed `Outside European office hours:`. Each offer has `list`: `main` or
 | `mailbox` | string | Empty means your calendar, or an enabled shared mailbox |
 | `offer_cet` | bool | true when the person you are writing to is in Europe: offers also show CET, Europe office hours first (default false) |
 
-### send_meeting_invite
+### create_meeting_draft
 
-Creates a meeting and sends the invite. **This is the only tool that can send
-anything.** What happens depends on the invite mode in Settings:
+Saves a meeting in your calendar **without sending it**. Clippy never sends
+anything. You add the Zoom or Teams link in Outlook and send the invite yourself. See
+[Meeting drafts](calendar.md#meeting-drafts) for the whole workflow.
 
-- **Send**: a confirmation dialog opens on your PC. The invite goes out when you
-  click **Send**. You can instead save it as a draft or cancel.
-- **Draft only**: the meeting is saved in your calendar, unsent. You send it from
-  Outlook.
-- **Disabled**: the tool returns an error.
+The meeting gets the category **Clippy draft invite**, is listed in the tray under
+**Draft invites**, and counts toward the tray icon's badge. If the invite answers an
+email, pass `reply_to_id` and a note is saved in Drafts.
 
-Every recipient must resolve in Outlook, or nothing is created. If the result is
-`cancelled`, Claude is told not to retry unless you ask.
+Every recipient must resolve in Outlook, or nothing is created. In **Disabled** mode
+the tool returns an error that asks you to turn it on in Settings.
 
 | Parameter | Type | Description |
 |---|---|---|
 | `recipients` | string, required | Attendees as `Name <email>; Name <email>` or bare emails, separated by `;` |
 | `subject` | string, required | Meeting subject |
 | `start` | string, required | Local start date-time, e.g. `2026-03-01T14:30` |
-| `end` | string, required | Local end date-time |
+| `end` | string, required | Local end date-time, after `start` and in the future |
 | `body` | string | Plain-text invite body |
 | `location` | string | Location, for example a room |
-| `teams` | bool | Requests a Teams link. See the note below |
-| `mailbox` | string | A configured shared mailbox to organize the meeting from. Empty means yours |
+| `mailbox` | string | A configured shared mailbox to save the meeting in. Empty means yours |
+| `reply_to_id` | string | The `id` of the email that asked for the meeting (from `search_emails`). Saves a note in Drafts as a reply to it. An unknown id is an error and nothing is created |
 
-!!! warning "Teams links"
-    `teams=true` does not add a Teams link. Outlook's object model has no
-    supported call for it, so the meeting is created without one and the result
-    says so. Open the meeting in Outlook and click **Teams Meeting** if you need
-    the link.
+To book option N of a `find_free_times` result, or of times offered in a draft, pass
+that option's start and end.
 
-The result has `status` (`sent`, `saved_as_draft` or `cancelled`), a `reason` for
-drafts (`user_choice`, `timeout` or `draft_only_mode`), and a `message` for Claude.
+!!! note "No Teams or Zoom link"
+    Outlook's object model has no supported call to add a Teams or Zoom link. The
+    result always tells Claude that the meeting has none and that you add it in
+    Outlook. The old `teams` argument is gone.
+
+The result has:
+
+| Field | Meaning |
+|---|---|
+| `status` | Always `saved_as_draft` |
+| `message` | A sentence for Claude: the meeting was saved without sending, it has no link, and it is listed in the tray under Draft invites |
+| `subject`, `start`, `end` | What was saved. Times are in the same format as `find_free_times` |
+| `mailbox`, `organizer`, `recipients` | Whose calendar it is in, who organizes it and who is invited |
+| `category` | `Clippy draft invite`, or null if the category couldn't be set (the meeting is still saved) |
+| `note_draft_id` | Only with `reply_to_id`: the id of the note draft |
+| `note_error` | Only if the note failed: the meeting is saved, but the note in Drafts couldn't be created |
+
+!!! example
+    Claude calls `create_meeting_draft` with `recipients="Ann Lee <ann@example.org>"`,
+    `subject="Project sync"`, `start="2026-10-15T10:00"`, `end="2026-10-15T11:00"` and
+    `reply_to_id` set to the id of Ann's email. The meeting appears unsent in your
+    calendar, a note reply appears in Drafts, and the tray shows **Draft invites (1)**.

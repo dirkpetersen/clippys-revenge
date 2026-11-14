@@ -2,8 +2,9 @@
 
 Three tools work with your calendar: [`list_events`](tools.md#list_events),
 [`find_free_times`](tools.md#find_free_times) and
-[`send_meeting_invite`](tools.md#send_meeting_invite). They read Outlook live, so
-Outlook must be running.
+[`create_meeting_draft`](tools.md#create_meeting_draft). They read Outlook live, so
+Outlook must be running. Clippy never sends anything: a meeting is saved unsent and you
+send it from Outlook.
 
 ## Listing events
 
@@ -23,7 +24,7 @@ A typical flow:
 2. Claude calls `find_free_times` and shows suggestions such as
    `1. Tue 10/15 1-3 PT`.
 3. You say "book number 2". Claude passes that suggestion's `start` and `end` to
-   `send_meeting_invite`.
+   `create_meeting_draft`.
 
 Things to know:
 
@@ -42,50 +43,86 @@ Things to know:
   [`find_free_times`](tools.md#find_free_times).
 - Clippy's [AI drafts](ai-drafts.md#meeting-times) use the same offers when an email
   asks for a meeting.
-## Meeting invites
 
-`send_meeting_invite` is the **only** tool that can send anything. Its behavior
-depends on the mode you choose in Settings, Scheduling.
+## Meeting drafts
+
+`create_meeting_draft` saves a meeting in your calendar **without sending it**.
+Clippy never sends anything, neither mail nor meetings. Outlook's object model can't
+add a Teams or Zoom link, so you add the link yourself and send the invite from
+Outlook.
+
+The workflow:
+
+1. You ask Claude Code to book a time, for example "make the invite for option 2".
+   Claude calls `create_meeting_draft` with the attendees, subject, start and end.
+2. The meeting is saved **unsent** in your calendar with the orange category
+   **Clippy draft invite**.
+3. If the invite answers an email, Claude passes `reply_to_id` and Clippy also saves
+   a [note in Drafts](#the-note-in-drafts).
+4. The tray icon shows a [yellow badge](tray.md#attention-badge) with the number of
+   draft invites, and the tray menu has **Draft invites (n)**.
+5. You open the meeting from that list, or from your calendar. Add the Zoom or Teams
+   link and click **Send** in Outlook.
+6. Within a few minutes Clippy sees that the invite has gone out and removes its
+   category. Any other category you set stays, and the badge count goes down.
+
+Before anything is created, every recipient must resolve in Outlook. If one doesn't,
+nothing is created.
+
+### Invite mode
+
+Set it in [Settings, Scheduling](tray.md#scheduling), **Meeting invites**:
 
 | Mode | What happens |
 |---|---|
-| **Send** (default) | A confirmation dialog opens. The invite goes out only if you click **Send** |
-| **Draft only** | The meeting is saved in your calendar, unsent. You send it from Outlook |
+| **Draft only** (default) | `create_meeting_draft` saves the meeting unsent |
 | **Disabled** | The tool refuses. Claude is told to ask you to enable it |
 
-Before anything is created, every recipient must resolve in Outlook. If one
-doesn't, nothing is created.
+Older versions had a **Send** mode with a confirmation dialog. It is gone. A saved
+**Send** now loads as **Draft only**, and the confirmation timeout is ignored.
 
-### The confirmation dialog
+### The category
 
-In **Send** mode a small window opens on top of your other windows without taking
-keyboard focus, and the tray icon turns amber. It shows:
+Every meeting draft gets the category **Clippy draft invite**. If your category list
+doesn't have it yet, Clippy adds it once, in orange. It never changes a category of
+that name that you already have, and never removes it from your list.
 
-- who organizes the meeting (you, or a shared mailbox)
-- the subject, time, location and whether a Teams meeting was requested
-- the full recipient list, with people **outside your organization highlighted**
-- the invite body
+When you have sent the meeting, Clippy removes only this category and saves the
+meeting. Saving a category change doesn't send anything. If you removed the category
+yourself, Clippy changes nothing. It skips a meeting while you have it open in
+Outlook and tries again later.
 
-You have three buttons:
+### Draft invites in the tray
 
-- **Send** sends the invite at once.
-- **Save as draft** saves the meeting in your calendar, unsent.
-- **Cancel** creates nothing. It is the default button and `Esc` triggers it, so
-  pressing Enter never sends.
+**Draft invites (n)** is in the [tray menu](tray.md#tray-menu) while at least one
+meeting draft is waiting. Each line shows the day, time and subject. Click a line to
+open the meeting in Outlook.
 
-A countdown shows the time left (default 120 seconds; change it in Settings). If
-it runs out, the meeting is **saved as a draft**, not sent. Closing the window with
-the X counts as Cancel. Requests queue up, and only one dialog is shown at a time.
+Clippy checks the list when you open the menu and after sync cycles, at most every
+five minutes. A meeting you deleted is dropped from the list. A meeting that ended
+more than 30 days ago and was never sent is dropped too, but it keeps its category.
 
-Every outcome appears in bold in the [Activity window](tray.md#activity-window).
+While Outlook isn't running, the lines are greyed out and the last line says
+**Start Outlook to open them**.
 
-### Teams links
+### The note in Drafts
 
-Clippy can't add a Teams link. If Claude asks for one, the meeting is created
-without it and the result says so. Open the meeting in Outlook and click **Teams
-Meeting**.
+When Claude passes `reply_to_id` (the `id` of the email that asked for the meeting),
+Clippy saves a reply draft to that email. The reply starts with a highlighted note:
+
+> [[Draft invite saved in your calendar: Tue 10/15 10:00–11:00 PT "Project sync".
+> Open it from the Clippy tray (Draft invites) or your calendar, add the Teams or
+> Zoom link and send it. Delete this note before you send this reply.]]
+
+Below the note is an empty paragraph for your own text. Delete the note before you
+send the reply. If an [AI draft](ai-drafts.md) already answers the email, it is left
+alone, and the note is a second reply draft.
+
+If the note can't be saved, the meeting is still saved and the result has a
+`note_error` that says why.
 
 ### Shared mailboxes
 
-With `mailbox`, the meeting is organized from that shared mailbox's calendar, and
-free/busy checks include that mailbox instead of yours.
+With `mailbox`, the meeting is saved in that shared mailbox's calendar, and free/busy
+checks include that mailbox instead of yours. The category is set on the meeting, but
+Outlook shows it without the orange color unless that mailbox's category list has it.

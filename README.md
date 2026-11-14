@@ -166,7 +166,9 @@ a configured shared mailbox's address; search tools also accept `all`).
 - **Never sends anything.** Mail tools only save drafts, and
   `create_meeting_draft` saves the meeting unsent in your calendar (or is
   off, `Disabled`). You add the Teams or Zoom link and send it from
-  Outlook. Clippy has no send call at all.
+  Outlook. Clippy has no send call at all. Unsent meetings get the orange
+  category `Clippy draft invite`, are listed under **Draft invites** in the tray and show
+  as a yellow badge on the tray icon until you send them.
 - **Attachments' content is never indexed.** Only file names are stored.
 - **File access is restricted by `PathPolicy`.** Every path a tool reads or
   writes must be inside an allowed folder: the attachment folder

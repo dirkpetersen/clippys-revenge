@@ -5,9 +5,10 @@ little as possible and to keep that access on your PC.
 
 ## What it never does
 
-- **Never sends email.** Drafts are only saved. You send them from Outlook. The
-  one exception is a [meeting invite](calendar.md#meeting-invites), which is sent
-  only after you click **Send** in a confirmation dialog.
+- **Never sends anything.** Not mail and not meetings. Clippy has no send call at
+  all. Mail drafts are only saved, and a [meeting draft](calendar.md#meeting-drafts)
+  is saved unsent in your calendar. You send both from Outlook. A test scans the
+  source to make sure it stays that way.
 - **Never deletes or moves email.** The only move is putting a reply draft it just
   created into Drafts. Retention and reconcile remove rows from Clippy's own index
   only, never from your mailbox.
@@ -77,6 +78,10 @@ escapes are refused. This stops a prompt-injected email from making Claude write
 into places like the Startup folder, or read files such as `~/.ssh`. A refused path
 is shown as `Blocked` in the Activity window.
 
+When a meeting draft has been sent, Clippy changes one thing on it: it removes its own
+**Clippy draft invite** category. It stores only the meeting's Outlook id in
+`draft-invites.json`, not its subject, times or attendees.
+
 ## Index at rest
 
 The index holds message bodies as plain text, like Outlook's own cache (OST) file.
@@ -144,8 +149,8 @@ The text of a query (SQL), the values it returns and SQLite's error messages are
 
 Email is untrusted text, and Claude reads it. Clippy limits what a malicious email
 could make Claude do: it can't send mail, can't delete mail, can only write files to
-allowed folders, and every meeting invite needs your click. AI drafts get a model with no tools at all, so the worst a malicious email can do there is produce a bad draft. Still, check drafts
-before you send them, and read the invite dialog before you click **Send**.
+allowed folders, and every meeting stays unsent until you send it yourself. AI drafts get a model with no tools at all, so the worst a malicious email can do there is produce a bad draft. Still, check drafts
+before you send them, and read a meeting draft before you click **Send**.
 
 ## Logs
 
