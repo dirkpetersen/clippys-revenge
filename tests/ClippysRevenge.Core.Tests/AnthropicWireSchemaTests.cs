@@ -5,7 +5,7 @@ namespace ClippysRevenge.Core.Tests;
 public class AnthropicWireSchemaTests
 {
     private const string ReducedReply =
-        """{"type":"object","additionalProperties":false,"required":["needs_reply","confidence","reason"],"properties":{"needs_reply":{"type":"boolean"},"confidence":{"type":"number"},"reply_all":{"type":"boolean"},"body_html":{"type":"string"},"reason":{"type":"string"}}}""";
+        """{"type":"object","additionalProperties":false,"required":["needs_reply","confidence","reason"],"properties":{"needs_reply":{"type":"boolean"},"confidence":{"type":"number"},"reply_all":{"type":"boolean"},"body_html":{"type":"string"},"reason":{"type":"string"},"meeting":{"type":"object","additionalProperties":false,"required":["requested"],"properties":{"requested":{"type":"boolean"},"duration_minutes":{"type":"integer"},"earliest_date":{"type":"string"},"latest_date":{"type":"string"},"outside_hours_heading":{"type":"string"}}}}}""";
 
     private static JsonElement Reduce(string schema)
     {
