@@ -20,6 +20,8 @@ sent to Claude, and how to set it up and fix it.
 - **Not every email gets a draft.** Newsletters, notifications, automatic mail and
   mail that needs no answer are skipped. See [Rules](#rules).
 - **Your signature** is added, as for `reply_draft`.
+- **Meeting times** are added by Clippy from your calendar, never written by the model.
+  See [Meeting times](#meeting-times).
 - **Check every draft.** The model can make mistakes. Where a reply needs a fact,
   such as a date or a number, it is told to leave a placeholder like `[[date]]`
   instead of inventing one.
@@ -93,13 +95,13 @@ the API:
 | Thread excerpts | Up to 8 earlier messages of the same conversation from your local index, your own text only (quoted history and signatures cut), each cut at 4,000 characters |
 | Attachment **names** | For the email and the thread messages. Names only |
 | Your name and address, today's date | So the draft is addressed and dated correctly |
-| Your writing style guide | The skill described [below](#your-writing-style), which contains short examples of your sent mail with addresses, links and phone numbers removed |
+| Your writing style guide | The skill described [below](#your-writing-style), which contains short examples of your sent mail with addresses, links and phone numbers removed. Its meeting-times section is left out |
 | About 150 to 300 samples of your sent mail | Sent once a week, with addresses, links and phone numbers removed, to write the style guide |
 
 **Never sent:**
 
 - Attachment contents or any file.
-- Anything else from your index: other mail, your calendar, other folders.
+- Anything else from your index: other mail, your calendar (also for meeting times: free/busy is read by Clippy after Claude has answered), other folders.
 - Mail from shared mailboxes you haven't turned on.
 - Your Claude credentials. Clippy never reads them.
 
@@ -149,6 +151,8 @@ confidence**.
 | Ignore mail older than | 2 days |
 | Only when I'm in To or CC | on |
 | Update weekly (writing style) | on |
+| Offer meeting times when an email asks for a meeting | on |
+| Number of times to offer | 5 (1 to 10) |
 
 ### Limits and backoff
 
@@ -160,8 +164,29 @@ confidence**.
   gives up on a single email after 3 failed attempts.
 - Nothing happens while indexing is paused or Outlook isn't running.
 
-### Shared mailboxes
+### Emails Clippy decides not to draft
 
+An email is **decided once**. When Claude says no reply is needed, or isn't
+confident enough, that email is not looked at again. Only emails whose Claude call
+**failed** are retried, up to 3 attempts.
+
+When Claude is not confident enough, the Activity window shows a line, with the time
+the email was received and no subject, sender or text:
+
+> AI drafts: no draft for the email received 2026-11-13 14:05: Claude's confidence
+> 0.55 is below your minimum of 0.60. To draft it anyway, select it in Outlook and
+> use "Draft a reply to the selected email" in the tray menu, or lower Minimum
+> confidence in Settings → AI drafts.
+
+To get a draft for that email, select it in Outlook and use
+[**Draft a reply to the selected email**](#draft-one-reply-now), which skips the
+confidence check. Lowering **Minimum confidence** only affects mail that arrives
+afterwards; mail that was already decided is not reconsidered. The summary line
+after a pass counts these emails separately, for example
+`AI drafts: 1 drafted, 2 low confidence (1.8 s)`, and the log shows the highest
+confidence seen against your minimum.
+
+### Shared mailboxes
 Under **Mailboxes** in the tab, **My mailbox** is always on while AI drafts are on.
 Each [shared mailbox](indexing.md#shared-mailboxes) you index has its own checkbox,
 off by default. Drafts for a shared mailbox use your own writing style.
@@ -173,6 +198,98 @@ the tray's **AI drafts** menu. This works even when automatic drafting is off, s
 needs your consent and a ready Claude, and counts toward the daily limit. It skips
 the rules and the confidence check, because you asked for it.
 
+## Meeting times
+
+When an email asks for or suggests a meeting or a call, the draft can offer concrete
+times from your calendar. **Clippy computes them, not the model.** The model only
+says that a meeting was asked for (and, if the email says so, how long it should be
+and in which time frame), and writes a short lead-in sentence in your style followed
+by a `[[meeting_times]]` placeholder. After the model has answered, Clippy reads
+Outlook free/busy and replaces the placeholder with the options. The model never
+sees or types a time, and your calendar is never sent to Claude.
+
+Example, for a sender in Europe:
+
+```
+1. Tue 11/18  10:00–11:00 PT  (19:00–20:00 CET)
+2. Wed 11/19  14:00–15:00 PT  (23:00–00:00 CET)
+
+Outside European office hours:
+3. Thu 11/20  08:00–09:00 PT  (17:00–18:00 CET)
+```
+
+Each option is one line, so you can delete the ones that don't suit before you send.
+The draft looks like this in Outlook: one option per line, with the columns kept
+aligned.
+
+**Who is checked.** You, the sender, and, when the reply is a reply to all, everyone
+in To and CC (at most 10 other people, the sender first). People whose free/busy
+can't be read, for example people outside your organization, are left out of the
+check, so confirm with them yourself.
+
+**When and how long.** From the start of the next day (or the earliest date the
+email names, if later) for 10 days, or until the latest date the email names, and
+never more than 60 days ahead. The length comes from the email and is 60 minutes
+when it doesn't say. Working hours, business days and whether tentative counts as
+busy come from [Settings, Scheduling](tray.md#scheduling).
+
+**Ranking.** The options are ranked by your calendar: times right before or after
+one of your meetings first (within 15 minutes, on the same day), then times next to
+a tentative meeting, then the rest, each group in date order. Free/busy can't tell a
+meeting from other busy time such as a focus block, so "next to a meeting" means
+"next to busy time". Within each free block, options start in 30-minute steps (plus one that ends exactly
+when the block ends), and they never overlap each other. At most **Number of times to offer** options are shown, both lists together.
+
+**Senders in Europe.** For a sender who looks European, each option also shows the
+time in Central European time, always written **CET**, also in summer, when the
+actual offset is CEST. Options between 08:00 and 18:00 CET come first. If there
+aren't enough, the others follow in a second list headed
+`Outside European office hours:`. When the email is in another language, the model
+translates that heading. If you are in the CET zone yourself, or Windows has no
+Central European time zone, the CET part and the second list are left out.
+
+Whether a sender is in Europe is guessed from two things: the time-zone offset in
+the email's `Date` header, and the country at the end of the sender's address (for
+example `.de`, `.fr`, `.eu`, `.co.uk`).
+
+| `Date` offset | European country address (`.de`, `.fr`, ...) | Other country address (`.za`, `.jp`, ...) | `.com`, `.org`, `.edu`, ... |
+|---|---|---|---|
+| `+0100`, `+0200` | Europe | not Europe | Europe |
+| `+0000`, `+0300` | Europe | not Europe | not Europe |
+| anything else | not Europe | not Europe | not Europe |
+| none | Europe | not Europe | not Europe |
+
+This is a guess and can be wrong:
+
+- Mail from inside your own Exchange organization has no such header, so only the
+  address is used.
+- A European sender with a `.com` address in winter UK or Portugal time (`+0000`) or
+  eastern summer time (`+0300`) isn't detected.
+- `by`, `ru`, `tr`, `ge`, `am`, `az` and `kz` addresses aren't counted as European.
+- A sender's mail program can write any offset.
+
+If the guess is wrong, delete the CET part and the second list by hand, or ask Claude
+Code for times yourself (see [the skill](#the-meeting-times-section-of-the-skill)).
+
+**When Clippy can't offer times.** The draft is still created, with a highlighted
+placeholder for you to fill in:
+
+| Placeholder | Meaning |
+|---|---|
+| `[[add meeting times: no free time found between 2026-11-15 and 2026-11-25]]` | Nobody is free in that range. Check by hand |
+| `[[add meeting times: Clippy couldn't read your calendar]]` | Your free/busy couldn't be read, for example Outlook was busy |
+
+When the sender proposes a specific time, the model doesn't accept or decline it. It
+leaves a placeholder such as `[[check whether Tue 3 pm works]]` and you still get
+the options. Like all placeholders, check these before sending.
+
+**Settings** (Settings, **AI drafts**):
+
+- **Offer meeting times when an email asks for a meeting**: on by default. When off,
+  drafts contain no meeting times and your calendar is not read.
+- **Number of times to offer**: 1 to 10, default 5.
+
+This works in automatic passes and in **Draft a reply to the selected email**.
 ## Your writing style
 
 Clippy learns your style from your own sent mail and keeps it in a Claude Code
@@ -215,6 +332,28 @@ toward the daily limit. In Settings you also have **View** (read-only), **Regene
 (runs now and takes a few minutes) and **Open in editor**. The status reads
 `Generated 2026-11-13 from 200 sent emails`, `Edited by you` or `Not generated yet`.
 
+### The meeting-times section of the skill
+
+The end of `SKILL.md` always has a section, **Offering meeting times**, written by
+Clippy between the markers `<!-- clippy:meeting-times v1 -->` and
+`<!-- /clippy:meeting-times -->`. It teaches your **interactive** Claude Code
+sessions the same habit: to get times from [`find_free_times`](tools.md#find_free_times)
+instead of making them up, to paste its `offer_text` unchanged, one option per line,
+and to set `offer_cet` when writing to someone in Europe. It also says to leave the
+options in the ranked order, to say that you will suggest times if none are found,
+and not to book anything unless you ask. A short paragraph on how **you** usually
+introduce meeting options is taken from your own sent mail.
+
+- A **new or regenerated** skill always gets the section.
+- A skill written **before** this feature gets the section added automatically, once,
+  when Clippy starts, with no Claude call, as long as **you haven't edited the file**.
+  The Activity window then shows `writing style: added how to offer meeting times`.
+- If you **edited** the skill, or wrote a `my-email-style` skill yourself, Clippy
+  doesn't touch it. **Regenerate** replaces it, including the new section.
+- Changing anything inside the section counts as editing the file, like any other
+  change.
+- The AI drafting prompt leaves the section out. It is meant for Claude Code sessions
+  with tools, not for drafting.
 !!! warning "Security note: this skill is also loaded by Claude Code"
     `%USERPROFILE%\.claude\skills\my-email-style\SKILL.md` is a *user-level Claude
     Code skill*. That means your **interactive** Claude Code sessions, the ones with
@@ -254,6 +393,8 @@ then press **Check**.
 | `AI drafts: Claude's usage limit was reached. I'll try again at 14:05.` | Wait. It retries by itself |
 | `AI drafts: a Claude call failed (<kind>). I'll try again in 4 min.` | Usually temporary. If it keeps failing, press **Check** |
 | `AI drafts: daily limit of 30 reached. I'll continue tomorrow.` | Raise **Daily limit** or wait |
+| `AI drafts: no draft for the email received ...: Claude's confidence 0.55 is below your minimum of 0.60.` | Draft it by hand from the tray, or lower **Minimum confidence**. See [Emails Clippy decides not to draft](#emails-clippy-decides-not-to-draft) |
+| `[[add meeting times: ...]]` in a draft | Clippy couldn't offer times. See [Meeting times](#meeting-times) |
 | `AI drafts: a reply draft couldn't be saved in Outlook. I'll try again later.` | Check that Outlook is running and Drafts is available |
 | `Select one email in Outlook first.` | Manual draft: select one email |
 | `That email isn't in your mailbox or an enabled shared mailbox.` | Manual draft: turn the shared mailbox on first |
@@ -266,7 +407,7 @@ then press **Check**.
 
 If an email gets no draft, the usual reasons are: it arrived before you turned AI
 drafts on, it is older than the age limit, it matched a [rule](#rules), or Claude
-decided no reply was needed or wasn't confident enough.
+decided no reply was needed or wasn't confident enough (the Activity window says so\nin the second case).
 
 Logs and the Activity window never contain mail text, prompts, the style skill or
 Claude's answers.

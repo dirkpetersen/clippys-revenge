@@ -32,8 +32,16 @@ Things to know:
 - Working hours, business-days-only, the time-zone label and whether tentative
   counts as busy come from [Settings, Scheduling](tray.md#scheduling). Claude can
   override the hours and business days per call.
-- Suggestions are whole free blocks, in local time.
-
+- Suggestions are whole free blocks, in local time. They are ranked: times right
+  before or after your own meetings come first, then times next to tentative
+  meetings, then the rest.
+- Besides the blocks, the result has **offers** of exactly the meeting length and an
+  `offer_text` with one option per line, ready to paste into an email. For someone
+  in Europe, Claude sets `offer_cet` and each line also shows the time in CET, with
+  the options inside European office hours first. See
+  [`find_free_times`](tools.md#find_free_times).
+- Clippy's [AI drafts](ai-drafts.md#meeting-times) use the same offers when an email
+  asks for a meeting.
 ## Meeting invites
 
 `send_meeting_invite` is the **only** tool that can send anything. Its behavior
