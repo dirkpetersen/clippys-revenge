@@ -142,7 +142,7 @@ public class IndexQuerySecurityTests : IndexQueryFixture
         {
             "SELECT randomblob(1000000000)", "SELECT zeroblob(2000000000)", "SELECT printf('%.*c', 1000000000, 'x')",
         })
-            Assert.StartsWith("SQL error: ", Fail(sql).Message);
+            Assert.Equal(IndexQueryTexts.TooBig, Fail(sql).Message);
     }
 
     private static (string Hash, long Length) Fingerprint(string path) =>
@@ -189,6 +189,10 @@ public class IndexQuerySecurityTests : IndexQueryFixture
         }
         SqliteConnection.ClearAllPools();
 
+        // index.db itself is byte-identical. SQLite may leave index.db-wal / index.db-shm next to a read-only
+        // connection of a WAL database (even after it closed); that is expected and harmless, nothing else may appear.
+        Assert.All(Directory.GetFiles(Path.GetDirectoryName(path)!, "index.db*"),
+            p => Assert.Matches(@"^index\.db(-wal|-shm)?$", Path.GetFileName(p)));
         Assert.Equal(before, Fingerprint(path));
         Assert.Equal(counts, new[] { "emails", "attachments", "meta", "ai_decisions" }.Select(t => Count(path, t)).ToArray());
         var fresh = new EmailIndex(path);

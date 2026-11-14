@@ -111,9 +111,10 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
         if (ex is not null)
         {
             sb.Append(Environment.NewLine).Append(ex.GetType().FullName);
-            if (ex is not McpException)
+            // Tool errors the MCP SDK logs (McpException) can quote SQL, search text or SQLite messages back to the model;
+            // only that category is scrubbed. Other categories (SyncService, SyncEngine, ...) keep their message.
+            if (!(ex is McpException && category.StartsWith("ModelContextProtocol", StringComparison.Ordinal)))
             {
-                // Tool errors (McpException) can quote SQL, search text or SQLite messages back to the model.
                 sb.Append(": ").Append(ex.Message);
             }
             if (ex.StackTrace is { } st)

@@ -37,7 +37,7 @@ internal sealed partial class SettingsForm
     private readonly TextBox _aiCap = new(), _aiMinConf = new(), _aiMaxAge = new();
     private readonly CheckBox _aiMeeting = new() { Text = AiTabTexts.MeetingTimesText };
     private readonly TextBox _aiMeetingCount = new();
-    private readonly CheckBox _aiDirect =new() { Text = "Only when I'm in To or CC" };
+    private readonly CheckBox _aiDirect = new() { Text = "Only when I'm in To or CC" };
     private readonly TextBox _aiExclude = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
     private readonly TextBox _aiInclude = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
     private readonly CheckBox _aiOwnBox = new() { Text = SettingsEditor.OwnMailboxLabel, Enabled = false };
