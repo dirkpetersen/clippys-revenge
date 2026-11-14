@@ -125,7 +125,7 @@ v0.0.1 release.
 - [ ] M12.6 End-to-end check by the user: with the M12 release installed via `install.ps1`, publish the next version; delete `%LOCALAPPDATA%\ClippysRevenge\update-state.json`, restart Clippy, and within ~2 minutes see the "I got an upgrade" balloon and the new version in About; `ClippysRevenge.exe.old` is gone. Record the result in the Log `{arch:skip}` (deps: M12.5 released)
 
 ## M13 Meeting times in drafts (SPEC §21, §11.8, §19.2, §19.6, §19.7, §19.10; user-approved 2026-11-14) — deps: M12
-- Review: [ ] pending
+- Review: [x] done (e132650, 85ae281; M13 APPROVED; M14 1 blocking (SQLite memory) fixed, re-review APPROVED, 2 fix rounds)
 - Parallel tracks: **A** M13.1 → M13.2 · **B** M13.3 (no deps, beside M13.1) · **C** M13.5 (no deps, any time). M13.4 joins A and B. M13.6 after M13.3. M13.7 after M13.4 and M13.5. M13.8 docs, M13.9 the user's check last.
 - [x] M13.1 Core meeting-times primitives: `OwnerCalendar.FromFreeBusy`, `MeetingRanking` (tiers, 15-minute adjacency), `MeetingOffers` (exact-length candidates, selection, Europe office-hours split with continued numbering and the heading rules, `FormatLine` `1. Tue 11/18  10:00–11:00 PT  (19:00–20:00 CET)`, text form), `SenderRegion` (Date offset + TLD decision table, `CentralEurope()`), `MeetingTimesHtml.Insert` (placeholder variants, breaks, no-placeholder paragraph rule, failure placeholders) + tests incl. split cases all-in-hours / mixed / none-in-hours (§21.2–§21.6, §21.9) `{arch:brief}` (deps: none)
 - [x] M13.2 `find_free_times`: ranked `suggestions` with `adjacent`, `offers`/`offer_text`, `offer_cet` argument and description; `IFreeBusySource` methods take a `WorkPriority` (default `Interactive`), `OutlookFreeBusySource` passes it through (§11.8, §21.8) `{arch:brief}` (deps: M13.1)
@@ -138,7 +138,7 @@ v0.0.1 release.
 - [ ] M13.9 End-to-end check by the user: after the M13 release, restart Clippy and confirm `%USERPROFILE%\.claude\skills\my-email-style\SKILL.md` ends with "Offering meeting times" (unedited skill) and that Settings → Regenerate keeps it; send yourself a meeting request from a European address (or a `.de`/`.fr` test account) and from a US one, use **Draft a reply to the selected email**, and check the options (busy-adjacent first, CET only for the European sender, second list when needed, one line per option, deletable); in Claude Code ask for times for an email and check it calls `find_free_times` and pastes `offer_text`. Record the result in the Log `{arch:skip}` (deps: M13.8 released)
 
 ## M14 Index statistics and read-only SQL (SPEC §11.11, §11.12, §17; user-approved 2026-11-14) — deps: M12
-- Review: [ ] pending
+- Review: [x] done (e132650, 85ae281; M13 APPROVED; M14 1 blocking (SQLite memory) fixed, re-review APPROVED, 2 fix rounds)
 - Parallel tracks: **A** M14.1 · **B** M14.2 (independent; neither needs M13). M14.3 joins A and B. M14.4 docs, M14.5 the user's check last.
 - [x] M14.1 `email_stats` Core: one shared WHERE builder for `Search` and stats (no second filter mapping), `EmailStats` (all `group_by` values, recipient splitting with `include_cc`, `order`, `top`, `mailbox=all` merge, `total`/`distinct`/`truncated`, local time buckets with an injected zone) + tests and a `[PerfFact]` 100k-row benchmark (§11.11, §17) `{arch:brief}` (deps: none)
 - [x] M14.2 `query_index` Core: `IndexQuery` (read-only, non-pooled connection, temp views `mail`/`mail_fts`/`mail_attachments`, `query_only`, limits, SQLitePCLRaw authorizer + progress handler, one-statement and read-only checks, 10 s deadline, row/cell/size caps, result shaping, error texts), `IndexQueryAuthorizer.Decide` table tests, FTS `MATCH`/`snippet`/`highlight`/`bm25`/`rank` through the view, file unchanged after queries (§11.12) `{arch:brief}` (deps: none)
@@ -230,3 +230,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-14 M14.3 email_stats + query_index MCP tools, McpException messages kept out of the log file (c94a899); M13.4 meeting times in AI drafts (step 6a) + visible low-confidence skips (8083fab); 3379 tests
 2026-11-14 M13.7 live tests: find_free_times offers, manual draft with meeting times (57552f2, not run; user runs them)
 2026-11-14 M13.8, M14.4 user docs (11c7da8): ai-drafts meeting times + low-confidence, tools email_stats/query_index, security, faq, changelog v0.0.7
+2026-11-14 M13+M14 reviews: M13 approved; M14 blocking memory bomb fixed (1 GiB heap limit), follow-ups (body cap, batch isolation, deadline timer) 85ae281; spec 2dcb0b9; 3440 tests; release v0.0.7
