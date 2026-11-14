@@ -352,7 +352,8 @@ internal sealed partial class TrayApp : ApplicationContext
 
     private void SetIcon(TrayIconKey key)
     {
-        if (key == _shownKey && _badgeText == _shownBadge)
+        var wanted = _badge is null ? "" : _badgeText;
+        if (key == _shownKey && wanted == _shownBadge)
         {
             return;
         }

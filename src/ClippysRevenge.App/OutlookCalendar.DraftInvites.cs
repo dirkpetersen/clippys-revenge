@@ -39,7 +39,16 @@ internal static partial class OutlookCalendar
                         shared[entry.Mailbox] = cal;
                     }
                 }
-                results.Add(CheckOneDraftInvite(ns, entry, cal, open, decide, log));
+                try
+                {
+                    results.Add(CheckOneDraftInvite(ns, entry, cal, open, decide, log));
+                }
+                catch (Exception ex) when (ex is not OutlookUnavailableException && !(ex is COMException c && ComErrors.IsOutlookGone(c)))
+                {
+                    // One entry that can't be checked is kept and retried; the others proceed.
+                    log?.LogWarning("Checking one draft invite failed ({Type}); keeping it.", ex.GetType().Name);
+                    results.Add(new DraftInviteOutcome(entry, decide(new DraftInviteSnapshot(DraftInviteLookup.Unreadable)), null, false));
+                }
             }
             return results;
         }
@@ -188,7 +197,7 @@ internal static partial class OutlookCalendar
                     item.Save();
                     applied = true;
                 }
-                catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
+                catch (Exception ex) when (ex is UnauthorizedAccessException || (ex is COMException c && !ComErrors.IsOutlookGone(c)))
                 {
                     log?.LogWarning("Removing the draft-invite category failed ({Type}); retrying next check.", ex.GetType().Name);
                 }
@@ -215,7 +224,7 @@ internal static partial class OutlookCalendar
             if (string.Equals(parent.EntryID, del.EntryID, StringComparison.OrdinalIgnoreCase)) return true;
             return (parent.FolderPath ?? "").StartsWith((del.FolderPath ?? "") + "\\", StringComparison.OrdinalIgnoreCase);
         }
-        catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
+        catch (Exception ex) when (ex is UnauthorizedAccessException || (ex is COMException c && !ComErrors.IsOutlookGone(c)))
         {
             // A shared mailbox may not expose its Deleted Items.
             return false;

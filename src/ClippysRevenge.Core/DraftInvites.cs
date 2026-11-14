@@ -548,9 +548,10 @@ public sealed class DraftInvites : IDraftInviteTracker, IAttentionSource
                     var applied = o.Decision.Action == DraftInviteAction.RemoveCategory && o.Applied;
                     if (o.Decision.Action == DraftInviteAction.Drop || applied)
                     {
-                        _log?.LogInformation("Draft invite no longer tracked ({Reason}).", o.Decision.Reason);
                         if (applied)
                             _log?.LogInformation("Draft invite sent; Clippy's category was removed ({Reason}).", o.Decision.Reason);
+                        else
+                            _log?.LogInformation("Draft invite no longer tracked ({Reason}).", o.Decision.Reason);
                         _entries.RemoveAt(idx);
                         _details.Remove(id);
                         _lastChecked.Remove(id);

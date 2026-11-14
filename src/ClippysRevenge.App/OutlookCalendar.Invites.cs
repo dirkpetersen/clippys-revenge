@@ -276,4 +276,5 @@ internal static partial class OutlookCalendar
             log?.LogWarning("Setting the draft-invite category failed ({Type}).", ex.GetType().Name);
             return false;
         }
-    }}
+    }
+}

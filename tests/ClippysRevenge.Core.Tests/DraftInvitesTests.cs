@@ -288,6 +288,43 @@ public sealed class DraftInvitesTests : IDisposable
     }
 
     [Fact]
+    public async Task Unreadable_entry_does_not_block_others_and_check_times_advance()
+    {
+        var t = new Rig(_dir);
+        for (var i = 0; i < 60; i++)
+        {
+            var id = $"E{i:00}";
+            t.Add(id, i);
+            t.Cal.Snapshots[id] = Unsent();
+        }
+        t.Cal.Snapshots["E00"] = new DraftInviteSnapshot(DraftInviteLookup.Unreadable);
+        t.Cal.Snapshots["E01"] = Sent();
+        await t.Dc.CheckAsync(WorkPriority.Interactive, TestContext.Current.CancellationToken);
+        Assert.Equal(59, t.Dc.Count); // E01 was decided and removed despite E00 being unreadable
+        t.Time.Advance(TimeSpan.FromMinutes(1));
+        await t.Dc.CheckAsync(WorkPriority.Interactive, TestContext.Current.CancellationToken);
+        var second = t.Cal.Calls[1].Ids;
+        // The 10 entries not yet checked come first, then the unreadable one (its check time advanced too).
+        Assert.Equal(Enumerable.Range(50, 10).Select(i => $"E{i:00}"), second.Take(10));
+        Assert.Contains("E00", second);
+    }
+
+    [Fact]
+    public void Per_entry_check_is_guarded_in_the_COM_adapter()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "ClippysRevenge.slnx"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        var src = File.ReadAllText(Path.Combine(dir!.FullName, "src", "ClippysRevenge.App", "OutlookCalendar.DraftInvites.cs"));
+        var call = src.IndexOf("results.Add(CheckOneDraftInvite(", StringComparison.Ordinal);
+        Assert.True(call > 0);
+        var tryAt = src.LastIndexOf("try", call, StringComparison.Ordinal);
+        var catchAt = src.IndexOf("catch (Exception ex) when (ex is not OutlookUnavailableException", call, StringComparison.Ordinal);
+        var nextForeach = src.IndexOf("foreach", call, StringComparison.Ordinal);
+        Assert.True(tryAt > src.LastIndexOf("foreach (var entry", call, StringComparison.Ordinal));
+        Assert.True(catchAt > call && (nextForeach < 0 || catchAt < nextForeach));
+    }
+    [Fact]
     public async Task At_most_50_per_check_oldest_first_then_rest()
     {
         var t = new Rig(_dir);
