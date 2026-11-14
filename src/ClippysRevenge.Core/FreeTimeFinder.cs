@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 
 namespace ClippysRevenge.Core;
@@ -7,10 +8,11 @@ namespace ClippysRevenge.Core;
 public interface IFreeBusySource
 {
     /// <summary>The signed-in user (own mailbox owner). Email is a primary SMTP address.</summary>
-    Task<Recipient> GetCurrentUserAsync(CancellationToken ct);
+    Task<Recipient> GetCurrentUserAsync(WorkPriority priority, CancellationToken ct);
 
     /// <summary>Joined free/busy string starting at from.Date. Null = unknown attendee.</summary>
-    Task<string?> GetFreeBusyAsync(string email, DateTime from, DateTime to, int intervalMinutes, CancellationToken ct);
+    Task<string?> GetFreeBusyAsync(string email, DateTime from, DateTime to, int intervalMinutes,
+        WorkPriority priority, CancellationToken ct);
 }
 
 public sealed record FreeTimeRequest(
@@ -23,13 +25,23 @@ public sealed record FreeTimeRequest(
     bool? BusinessDaysOnly = null,
     bool IncludeMe = true,
     int MaxSuggestions = 5,
-    string? Mailbox = null);
+    string? Mailbox = null,
+    bool OfferCet = false);
 
 public sealed record FreeTimeSuggestion(
     [property: JsonPropertyName("n")] int N,
     [property: JsonPropertyName("label")] string Label,
     [property: JsonPropertyName("start")] string Start,
-    [property: JsonPropertyName("end")] string End);
+    [property: JsonPropertyName("end")] string End,
+    [property: JsonPropertyName("adjacent")] string Adjacent);
+
+public sealed record FreeTimeOffer(
+    [property: JsonPropertyName("n")] int N,
+    [property: JsonPropertyName("label")] string Label,
+    [property: JsonPropertyName("start")] string Start,
+    [property: JsonPropertyName("end")] string End,
+    [property: JsonPropertyName("adjacent")] string Adjacent,
+    [property: JsonPropertyName("list")] string List);
 
 public sealed record FreeTimeAttendee(
     [property: JsonPropertyName("name")] string Name,
@@ -38,17 +50,29 @@ public sealed record FreeTimeAttendee(
 public sealed record FreeTimesResult(
     [property: JsonPropertyName("suggestions")] IReadOnlyList<FreeTimeSuggestion> Suggestions,
     [property: JsonPropertyName("text")] string Text,
+    [property: JsonPropertyName("offers")] IReadOnlyList<FreeTimeOffer> Offers,
+    [property: JsonPropertyName("offer_text")] string OfferText,
     [property: JsonPropertyName("unknown_attendees")] IReadOnlyList<string> UnknownAttendees,
     [property: JsonPropertyName("attendees")] IReadOnlyList<FreeTimeAttendee> Attendees);
 
-public sealed class FreeTimeFinder(IFreeBusySource source, TimeProvider time, TimeZoneInfo timeZone)
+public sealed class FreeTimeFinder(
+    IFreeBusySource source,
+    TimeProvider time,
+    TimeZoneInfo timeZone,
+    Func<TimeZoneInfo?>? centralEurope = null,
+    ILogger? logger = null)
 {
     public const int MaxDaysAhead = 60;
     public const int MaxAttendees = 50;
     public const int MaxSuggestionsCap = 20;
     public const int MaxDurationMinutes = 1440;
 
+    public const string CetMissingWarning =
+        "Meeting times: no Central European time zone (Europe/Berlin or W. Europe Standard Time) on this PC; offers have no CET times.";
+
     private const string IsoFormat = "yyyy-MM-dd'T'HH:mm:sszzz";
+
+    private int cetWarned;
 
     public async Task<FreeTimesResult> FindAsync(FreeTimeRequest request, Settings settings, CancellationToken ct)
     {
@@ -123,13 +147,15 @@ public sealed class FreeTimeFinder(IFreeBusySource source, TimeProvider time, Ti
 
         // 8. Owner
         var attendees = new List<Recipient>(parsed);
+        string? ownerEmail = null;
         if (request.IncludeMe)
         {
-            var owner = shared is null
-                ? await source.GetCurrentUserAsync(ct).ConfigureAwait(false)
+            var me = shared is null
+                ? await source.GetCurrentUserAsync(WorkPriority.Interactive, ct).ConfigureAwait(false)
                 : new Recipient(shared.DisplayName.Trim(), shared.Smtp.Trim());
-            if (!attendees.Any(a => string.Equals(a.Email, owner.Email, StringComparison.OrdinalIgnoreCase)))
-                attendees.Add(owner);
+            ownerEmail = me.Email;
+            if (!attendees.Any(a => string.Equals(a.Email, me.Email, StringComparison.OrdinalIgnoreCase)))
+                attendees.Add(me);
         }
 
         // 9. Free/busy
@@ -138,10 +164,12 @@ public sealed class FreeTimeFinder(IFreeBusySource source, TimeProvider time, Ti
         var known = new List<Recipient>();
         var unknown = new List<string>();
         var busyLists = new List<IReadOnlyList<TimeRange>>();
+        var owner = OwnerCalendar.Unknown;
         foreach (var a in attendees)
         {
             ct.ThrowIfCancellationRequested();
-            var fb = await source.GetFreeBusyAsync(a.Email, from, to, interval, ct).ConfigureAwait(false);
+            var fb = await source.GetFreeBusyAsync(a.Email, from, to, interval, WorkPriority.Interactive, ct)
+                .ConfigureAwait(false);
             if (string.IsNullOrEmpty(fb) || fb.Length < needed)
             {
                 unknown.Add(a.Email);
@@ -155,26 +183,46 @@ public sealed class FreeTimeFinder(IFreeBusySource source, TimeProvider time, Ti
             catch (FormatException)
             {
                 unknown.Add(a.Email);
+                continue;
             }
+            if (ownerEmail is not null && string.Equals(a.Email, ownerEmail, StringComparison.OrdinalIgnoreCase))
+                owner = OwnerCalendar.FromFreeBusy(fb, from.Date, interval);
         }
 
-        // 10. Slots
-        IReadOnlyList<TimeRange> slots = known.Count == 0
+        // 10. Blocks (the whole list, ranked before max is applied)
+        IReadOnlyList<TimeRange> blocks = known.Count == 0
             ? []
-            : FreeBusy.FreeSlots(busyLists, from, to, startHour, endHour, businessDays, duration, now, interval)
-                .OrderBy(s => s.Start).Take(max).ToList();
+            : FreeBusy.FreeSlots(busyLists, from, to, startHour, endHour, businessDays, duration, now, interval);
 
-        // 11. Formatting
+        // 11. Suggestions
         var suggestions = new List<FreeTimeSuggestion>();
-        for (var i = 0; i < slots.Count; i++)
+        var ranked = MeetingRanking.Rank(blocks, owner).Take(max).ToList();
+        for (var i = 0; i < ranked.Count; i++)
         {
-            var s = slots[i];
+            var s = ranked[i].Range;
             var label = SlotFormatter.Format(i + 1, s.Start, s.End,
                 TimeZoneLabels.Resolve(tzLabel, timeZone, s.Start), startHour, endHour);
-            suggestions.Add(new FreeTimeSuggestion(i + 1, label, Iso(s.Start), Iso(s.End)));
+            suggestions.Add(new FreeTimeSuggestion(i + 1, label, Iso(s.Start), Iso(s.End),
+                MeetingRanking.Name(ranked[i].Tier)));
         }
 
-        // 12. Result
+        // 12. Offers
+        var offers = new List<FreeTimeOffer>();
+        var offerText = "";
+        if (blocks.Count > 0)
+        {
+            var cet = request.OfferCet ? (centralEurope ?? SenderRegion.CentralEurope)() : null;
+            var set = MeetingOffers.Build(blocks, owner, duration, max, timeZone, tzLabel,
+                europe: request.OfferCet, centralEurope: cet);
+            foreach (var o in set.All)
+                offers.Add(new FreeTimeOffer(o.N, o.Line, Iso(o.Range.Start), Iso(o.Range.End),
+                    MeetingRanking.Name(o.Tier), o.ListName));
+            offerText = set.ToText();
+            if (set.CetMissing && Interlocked.Exchange(ref cetWarned, 1) == 0)
+                logger?.LogWarning("{Message}", CetMissingWarning);
+        }
+
+        // 13. Result
         string text;
         if (suggestions.Count > 0)
             text = string.Join("\n", suggestions.Select(s => s.Label));
@@ -187,7 +235,8 @@ public sealed class FreeTimeFinder(IFreeBusySource source, TimeProvider time, Ti
                 + "Try a larger days_ahead, a shorter duration_minutes, or a wider earliest_hour/latest_hour.";
 
         return new FreeTimesResult(
-            suggestions, text, unknown, known.Select(a => new FreeTimeAttendee(a.Name, a.Email)).ToList());
+            suggestions, text, offers, offerText, unknown,
+            known.Select(a => new FreeTimeAttendee(a.Name, a.Email)).ToList());
     }
 
     private string Iso(DateTime x) =>

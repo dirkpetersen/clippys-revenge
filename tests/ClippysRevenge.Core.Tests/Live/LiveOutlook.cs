@@ -583,7 +583,7 @@ public sealed class LiveOutlook : IAsyncLifetime
     {
         try
         {
-            return await new OutlookFreeBusySource(Worker).GetCurrentUserAsync(TestContext.Current.CancellationToken)
+            return await new OutlookFreeBusySource(Worker).GetCurrentUserAsync(WorkPriority.Interactive, TestContext.Current.CancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OutlookNotRespondingException)

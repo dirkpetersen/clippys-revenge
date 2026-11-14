@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using Xunit;
 
@@ -13,22 +15,25 @@ public class FreeTimeFinderTests
 
     private sealed class FakeSource(Dictionary<string, string?> map) : IFreeBusySource
     {
-        public List<(string Email, DateTime From, DateTime To, int Interval)> Calls { get; } = [];
+        public List<(string Email, DateTime From, DateTime To, int Interval, WorkPriority Priority)> Calls { get; } = [];
+        public List<WorkPriority> UserPriorities { get; } = [];
         public int UserCalls { get; private set; }
         public Exception? Throw { get; set; }
 
-        public Task<Recipient> GetCurrentUserAsync(CancellationToken ct)
+        public Task<Recipient> GetCurrentUserAsync(WorkPriority priority, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
+            UserPriorities.Add(priority);
             UserCalls++;
             if (Throw is not null) throw Throw;
             return Task.FromResult(new Recipient("Me", "me@x.org"));
         }
 
-        public Task<string?> GetFreeBusyAsync(string email, DateTime from, DateTime to, int intervalMinutes, CancellationToken ct)
+        public Task<string?> GetFreeBusyAsync(string email, DateTime from, DateTime to, int intervalMinutes,
+            WorkPriority priority, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
-            Calls.Add((email, from, to, intervalMinutes));
+            Calls.Add((email, from, to, intervalMinutes, priority));
             if (Throw is not null) throw Throw;
             return Task.FromResult(map.TryGetValue(email, out var v) ? v : null);
         }
@@ -69,13 +74,33 @@ public class FreeTimeFinderTests
 
     private static DateTimeOffset Utc(DateTime local) => new(local.AddHours(7), TimeSpan.Zero);
 
-    private static (FreeTimeFinder F, FakeSource S) Make(Dictionary<string, string?>? map = null, DateTime? now = null, TimeZoneInfo? tz = null)
+    private sealed class CapturingLogger : ILogger
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception)));
+    }
+
+    private static string FbMixed(DateTime day0, int days, params (DateTime S, DateTime E, char Code)[] runs)
+    {
+        var a = new char[days * 48];
+        Array.Fill(a, '0');
+        foreach (var (s, e, c) in runs)
+            for (var x = s; x < e; x = x.AddMinutes(30))
+                a[(int)((x - day0).TotalMinutes / 30)] = c;
+        return new string(a);
+    }
+
+    private static (FreeTimeFinder F, FakeSource S) Make(Dictionary<string, string?>? map = null, DateTime? now = null, TimeZoneInfo? tz = null,
+        Func<TimeZoneInfo?>? cet = null, ILogger? logger = null)
     {
         var src = new FakeSource(map ?? Default());
         var zone = tz ?? Tz;
         var n = now ?? L(12, 7);
         var utc = tz is null ? Utc(n).UtcDateTime : TimeZoneInfo.ConvertTimeToUtc(n, zone);
-        return (new FreeTimeFinder(src, new FixedTime(new DateTimeOffset(utc, TimeSpan.Zero)), zone), src);
+        return (new FreeTimeFinder(src, new FixedTime(new DateTimeOffset(utc, TimeSpan.Zero)), zone, cet, logger), src);
     }
 
     private static FreeTimeRequest Req(string? recipients = "A <a@x.org>; B <b@x.org>") =>
@@ -99,7 +124,7 @@ public class FreeTimeFinderTests
         Assert.Equal(string.Join("\n", Labels7), r.Text);
         Assert.Equal([new FreeTimeAttendee("A", "a@x.org"), new FreeTimeAttendee("B", "b@x.org")], r.Attendees);
         Assert.Empty(r.UnknownAttendees);
-        Assert.Equal([("a@x.org", L(12, 7), L(13, 0), 30), ("b@x.org", L(12, 7), L(13, 0), 30)], src.Calls);
+        Assert.Equal([("a@x.org", L(12, 7), L(13, 0), 30, WorkPriority.Interactive), ("b@x.org", L(12, 7), L(13, 0), 30, WorkPriority.Interactive)], src.Calls);
     }
 
     [Theory]
@@ -151,6 +176,8 @@ public class FreeTimeFinderTests
         Assert.Empty(r.Attendees);
         Assert.Equal(["a@x.org", "b@x.org"], r.UnknownAttendees);
         Assert.Equal("No free/busy information could be read for any attendee, so no times can be suggested. Check the addresses in unknown_attendees.", r.Text);
+        Assert.Empty(r.Offers);
+        Assert.Equal("", r.OfferText);
     }
 
     [Fact]
@@ -376,6 +403,14 @@ public class FreeTimeFinderTests
         var r = await Run(f, new FreeTimeRequest("A <a@x.org>", IncludeMe: false, DateFrom: "2026-10-01", DaysAhead: 2));
         Assert.Empty(r.Suggestions);
         Assert.Equal("No free time of at least 60 minutes was found for everyone between 2026-10-01 and 2026-10-02. Try a larger days_ahead, a shorter duration_minutes, or a wider earliest_hour/latest_hour.", r.Text);
+        Assert.Empty(r.Offers);
+        Assert.Equal("", r.OfferText);
+
+        var cetCalls = 0;
+        var (f2, _) = Make(map, cet: () => { cetCalls++; return null; });
+        var r2 = await Run(f2, new FreeTimeRequest("A <a@x.org>", IncludeMe: false, DateFrom: "2026-10-01", DaysAhead: 2, OfferCet: true));
+        Assert.Empty(r2.Offers);
+        Assert.Equal(0, cetCalls);
     }
 
     [Fact]
@@ -417,8 +452,201 @@ public class FreeTimeFinderTests
         var r = await Run(f, Req("A <a@x.org>; B <b@x.org>; C <c@x.org>"));
         using var doc = JsonDocument.Parse(JsonSerializer.Serialize(r));
         var root = doc.RootElement;
-        Assert.Equal(["suggestions", "text", "unknown_attendees", "attendees"], root.EnumerateObject().Select(p => p.Name));
-        Assert.Equal(["n", "label", "start", "end"], root.GetProperty("suggestions")[0].EnumerateObject().Select(p => p.Name));
+        Assert.Equal(["suggestions", "text", "offers", "offer_text", "unknown_attendees", "attendees"], root.EnumerateObject().Select(p => p.Name));
+        Assert.Equal(["n", "label", "start", "end", "adjacent"], root.GetProperty("suggestions")[0].EnumerateObject().Select(p => p.Name));
         Assert.Equal(["name", "email"], root.GetProperty("attendees")[0].EnumerateObject().Select(p => p.Name));
+
+        var (f2, _) = Make(RMap(), L(12, 7));
+        var r2 = await Run(f2, RReq());
+        using var doc2 = JsonDocument.Parse(JsonSerializer.Serialize(r2));
+        var root2 = doc2.RootElement;
+        Assert.Equal(["n", "label", "start", "end", "adjacent", "list"], root2.GetProperty("offers")[0].EnumerateObject().Select(p => p.Name));
+        Assert.Equal(JsonValueKind.String, root2.GetProperty("offer_text").ValueKind);
+    }
+
+    // Scenario R: Mon 10/12 07:00, 3 days. Me: tentative Tue 10-11, busy Wed 12-13.
+    private static Dictionary<string, string?> RMap(bool withMe = true)
+    {
+        var m = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["a@x.org"] = Fb(L(12, 0), 3, '0'),
+        };
+        if (withMe)
+            m["me@x.org"] = FbMixed(L(12, 0), 3, (L(13, 10), L(13, 11), '1'), (L(14, 12), L(14, 13), '2'));
+        return m;
+    }
+
+    private static FreeTimeRequest RReq() => new("A <a@x.org>", IncludeMe: true, DaysAhead: 3, MaxSuggestions: 5);
+
+    private static readonly string[] RLabels =
+    [
+        "1. Wed 10/14 8-12 PT", "2. Wed 10/14 1-5 PT", "3. Tue 10/13 8-10 PT", "4. Tue 10/13 11-5 PT", "5. Mon 10/12 8-5 PT",
+    ];
+
+    private static readonly string[] ROffers =
+    [
+        "1. Wed 10/14  11:00–12:00 PT", "2. Wed 10/14  13:00–14:00 PT", "3. Tue 10/13  09:00–10:00 PT",
+        "4. Tue 10/13  11:00–12:00 PT", "5. Mon 10/12  08:00–09:00 PT",
+    ];
+
+    private static TimeZoneInfo Berlin() => TimeZoneInfo.FindSystemTimeZoneById("Europe/Berlin");
+
+    [Fact]
+    public async Task Ranked_suggestions()
+    {
+        var (f, _) = Make(RMap(), L(12, 7));
+        var r = await Run(f, RReq());
+        Assert.Equal(RLabels, r.Suggestions.Select(s => s.Label));
+        Assert.Equal(["busy", "busy", "tentative", "tentative", "none"], r.Suggestions.Select(s => s.Adjacent));
+        Assert.Equal([1, 2, 3, 4, 5], r.Suggestions.Select(s => s.N));
+        Assert.Equal("2026-10-14T08:00:00-07:00", r.Suggestions[0].Start);
+        Assert.Equal(string.Join("\n", RLabels), r.Text);
+    }
+
+    [Fact]
+    public async Task Ranking_before_take()
+    {
+        var (f, _) = Make(RMap(), L(12, 7));
+        var r = await Run(f, RReq() with { MaxSuggestions = 2 });
+        Assert.Equal(["1. Wed 10/14 8-12 PT", "2. Wed 10/14 1-5 PT"], r.Suggestions.Select(s => s.Label));
+    }
+
+    [Fact]
+    public async Task Tentative_not_busy_overlap_is_not_adjacent()
+    {
+        var (f, _) = Make(RMap(), L(12, 7));
+        var r = await Run(f, RReq(), MakeSettings(s => s.TentativeIsBusy = false));
+        Assert.Equal(["1. Wed 10/14 8-12 PT", "2. Wed 10/14 1-5 PT", "3. Mon 10/12 8-5 PT", "4. Tue 10/13 8-5 PT"],
+            r.Suggestions.Select(s => s.Label));
+        Assert.Equal(["busy", "busy", "none", "none"], r.Suggestions.Select(s => s.Adjacent));
+    }
+
+    [Fact]
+    public async Task IncludeMe_false_all_none()
+    {
+        var (f, _) = Make(RMap(), L(12, 7));
+        var r = await Run(f, new FreeTimeRequest("A <a@x.org>; Me <me@x.org>", IncludeMe: false, DaysAhead: 3, MaxSuggestions: 5));
+        Assert.Equal(["1. Mon 10/12 8-5 PT", "2. Tue 10/13 8-10 PT", "3. Tue 10/13 11-5 PT", "4. Wed 10/14 8-12 PT", "5. Wed 10/14 1-5 PT"],
+            r.Suggestions.Select(s => s.Label));
+        Assert.All(r.Suggestions, s => Assert.Equal("none", s.Adjacent));
+        Assert.NotEmpty(r.Offers);
+        Assert.All(r.Offers, o => Assert.Equal("none", o.Adjacent));
+    }
+
+    [Fact]
+    public async Task Owner_unknown_all_none()
+    {
+        var (f, _) = Make(RMap(withMe: false), L(12, 7));
+        var r = await Run(f, RReq());
+        Assert.Equal(["me@x.org"], r.UnknownAttendees);
+        Assert.Equal(["1. Mon 10/12 8-5 PT", "2. Tue 10/13 8-5 PT", "3. Wed 10/14 8-5 PT"], r.Suggestions.Select(s => s.Label));
+        Assert.All(r.Suggestions, s => Assert.Equal("none", s.Adjacent));
+    }
+
+    [Fact]
+    public async Task Offers_without_cet()
+    {
+        var cetCalls = 0;
+        var (f, _) = Make(RMap(), L(12, 7), cet: () => { cetCalls++; return null; });
+        var r = await Run(f, RReq());
+        Assert.Equal(ROffers, r.Offers.Select(o => o.Label));
+        Assert.Equal(["busy", "busy", "tentative", "tentative", "none"], r.Offers.Select(o => o.Adjacent));
+        Assert.All(r.Offers, o => Assert.Equal("main", o.List));
+        Assert.Equal("2026-10-14T11:00:00-07:00", r.Offers[0].Start);
+        Assert.Equal("2026-10-14T12:00:00-07:00", r.Offers[0].End);
+        Assert.Equal(string.Join("\n", ROffers), r.OfferText);
+        Assert.Equal(0, cetCalls);
+    }
+
+    [Fact]
+    public async Task Offers_with_cet_split()
+    {
+        var (f, _) = Make(RMap(), L(12, 7), cet: Berlin);
+        var r = await Run(f, RReq() with { OfferCet = true });
+        string[] labels =
+        [
+            "1. Mon 10/12  08:00–09:00 PT  (17:00–18:00 CET)",
+            "2. Tue 10/13  08:00–09:00 PT  (17:00–18:00 CET)",
+            "3. Wed 10/14  08:00–09:00 PT  (17:00–18:00 CET)",
+            "4. Wed 10/14  11:00–12:00 PT  (20:00–21:00 CET)",
+            "5. Wed 10/14  13:00–14:00 PT  (22:00–23:00 CET)",
+        ];
+        Assert.Equal(labels, r.Offers.Select(o => o.Label));
+        Assert.Equal(["main", "main", "main", "outside_hours", "outside_hours"], r.Offers.Select(o => o.List));
+        Assert.Equal(["none", "none", "none", "busy", "busy"], r.Offers.Select(o => o.Adjacent));
+        Assert.Equal(string.Join("\n", labels[..3]) + "\n\nOutside European office hours:\n" + string.Join("\n", labels[3..]), r.OfferText);
+        Assert.Equal(RLabels, r.Suggestions.Select(s => s.Label));
+    }
+
+    [Fact]
+    public async Task Offers_cet_owner_already_cet()
+    {
+        var berlin = Berlin();
+        var map = new Dictionary<string, string?> { ["a@x.org"] = Fb(L(12, 0), 1, '0') };
+        var (f, _) = Make(map, L(12, 7), berlin, cet: Berlin);
+        var r = await Run(f, new FreeTimeRequest("A <a@x.org>", IncludeMe: false, DaysAhead: 1, OfferCet: true));
+        Assert.Equal(5, r.Offers.Count);
+        Assert.Equal(["08:00–09:00", "09:00–10:00", "10:00–11:00", "11:00–12:00", "12:00–13:00"],
+            r.Offers.Select(o => o.Label.Split("  ")[1].Split(' ')[0]));
+        Assert.All(r.Offers, o => Assert.Equal("main", o.List));
+        Assert.All(r.Offers, o => Assert.DoesNotContain("CET)", o.Label));
+        Assert.DoesNotContain("\n\n", r.OfferText);
+    }
+
+    [Fact]
+    public async Task Offers_cet_missing_warns_once()
+    {
+        var log = new CapturingLogger();
+        var (f, _) = Make(RMap(), L(12, 7), cet: () => null, logger: log);
+        var r = await Run(f, RReq() with { OfferCet = true });
+        Assert.Equal(ROffers, r.Offers.Select(o => o.Label));
+        Assert.All(r.Offers, o => Assert.Equal("main", o.List));
+        await Run(f, RReq() with { OfferCet = true });
+        var entry = Assert.Single(log.Entries);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+        Assert.Equal(FreeTimeFinder.CetMissingWarning, entry.Message);
+    }
+
+    [Fact]
+    public async Task Offers_count_capped_by_max()
+    {
+        var (f, _) = Make(RMap(), L(12, 7));
+        var r = await Run(f, RReq() with { MaxSuggestions = 2 });
+        Assert.Equal(ROffers.Take(2), r.Offers.Select(o => o.Label));
+        Assert.Equal([1, 2], r.Offers.Select(o => o.N));
+    }
+
+    [Fact]
+    public async Task Offers_exact_duration()
+    {
+        var (f, _) = Make(RMap(), L(12, 7));
+        var r = await Run(f, RReq() with { DurationMinutes = 30, MaxSuggestions = 3 });
+        Assert.Equal(3, r.Offers.Count);
+        Assert.All(r.Offers, o =>
+            Assert.Equal(TimeSpan.FromMinutes(30),
+                DateTimeOffset.Parse(o.End, CultureInfo.InvariantCulture) - DateTimeOffset.Parse(o.Start, CultureInfo.InvariantCulture)));
+        Assert.Contains("Wed 10/14  11:30–12:00", r.Offers[0].Label);
+        Assert.Contains("Wed 10/14  13:00–13:30", r.Offers[1].Label);
+        Assert.Contains("Tue 10/13  09:30–10:00", r.Offers[2].Label);
+        Assert.Equal(["busy", "busy", "tentative"], r.Offers.Select(o => o.Adjacent));
+    }
+
+    [Fact]
+    public async Task Priority_is_interactive()
+    {
+        var (f, src) = Make(RMap(), L(12, 7));
+        await Run(f, RReq());
+        Assert.NotEmpty(src.Calls);
+        Assert.All(src.Calls, c => Assert.Equal(WorkPriority.Interactive, c.Priority));
+        Assert.Equal([WorkPriority.Interactive], src.UserPriorities);
+    }
+
+    [Fact]
+    public async Task Owner_listed_in_recipients()
+    {
+        var (f, src) = Make(RMap(), L(12, 7));
+        var r = await Run(f, RReq() with { Recipients = "A <a@x.org>; Me <ME@x.org>" });
+        Assert.Single(src.Calls, c => string.Equals(c.Email, "me@x.org", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(RLabels, r.Suggestions.Select(s => s.Label));
     }
 }

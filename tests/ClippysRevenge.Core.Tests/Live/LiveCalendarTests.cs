@@ -156,7 +156,7 @@ public sealed class LiveCalendarTests(LiveOutlook fx)
             string? fb;
             try
             {
-                fb = await source.GetFreeBusyAsync(me.Email, today, today.AddDays(days), 30, ct);
+                fb = await source.GetFreeBusyAsync(me.Email, today, today.AddDays(days), 30, WorkPriority.Interactive, ct);
             }
             catch (OutlookNotRespondingException)
             {

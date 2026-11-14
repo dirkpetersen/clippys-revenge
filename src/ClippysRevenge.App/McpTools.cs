@@ -87,7 +87,7 @@ internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker)
     }
 
     private const string FindFreeTimesDescription =
-        "Finds meeting times when everyone is free, from Outlook free/busy. Paste recipients as \"Last, First <email>; ...\" (separate with \";\"). Returns numbered suggestions with start/end (local time, ISO with offset) and a ready-to-show \"text\". People whose free/busy can't be read (e.g. outside the organization) are listed in unknown_attendees and ignored. Nothing is booked. To book suggestion N, pass its start and end to send_meeting_invite.";
+        "Finds meeting times when everyone is free, from Outlook free/busy. Paste recipients as \"Last, First <email>; ...\" (separate with \";\"). Returns \"suggestions\": whole free blocks, numbered, with start/end (local time, ISO with offset), ranked so that times right before or after the calendar owner's meetings come first, then times next to tentative meetings, then the rest, each group in date order (\"adjacent\" says which), plus a ready-to-show \"text\". Also returns \"offers\": up to max_suggestions options of exactly duration_minutes, in the same ranking, and \"offer_text\" with one option per line. When proposing times in an email, paste offer_text as is, without reordering or retyping the times, and set offer_cet=true when the person you are writing to is in Europe. People whose free/busy can't be read (e.g. outside the organization) are listed in unknown_attendees and ignored. Nothing is booked. To book a suggestion or offer, pass its start and end to send_meeting_invite.";
 
 #pragma warning disable IDE1006
     [McpServerTool(Name = "find_free_times", ReadOnly = true, Idempotent = true)]
@@ -96,18 +96,19 @@ internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker)
         FreeTimeFinder finder,
         Settings settings,
         [Description("Attendees as \"Name <email>; Name <email>\". Split on \";\" only.")] string recipients,
-        [Description("Minimum free block length, 1-1440.")] int duration_minutes = 60,
+        [Description("Meeting length in minutes, 1-1440: the minimum length of a suggestion and the exact length of each offer.")] int duration_minutes = 60,
         [Description("Calendar days to search, starting with date_from's day (max 60).")] int days_ahead = 10,
         [Description("Start date or date-time, local time (ISO). Default: now.")] string? date_from = null,
         [Description("Working-hours window, 0-23. Default: tray settings.")] int? earliest_hour = null,
         [Description("Working-hours window, 1-24. Default: tray settings.")] int? latest_hour = null,
         [Description("Skip Saturdays and Sundays. Default: tray settings.")] bool? business_days_only = null,
-        [Description("Also check the calendar owner (you, or the shared mailbox).")] bool include_me = true,
-        [Description("1-20.")] int max_suggestions = 5,
+        [Description("Also check the calendar owner (you, or the shared mailbox). Needed for the ranking next to the owner's meetings.")] bool include_me = true,
+        [Description("1-20. The number of suggestions, and of offers in total.")] int max_suggestions = 5,
         [Description("Empty = your calendar; or the SMTP address of an enabled shared mailbox.")] string? mailbox = null,
+        [Description("Set to true when the person you are writing to is in Europe: each offer also shows the time in CET, and options between 08:00 and 18:00 CET come first, with the others in a second list headed \"Outside European office hours:\".")] bool offer_cet = false,
         CancellationToken cancellationToken = default)
         => finder.FindAsync(new FreeTimeRequest(recipients, duration_minutes, days_ahead, date_from,
-               earliest_hour, latest_hour, business_days_only, include_me, max_suggestions, mailbox),
+               earliest_hour, latest_hour, business_days_only, include_me, max_suggestions, mailbox, offer_cet),
                settings, cancellationToken);
 #pragma warning restore IDE1006
 
