@@ -24,3 +24,21 @@ No existing hard rule is weakened. The proposed addition is in SPEC §18 open qu
 Options: A) Add the bullet as proposed. B) Leave CLAUDE.md as is; the spec and the safety scans cover it.
 Recommendation: A.
 Answer:
+
+## Q3 (task M13.4, not blocking): Whose calendar for meeting times in shared-mailbox AI drafts?
+When Clippy drafts a reply in a shared mailbox and the email asks for a meeting, it needs one "owner" calendar for free/busy and the ranking. See SPEC §21.6 and §18 open question 16.
+Options: A) Your own calendar (you are the one who attends). B) The shared mailbox's calendar (like find_free_times with mailbox). C) Both must be free.
+Recommendation: A (M13 proceeds on it).
+Answer:
+
+## Q4 (task M13.4, not blocking): How soon can the first offered time be in an AI draft?
+Drafts are reviewed and sent later, so very near times may be gone by then. See SPEC §21.6 and §18 open question 17.
+Options: A) Not before the start of the next local day. B) Not before a few hours from now (same-day options possible).
+Recommendation: A (M13 proceeds on it).
+Answer:
+
+## Q5 (task M15.3, not blocking): Where should the "draft invite saved" note go?
+With reply_to_id, Clippy leaves a note in Drafts. If an AI reply draft for the same email already exists, there would be two reply drafts. See SPEC §22.4 and §18 open question 18.
+Options: A) Always a separate reply draft with a highlighted note line. B) Put the note at the top of the existing Clippy draft for that email when there is one, else a new draft.
+Recommendation: A (simpler; M15 proceeds on it).
+Answer:

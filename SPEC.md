@@ -22,11 +22,12 @@ artwork.
 3. It starts at Windows logon and lives in the **system tray**. The tray icon
    shows live activity, and the tray menu is where everything is configured
    (§6).
-4. It **never sends email**. New mail and replies are only ever saved as
-   drafts. The only thing that can send is `send_meeting_invite` (§11.9),
-   and in `Send` mode every invite needs the user's click in a **tray
-   confirmation dialog** (§6.6). Invites can also be set to draft-only or
-   disabled.
+4. It **never sends anything** (from M15, user-approved 2026-11-14).
+   Clippy has no `.Send()` call. Mail drafts only `.Save()`; meetings
+   are saved unsent in the calendar (`create_meeting_draft`, §22) for the
+   user to finish (add the Teams or Zoom link) and send in Outlook.
+   Before M15, `send_meeting_invite` (§11.9) could send after the user's
+   click in a tray confirmation dialog (§6.6); M15 removes that path.
    It also **never deletes or moves email**: no `Delete`, `PermanentDelete`
    or `EmptyDeletedItems` on Outlook items or folders. The only `Move`
    puts a reply draft it just created into Drafts. Reconcile and retention
@@ -50,7 +51,9 @@ artwork.
     only ever becomes a reply draft through the normal reply-draft path
     (rules 4 and 5 hold), or the body of the writing-style skill file
     (§19.6; see §18, open question 11, for the CLAUDE.md wording that
-    still needs the user's approval). The model gets no tools. Clippy **never reads
+    still needs the user's approval). The model gets no tools. Meeting
+    times in AI drafts (§21) are computed by Clippy from free/busy after
+    the model call; the model only says that a meeting was asked for. Clippy **never reads
     Claude Code's stored credentials** (OAuth tokens, `.credentials.json`,
     the keychain/credential store) and never calls any API with them, and
     it **never offers a claude.ai sign-in inside Clippy**. Claude Code signs
@@ -131,6 +134,12 @@ src/ClippysRevenge.Core/        net10.0: no Windows, no COM, testable on Linux/W
     DraftBody.cs            draft HTML fragment: new text + signature body
     CreateDraft.cs          create_draft validation (recipients, mailbox, PathPolicy) and orchestration behind IDraftWriter
     FreeTimeFinder.cs       find_free_times logic over IFreeBusySource (App supplies COM)
+    MeetingTimes.cs         owner calendar tiers, ranking, exact-length options, the offer line format, the
+                            European office-hours split, HTML insertion at [[meeting_times]] (§21)
+    SenderRegion.cs         "is the sender in Europe" from the Date header offset and the domain TLD; the CET zone (§21.4)
+    EmailStats.cs           email_stats grouping and merging (§11.11, M14)
+    IndexQuery.cs           query_index: read-only connection, temp views, authorizer, limits (§11.12, M14)
+    DraftInvites.cs         DraftInvitesStore, the tracked-meeting check, category helpers, note text (§22, M15)
     InviteConfirm.cs        invite dialog view model, external-recipient rule, one-at-a-time confirmation queue
     MeetingInvite.cs        MeetingRequest validation, IMeetingCalendar, InviteTexts, MeetingInviteResult
     MeetingInvites.cs       send_meeting_invite orchestration (§11.9) behind IMeetingCalendar
@@ -321,6 +330,7 @@ worker makes that explicit and prevents cross-thread COM bugs.
 | Writing-style skill (§19.6) | `%USERPROFILE%\.claude\skills\my-email-style\SKILL.md`, plus a copy `%APPDATA%\ClippysRevenge\my-email-style\SKILL.md` and `%APPDATA%\ClippysRevenge\my-email-style\state.json` |
 | Claude CLI working folder (§19.3) | `%LOCALAPPDATA%\ClippysRevenge\ai\` (per-run system-prompt files, deleted after each run) |
 | Update state (§20.7) | `%LOCALAPPDATA%\ClippysRevenge\update-state.json` (installed copy only) |
+| Draft invites (§22.3, M15) | `%APPDATA%\ClippysRevenge\draft-invites.json` (entry ids only) |
 | Staged update downloads (§20.6) | `%LOCALAPPDATA%\Programs\ClippysRevenge\update\` (next to the installed exe) |
 
 The token and the API key are never written to `settings.json` or to any
@@ -378,8 +388,8 @@ They are protected by the user profile's ACLs and by disk encryption
 | `BusinessDaysOnly` | `true` | Live |
 | `TimeZoneLabel` | empty = derived from Windows (`TimeZoneLabels`) | Live |
 | `TentativeIsBusy` | `true` | Live |
-| `MeetingInviteMode` | `Send` (`Send` / `DraftOnly` / `Disabled`) | Live |
-| `InviteConfirmTimeoutSeconds` | `120` (30–900) | Live |
+| `MeetingInviteMode` | `Send` (`Send` / `DraftOnly` / `Disabled`); from M15 `DraftOnly` (`DraftOnly` / `Disabled`), a stored `Send` loads as `DraftOnly` (§22) | Live |
+| `InviteConfirmTimeoutSeconds` | `120` (30–900); removed in M15, ignored when read (§22) | Live |
 | `AttachmentDir` | see 5.1 | Live |
 | `AllowedFolders` | `[AttachmentDir, %USERPROFILE%\Documents]` | Live. `AttachmentDir` is always allowed, even if removed from the list |
 | `StartWithWindows` | `true` | Live: writes or removes the HKCU Run key |
@@ -434,7 +444,7 @@ highest one in this table wins.
 | State | Icon | Tooltip (≤127 chars) |
 |---|---|---|
 | `Error` | red | `Clippy — error: <short reason>` |
-| `AwaitingConfirmation` | amber | `Clippy — waiting for you to confirm a meeting invite` |
+| `AwaitingConfirmation` | amber | `Clippy — waiting for you to confirm a meeting invite` (removed in M15 with the dialog, §22) |
 | `OutlookUnavailable` | grey with `!` | `Clippy — Outlook is not running` |
 | `Backfilling` | blue, animated | `Clippy — indexing Inbox 1,240 / 8,000 (2025-11 → now)` |
 | `Syncing` | blue | `Clippy — pulling new mail (Inbox +12)` |
@@ -502,6 +512,9 @@ AI drafts                                  ▸  (§19.10)
       Show Drafts in Outlook
     ─────────
     AI drafts settings…
+Draft invites (2)                          ▸  (M15, §22.3; hidden when none)
+    Tue 11/18 10:00–11:00  Project kickoff    (click opens the meeting in Outlook)
+    Wed 11/19 14:00–14:30  Budget review
 ────────────────────────────
 Copy "claude mcp add" command
 Copy auth token
@@ -730,6 +743,12 @@ something went wrong: <reason>. Right-click me and pick Activity… for
 details."
 
 ### 6.6 Invite confirmation (`InviteConfirmForm`)
+
+**Removed in M15 (§22).** Clippy no longer sends invites, so there is
+nothing to confirm: `InviteConfirmForm`, the confirmation queue
+(`InviteConfirm.cs` queue parts), `InviteGate` and the
+`AwaitingConfirmation` state are deleted. The text below describes the
+behavior up to M15.
 
 In `Send` mode, `send_meeting_invite` shows this dialog before anything is
 sent.
@@ -1034,6 +1053,10 @@ All calls run through `OutlookWorker`.
   Recipients count as internal (not highlighted) when their
   `AddressEntryUserType` is an Exchange user, distribution list, public
   folder, agent or organization entry.
+  **From M15 (§22.2)** `CreateMeeting` only ever calls `.Save()`: the
+  `InviteDecision` parameter and the `.Send()` branch are removed, the
+  item gets the `Clippy draft invite` category before its first save,
+  and the codebase has no `.Send(` at all.
 
 ## 9. Index (`EmailIndex`, `MailboxIndexes`, Core)
 
@@ -1488,7 +1511,7 @@ AI drafts (§19) use the same path with the `ai` marker.
 Sets `IncludeRecurrences` **before** `Sort` and `Restrict`. Capped at 500
 items. With `mailbox`, it reads that mailbox's calendar.
 
-### 11.8 `find_free_times(recipients, duration_minutes=60, days_ahead=10, date_from?, earliest_hour?, latest_hour?, business_days_only?, include_me=true, max_suggestions=5, mailbox?)`
+### 11.8 `find_free_times(recipients, duration_minutes=60, days_ahead=10, date_from?, earliest_hour?, latest_hour?, business_days_only?, include_me=true, max_suggestions=5, mailbox?, offer_cet=false)`
 
 Unset optional arguments fall back to the tray settings. `days_ahead` is
 capped at 60.
@@ -1502,16 +1525,33 @@ capped at 60.
    `FreeBusy.BusyIntervals`.
 4. `FreeBusy.FreeSlots` combines everyone's busy time and the working
    hours. It keeps free blocks of at least `duration_minutes`.
-5. Format each slot with `SlotFormatter`.
+5. Rank the blocks by the owner's calendar (M13, §21.2): blocks next to
+   the owner's busy meetings first, then blocks next to tentative ones,
+   then the rest, each tier in date order.
+6. Format each slot with `SlotFormatter`.
+7. Build the exact-length offers (§21.3) with the `offer_text` format of
+   §21.5, with the CET part and the European office-hours split when
+   `offer_cet` is true.
 
 Returns:
 
 ```json
-{"suggestions":[{"n":1,"label":"1. Tue 10/15 1-3 PT","start":"2024-10-15T13:00:00-07:00","end":"2024-10-15T15:00:00-07:00"}],
+{"suggestions":[{"n":1,"label":"1. Tue 10/15 1-3 PT","start":"2024-10-15T13:00:00-07:00","end":"2024-10-15T15:00:00-07:00","adjacent":"busy"}],
  "text":"1. Tue 10/15 1-3 PT\n2. Wed 10/16 9:30-11 PT",
+ "offers":[{"n":1,"label":"1. Tue 10/15  13:00–14:00 PT  (22:00–23:00 CET)","start":"2024-10-15T13:00:00-07:00","end":"2024-10-15T14:00:00-07:00","adjacent":"busy","list":"main"}],
+ "offer_text":"1. Tue 10/15  13:00–14:00 PT  (22:00–23:00 CET)\n2. …",
  "unknown_attendees":["someone@external.org"],
  "attendees":[{"name":"Example, Bob","email":"bob@example.edu"}]}
 ```
+
+`suggestions` are whole free blocks, as before M13, now in ranked order
+(`n` and the label number follow that order). `adjacent` is `busy`,
+`tentative` or `none` (§21.2). `offers` are options of exactly
+`duration_minutes` (§21.3), at most `max_suggestions` in total; `list` is
+`main` or `outside_hours` (§21.4). `offer_text` is the ready-to-paste
+text of §21.5 (`""` when there are no offers). The tool description says
+to paste `offer_text` as is when proposing times in an email, and to set
+`offer_cet=true` when the person written to is in Europe.
 
 `unknown_attendees` are people with no readable free/busy, such as people
 outside the Exchange org. They are left out of the availability check and
@@ -1533,12 +1573,21 @@ Details (M8.2):
 - An attendee is unknown when free/busy is null, empty, shorter than the
   range, or has an invalid code. `attendees` lists only the known
   attendees.
-- Suggestions are the first `max_suggestions` whole free blocks.
+- Suggestions are the first `max_suggestions` whole free blocks in
+  ranked order (§21.2; before M13 they were in date order).
   `start`/`end` are `yyyy-MM-ddTHH:mm:sszzz`.
+- The tiers come from the owner's free/busy string, which is fetched
+  anyway; no extra Outlook call. With `include_me=false`, or when the
+  owner's free/busy is unknown, every block and offer is `none`.
+- Offers use the same free blocks, the same `now` cut-off and no extra
+  lead time (unlike AI drafts, §21.6).
 - With no suggestions, `text` explains why: no readable free/busy, or no
   free block between the first and last day searched.
 
 ### 11.9 `send_meeting_invite(recipients, subject, start, end, body?, location?, teams=false, mailbox?)` — **the only sending tool**
+
+**Replaced in M15** by `create_meeting_draft` (§22.1), which never sends.
+The text below describes the tool up to M15.
 
 What it does depends on `MeetingInviteMode`:
 
@@ -1593,6 +1642,199 @@ Outlook is running, and the current `ActivityHub` state.
 while it is unavailable, and `null` before the first attach attempt. This is for
 questions like "why didn't search find X" and for checking backfill
 progress.
+
+### 11.11 `email_stats(group_by, top=10, order="count", include_cc=true, <all search_emails filters incl. query and mailbox>)` (M14)
+
+Counts emails in the index, grouped, so questions like "top 10 people
+who emailed me last year" take one call instead of paging
+`search_emails`. It returns **counts and names only, never mail text**.
+`ReadOnly = true`, `Idempotent = true`.
+
+- **Filters**: exactly the `search_emails` filters (§11.1: `query`,
+  `sender`, `recipient`, `subject`, `date_from`, `date_to`, `folder`,
+  `has_attachment`, `attachment_name`, `attachment_ext`, `unread`,
+  `mailbox` incl. `all`), mapped by the same `SearchArgs.ToFilter` and
+  applied by the same WHERE-clause builder as `EmailIndex.Search` (one
+  shared builder; no second copy). No `limit`/`offset`.
+- **`group_by`** (required): `sender`, `sender_domain`, `recipient`,
+  `recipient_domain`, `folder`, `month`, `week`, `weekday`, `hour`.
+  Anything else → `group_by must be one of sender, sender_domain, recipient, recipient_domain, folder, month, week, weekday, hour.`
+- **Keys** (`EmailStats`, Core):
+  - `sender`: the lower-cased, trimmed `sender_email`; when it is empty,
+    `(unknown)`. `name`: the `sender_name` of the newest email in the
+    group.
+  - `sender_domain`: the part after the last `@` of the sender address,
+    lower-cased; `(unknown)` without one.
+  - `recipient`: each email's To entries, plus CC when `include_cc`
+    (default true), split on `;` and parsed one entry at a time like
+    `Recipients.Parse` (an entry without a valid address is skipped).
+    Each address counts at most once per email. Lower-cased. `name`:
+    the display name seen in the newest email, `""` when none.
+  - `recipient_domain`: as `recipient`, by domain; one count per domain
+    per email.
+  - `folder`: the stored folder path.
+  - `month` `yyyy-MM`, `week` ISO `yyyy-Www` (`ISOWeek`), `weekday`
+    `Mon`…`Sun`, `hour` `00`…`23`, all from `event_time` in the local
+    Windows time zone (injected `TimeZoneInfo`).
+- **Order**: `order="count"` (default): count descending, then key
+  ascending (ordinal). `order="key"`: key ascending (for month, week,
+  hour: chronological; weekday `Mon`→`Sun`). Anything else is an error.
+- **`top`**: 1–200 (clamped), default 10.
+- **`mailbox="all"`**: each enabled mailbox is counted and the groups
+  are merged by key (counts added, earliest `first`, latest `last`,
+  `name` from the newest). An email in two mailboxes counts twice.
+- **Result**:
+  ```json
+  {"group_by":"sender","mailbox":"","total":5321,"distinct":812,"truncated":true,
+   "rows":[{"key":"alice@example.edu","name":"Example, Alice","count":143,
+            "first":"2025-11-20T09:12:00-08:00","last":"2026-11-13T16:40:00-08:00"}]}
+  ```
+  `total` is the number of matching emails (not recipient entries);
+  `distinct` the number of groups; `truncated` is `distinct > top`.
+  `name` is present only for `sender` and `recipient`. `first`/`last`
+  use the `find_free_times` ISO format with the local offset.
+- **How it runs**: `sender`, `sender_domain` and `folder` are one
+  `GROUP BY` query in SQLite (`count(*)`, `min`/`max(event_time)`; the
+  domain via `substr`/`instr` on the last `@`, done in C# when SQLite
+  can't do "last `@`" simply). The other groupings stream only the
+  needed columns (`event_time`, plus `to_addrs`/`cc_addrs` and
+  `sender_name` where used) of the matching rows and aggregate in C#.
+  Nothing is cached. Performance targets in §17.
+- No text is logged; the tool event is the tool name, as for every tool.
+
+### 11.12 `query_index(sql, mailbox?, max_rows=200)` (M14)
+
+Runs **one read-only `SELECT`** over documented views of the index,
+including full-text search. For questions the other tools can't answer
+in one call. `ReadOnly = true`, `Idempotent = true`. It exposes the
+same data that `search_emails` and `get_message` already expose, and
+nothing else: no sync state, settings, AI decisions or internal ids
+other than the email `id` that `get_message` takes. Attachment content
+is not in the index, so it can't be queried.
+
+**Views** (created per connection, §11.12 "Connection"):
+
+| View | Columns |
+|---|---|
+| `mail` | `id` (text; the id `get_message` takes), `doc` (integer; join key for `mail_fts` and `mail_attachments`), `mailbox` (`""` = own, else the shared SMTP), `folder`, `date` (local `yyyy-MM-ddTHH:mm:ss`), `unix_time` (integer, UTC seconds), `sender_name`, `sender_email`, `to_addrs`, `cc_addrs` (`Name <smtp>; …`), `subject`, `topic` (conversation topic), `body` (plain text), `unread` (0/1), `has_attachments` (0/1, non-inline), `attachment_names` (newline-joined) |
+| `mail_fts` | the FTS5 table: hidden column `mail_fts` (for `MATCH`, `snippet(mail_fts, …)`, `highlight(mail_fts, …)`, `bm25(mail_fts)`), `rank`, `doc`, `subject`, `body`, `sender_name`, `sender_email`, `to_addrs`, `cc_addrs`, `attachment_names` |
+| `mail_attachments` | `doc`, `position`, `filename`, `size`, `is_inline` (0/1) |
+
+`date` is computed in SQL with `strftime('%Y-%m-%dT%H:%M:%S', event_time, 'unixepoch', 'localtime')`
+(SQLite's local time, which is the Windows local time zone in the app).
+`mail_fts` must support `MATCH`, `snippet()`, `highlight()`, `bm25()` and
+`ORDER BY rank` through the view; tests prove it. If the coder finds
+that FTS5 can't be used through a view, the brief falls back to
+exposing the FTS table under its real name with the same columns, and
+this section is updated.
+
+**Connection** (`IndexQuery`, Core; one per mailbox per call):
+1. A new `SqliteConnection` to the mailbox's database with
+   `Mode=ReadOnly`, `Pooling=False` (so the authorizer and pragmas never
+   reach a pooled connection) and `busy_timeout=5000`.
+2. Create the three views as `TEMP` views (`CREATE TEMP VIEW mail AS
+   SELECT … FROM main.emails`, etc.). `mailbox` is a SQL string literal
+   of the normalized key (single quotes doubled). Temp views live only
+   in this connection, so the database file and its schema version stay
+   unchanged and older app versions can still open it. They must be
+   created **before** step 3, because `query_only` also blocks the temp
+   schema.
+3. `PRAGMA query_only = ON`; `sqlite3_limit(SQLITE_LIMIT_ATTACHED, 0)`;
+   `SQLITE_LIMIT_SQL_LENGTH` 20,000.
+4. Install the authorizer (`SQLitePCL.raw.sqlite3_set_authorizer` on
+   `connection.Handle`, available in SQLitePCLRaw.core 2.1.13, which
+   Microsoft.Data.Sqlite 10.0.15 references; verified 2026-11-14) and a
+   progress handler (`sqlite3_progress_handler`, every 1,000 VM steps)
+   that stops the statement after the deadline or on cancellation.
+   Extension loading stays off (`load_extension` is never enabled).
+
+**Authorizer** (pure decision function `IndexQueryAuthorizer.Decide(action, arg1, arg2, dbName, viewName)`, unit-tested):
+- Allowed actions: `SQLITE_SELECT`, `SQLITE_READ` (below),
+  `SQLITE_FUNCTION` (below) and `SQLITE_RECURSIVE`. Everything else is
+  denied: `PRAGMA`, `ATTACH`, `DETACH`, every `CREATE_*`/`DROP_*`,
+  `INSERT`, `UPDATE`, `DELETE`, `TRANSACTION`, `SAVEPOINT`, `ANALYZE`,
+  `ALTER_TABLE`, `REINDEX`, `CREATE_VTABLE`, `DROP_VTABLE`, and unknown
+  codes.
+- `SQLITE_READ` is allowed when the access comes through one of the
+  three views (the "view" argument is `mail`, `mail_fts` or
+  `mail_attachments`), or directly on: the FTS5 shadow tables
+  (`emails_fts_data`, `emails_fts_idx`, `emails_fts_config`,
+  `emails_fts_docsize`) and `emails_fts` itself, and `emails` columns
+  `id`, `subject`, `body`, `sender_name`, `sender_email`, `to_addrs`,
+  `cc_addrs`, `attachment_names` (FTS5's own statements on the
+  external-content table read these; they are exposed by the views
+  anyway). Also `json_each` and `json_tree`. Every other table or column
+  is denied, including `sync_state`, `meta`, `ai_decisions`,
+  `sqlite_master`/`sqlite_schema`, `sqlite_temp_master`, `pragma_*`
+  table-valued functions and `emails.entry_id`/`store_id`/
+  `internet_message_id`/`in_reply_to`/`clippy_marker` outside the views.
+  If a test shows FTS5 needs one more shadow read, the brief adds
+  exactly that and this list is updated.
+- `SQLITE_FUNCTION` is allowed except `load_extension`, `fts3_tokenizer`,
+  `readfile`, `writefile`, `edit` and any name starting with `sqlite_`
+  other than `sqlite_version`.
+- The first denied action is remembered for the error message.
+
+**Statement checks**: `sql` is required, non-blank, at most 20,000
+characters. It is prepared with `sqlite3_prepare_v2`; the tail must
+prepare to no statement (only whitespace, `;` and comments), else
+`query_index runs exactly one SELECT statement. Remove everything after the first statement.`
+The statement must be `sqlite3_stmt_readonly` and start (after
+comments) with `SELECT`, `WITH` or `VALUES`. No parameters are bound
+(`?` placeholders → error `query_index takes no parameters; write the values into the SQL.`).
+
+**Limits**:
+- Wall clock 10 s for the whole call (all mailboxes together) →
+  `The query ran longer than 10 seconds and was stopped. Add a date range, a folder or a LIMIT, or use email_stats for counts.`
+- `max_rows` 1–1000 (clamped), default 200. Stepping stops after
+  `max_rows` rows; `truncated: true`, `truncated_reason: "max_rows"`.
+- At most 100 columns (`query_index returns at most 100 columns.`).
+- Text cells longer than 2,000 characters are cut to 2,000 + `…` and
+  counted in `truncated_cells`. BLOBs become `"[blob, <n> bytes]"`.
+- The response stops at 1,000,000 characters of cell text in total
+  (`truncated_reason: "size"`).
+
+**`mailbox`**: empty (own), an address, or `all`. With `all` the query
+runs once per enabled mailbox (own first, then shared in settings
+order), the result gets a leading `mailbox` column, and rows are
+concatenated up to `max_rows`. Aggregates are therefore per mailbox;
+the description says so and points to `email_stats` for merged counts.
+Mailbox errors are the §11 ones.
+
+**Result**:
+```json
+{"columns":["sender_email","n"],"rows":[["alice@example.edu",143]],"row_count":1,
+ "truncated":false,"truncated_cells":0,"elapsed_ms":42}
+```
+Integers as numbers, reals as numbers, NULL as `null`.
+
+**Errors** (`McpException`):
+- SQLite errors: `SQL error: <SQLite's message>. query_index reads the views mail, mail_fts and mail_attachments (see the tool description).`
+- A denied action: `query_index only reads the views mail, mail_fts and mail_attachments with one SELECT. Not allowed here: <what>.`
+  where `<what>` is e.g. `PRAGMA`, `ATTACH`, `writing`, `table ai_decisions`,
+  `column emails.entry_id` or `function load_extension`.
+- A database that can't be opened (not indexed yet, being rebuilt):
+  `The index for <mailbox> isn't available right now. Check index_status.`
+
+**Logging and privacy**: the SQL text, cell values and SQLite error
+messages are never logged (like search text, §5.1). Debug log: rows,
+columns, mailboxes, elapsed ms, truncation. The tool event is the tool
+name. The `McpException` message may contain SQLite's error text (it
+goes back to the model, not to the log).
+
+**Tool description** (exact text in the M14 brief) lists the three
+views with their columns, says "one read-only SELECT, 10 s, at most
+1000 rows, long text cut at 2,000 characters", says that with
+`mailbox="all"` each mailbox is queried separately, and gives these
+examples:
+- Top senders last year:
+  `SELECT sender_email, count(*) AS n FROM mail WHERE folder = 'Inbox' AND unix_time >= strftime('%s','now','-1 year') GROUP BY sender_email ORDER BY n DESC LIMIT 10`
+- Mail per month:
+  `SELECT substr(date,1,7) AS month, count(*) AS n FROM mail GROUP BY month ORDER BY month`
+- Full text with snippets:
+  `SELECT m.id, m.date, m.subject, snippet(mail_fts, 1, '**', '**', '…', 12) AS hit FROM mail_fts JOIN mail m ON m.doc = mail_fts.doc WHERE mail_fts MATCH 'budget AND 2026' ORDER BY rank LIMIT 20`
+- PDFs by sender:
+  `SELECT m.sender_email, count(*) AS n FROM mail_attachments a JOIN mail m ON m.doc = a.doc WHERE lower(a.filename) LIKE '%.pdf' GROUP BY 1 ORDER BY n DESC LIMIT 20`
 
 ## 12. Core helpers
 
@@ -1702,7 +1944,7 @@ progress.
     created if missing; `IOException` if the path is an existing file).
     Only policy refusals are `PathNotAllowedException`, so only they record
     a `Blocked` event.
-- `InviteGate.Decide(mode, userChoice?, timedOut)` → `Send`,
+- (Removed in M15, §22.) `InviteGate.Decide(mode, userChoice?, timedOut)` → `Send`,
   `SaveDraft(reason)`, `Cancel` or `Refuse(reason)`. It is the only place
   that maps these inputs, so it is fully unit-tested. The most restrictive
   input wins:
@@ -1833,9 +2075,12 @@ progress.
 | `InviteGate` | every mode × choice × timeout combination |
 | `BearerAuth` | missing, wrong or correct token; `Origin` header → 401; live token swap |
 | `Settings` | defaults, validation bounds, shared mailbox entries, `AttachmentDir` always allowed |
-| Safety | A source scan of `src/` finds exactly one `.Send(`, in `OutlookCalendar.CreateMeeting`, and no `new Application(`, `Activator.CreateInstance` or `CoCreateInstance` for Outlook. `Process.Start` appears only in `OutlookLauncher.cs`, `Tray/TrayApp.cs` (Open data folder, once), `ClaudeCli.cs` and `UpdateRestarter.cs` (once, `UseShellExecute = false`, no arguments, only `UpdatePaths.ExePath`; §20.11). `.Kill(` appears only in `UpdateRestarter.cs`. The update hosts (`api.github.com`, `githubusercontent.com`, `/releases/download/`) appear as literals only in `UpdateRelease.cs`, and `new HttpClient(` only in `ConnectionTester.cs`, `AnthropicApiModel.cs` and `UpdateClient.cs`. `UseShellExecute = true` appears only in `TrayApp.cs` and `OutlookLauncher.cs`. In the App project, `Delete`/`PermanentDelete`/`EmptyDeletedItems` and `.Move(` calls are allowed only on `File`/`Directory` (plus the one reply-draft `.Move(` into Drafts). AI additions (§19.12): no `.Send(` or `.Display(` in the AI files, and no `.Move(`/`Delete(` calls there except on `File` or `Directory`; Claude credentials never referenced; `--bare` and `login` never passed to the CLI; `UseShellExecute = true` never used for the CLI |
+| Safety | A source scan of `src/` finds exactly one `.Send(`, in `OutlookCalendar.CreateMeeting` (from M15: **no** `.Send(` at all, and `.Display(` only once, in `OutlookCalendar.cs`, §22.3, §22.7), and no `new Application(`, `Activator.CreateInstance` or `CoCreateInstance` for Outlook. `Process.Start` appears only in `OutlookLauncher.cs`, `Tray/TrayApp.cs` (Open data folder, once), `ClaudeCli.cs` and `UpdateRestarter.cs` (once, `UseShellExecute = false`, no arguments, only `UpdatePaths.ExePath`; §20.11). `.Kill(` appears only in `UpdateRestarter.cs`. The update hosts (`api.github.com`, `githubusercontent.com`, `/releases/download/`) appear as literals only in `UpdateRelease.cs`, and `new HttpClient(` only in `ConnectionTester.cs`, `AnthropicApiModel.cs` and `UpdateClient.cs`. `UseShellExecute = true` appears only in `TrayApp.cs` and `OutlookLauncher.cs`. In the App project, `Delete`/`PermanentDelete`/`EmptyDeletedItems` and `.Move(` calls are allowed only on `File`/`Directory` (plus the one reply-draft `.Move(` into Drafts). AI additions (§19.12): no `.Send(` or `.Display(` in the AI files, and no `.Move(`/`Delete(` calls there except on `File` or `Directory`; Claude credentials never referenced; `--bare` and `login` never passed to the CLI; `UseShellExecute = true` never used for the CLI |
 | AI drafting (§19.12) | own-text extraction, redaction, header parsing, HTML sanitizer, sampling, rules, prompt rendering, JSON parsing and validation, CLI args and output parsing (with a fake `claude`), daily limit and backoff with a fake clock, skill edit detection |
 | Auto-update (§20) | SemVer parse and precedence, informational-version parsing, release JSON rules, `SHA256SUMS.txt` parsing, due times with a fake clock, installed-copy check, state file round trip and repair, About texts; the HTTP client with a fake handler (headers, redirect allow-list, caps, hash and size checks, stalls); the swap, handover, rollback and start-up decisions in temp folders with a fake process; renaming a running exe (Windows-only) |
+| Meeting times (§21, M13) | owner tiers and adjacency, exact-length options, the Europe split (all in hours, mixed, none), line format, `SenderRegion` decision table, HTML insertion, `meeting` parsing, drafting with a fake free/busy source, ranked `find_free_times`, the skill's fixed section, hash and refresh (§21.9) |
+| Index statistics and SQL (§11.11, §11.12, M14) | every `group_by` with filters and `mailbox=all` merging, recipient splitting with and without CC, ordering and `top`; `query_index` views, FTS `MATCH`/`snippet`/`bm25`/`rank` through the view, the authorizer decision table, one-statement and read-only checks, timeout, row/cell/size caps, error texts, nothing written to the file (hash before/after), no SQL in logs |
+| Draft-only invites (§22, M15) | settings migration, `create_meeting_draft` orchestration and texts, the tracked-meeting check (sent, unsent, category gone, deleted, open in an Inspector), category helpers, store, note text, attention badge (§22.7) |
 
 Live tests (`[Trait("live","outlook")]`, opt-in, never in CI) cover: a
 draft round-trip, the reply-draft subject and HTML body, saving an
@@ -1887,6 +2132,15 @@ marker on tool drafts. Live Claude tests carry `[Trait("live","claude")]`
 - Initial backfill of 12 months: at least 50 emails/s, with tool calls
   staying responsive during it (interactive priority).
 - `find_free_times` with 8 attendees over 10 business days under 5 s.
+  Ranking and offers (M13) add under 50 ms.
+- `email_stats` (M14) over 100k indexed emails in one mailbox, no
+  filters: `sender`, `sender_domain`, `folder` and the time groupings
+  under 1 s; `recipient`/`recipient_domain` under 3 s (they parse the
+  To/CC text of every matching row in C#). A benchmark test with a
+  synthetic 100k-row database checks this (`[PerfFact]`, runs only with
+  `CLIPPY_PERF=1`, like the M2 benchmark in `PerfBenchmarkTests.cs`).
+- `query_index` (M14): bounded by its 10 s limit; opening the read-only
+  connection and creating the temp views under 20 ms.
 - Tray icon updates within 250 ms of a state change.
 - The DB is not compressed. It holds text only, about tens of MB per year
   of mail.
@@ -1909,7 +2163,8 @@ Decided (2026-11-12):
   tray or Settings. Each has its own database, folders and retention.
 - One auth token in v1. Named per-client tokens are deferred.
 - Time zones: local Windows time only. Other attendees' zones are out of
-  scope.
+  scope. (M13 adds one exception: offered meeting times also show CET
+  for senders detected as European, §21.4.)
 - External attendees: reported in `unknown_attendees` and ignored for
   availability.
 - New Outlook (`olk.exe`) has no COM API and is not supported.
@@ -2095,6 +2350,88 @@ window. Design choices made by the spec owner:
   marked latest, has the two assets and writes `<hex> *ClippysRevenge.exe`,
   and that downloads redirect to `release-assets.githubusercontent.com`.
 
+Decided (2026-11-14, meeting times, M13; §21, §11.8, §19). The user
+approved the feature and these points: ranking by adjacency to the
+owner's busy, then tentative meetings, chronological within a tier, for
+`find_free_times` and AI drafts; the model only flags a meeting request
+(no tools, no times), Clippy computes and inserts the options; CET shown
+for European senders, always labelled `CET`; the one-line format of
+§21.5; in-hours options (08:00–18:00 CET) preferred, the rest in a
+second list; the skill always carries a fixed, Clippy-written
+meeting-times section. Choices made by the spec owner:
+
+- Adjacency means 0–15 minutes between the range and an owner busy or
+  tentative run on the same day; with 30-minute free/busy that is
+  "touching". Out of office, working elsewhere and free don't count.
+- `find_free_times` keeps whole free blocks in `suggestions` (now
+  ranked, with `adjacent`) and adds exact-length `offers` and
+  `offer_text` in the draft format, plus `offer_cet`, so interactive
+  Claude Code gets the same deterministic text the drafts use.
+- Draft options start no earlier than the next local day, 10 days by
+  default, at most 10 other attendees (sender, plus To/CC on reply-all),
+  N = `MeetingTimeOptions` (5).
+- Europe detection: the decision table of §21.4 (Date offset first, a
+  non-European country TLD overrides, TLD alone without an offset).
+- The placeholder is `[[meeting_times]]`, replaced after sanitizing;
+  without it the block goes before the last paragraph. Nothing to offer
+  → a highlighted placeholder; the draft is still saved.
+- The skill section is fixed text between version markers, covered by
+  the hash. Unedited existing skills get it without a model call
+  (`RefreshMeetingSection`), edited ones only on Regenerate → Replace.
+  The drafting prompt drops the section (it names a tool the drafting
+  model doesn't have). The user-voice part comes from an optional
+  `meeting_phrasing` field of the style call.
+- Two new AI settings: `MeetingTimes` (on) and `MeetingTimeOptions` (5).
+
+Decided (2026-11-14, index statistics and read-only SQL, M14; §11.11,
+§11.12). The user asked for counts in one call and for raw read-only SQL
+including full-text search. Choices made by the spec owner:
+
+- `email_stats` takes the `search_emails` filters through the same
+  builder, returns counts and names only, merges `mailbox=all` by key,
+  counts To + CC for recipients by default (`include_cc`), and has
+  `order` (`count` or `key`).
+- `query_index` reads three **temp views** (`mail`, `mail_fts`,
+  `mail_attachments`) created per connection before `query_only` is
+  turned on: no schema change, nothing written to the file, and the
+  views stay stable when internal tables change. `mail_attachments`
+  isn't called `attachments`, so it doesn't shadow the real table.
+- Layers: `Mode=ReadOnly`, `Pooling=False`, `query_only`, one statement,
+  `sqlite3_stmt_readonly`, an authorizer allow-list (SQLitePCLRaw.core
+  2.1.13 has `sqlite3_set_authorizer`, `sqlite3_progress_handler` and
+  `sqlite3_limit`, checked 2026-11-14), a 10 s progress-handler deadline,
+  row, cell and size caps.
+- `mailbox=all` runs per mailbox and adds a `mailbox` column;
+  cross-mailbox aggregates are `email_stats`' job.
+- It exposes only what `search_emails`/`get_message` already expose; the
+  manual's Security page says so. The SQL text is never logged.
+
+Decided (2026-11-14, draft-only invites, M15; §22, §1.4). The user
+approved removing every send path and the new hard-rule wording
+"**Never send anything.** Clippy has no `.Send()` call. Mail drafts only
+`.Save()`; meetings are saved unsent in the calendar for the user to
+finish and send in Outlook." Also approved: the `Clippy draft invite`
+category, removed again once the meeting is sent; the **Draft invites**
+tray list; the note in Drafts with `reply_to_id`; the attention badge on
+the tray icon. Choices made by the spec owner:
+
+- `send_meeting_invite` is renamed `create_meeting_draft`; `teams` is
+  dropped and every result says the user adds the link in Outlook.
+  `MeetingInviteMode` keeps `DraftOnly` (default) and `Disabled`; a
+  stored `Send` loads as `DraftOnly`.
+- The category is added to the own master list once, orange, only when
+  missing; never recoloured or removed from the list.
+- "Sent" is `PidLidFInvited` true (or no longer a meeting, or
+  cancelled). Removing the category is a Categories-only `.Save()`,
+  skipped while the meeting is open in an Inspector (§22.2).
+- Tracking is a small JSON file of entry ids, checked after sync cycles
+  (at most every 5 min, 50 items) and when the tray menu opens.
+- The tray's `.Display()` on a tracked meeting is the one `.Display(`
+  in the codebase (Outlook is already running; no launch).
+- The badge keeps the last known count while Outlook is unavailable.
+- §18 open question 4 (Teams) is settled by this: no Teams automation,
+  the user adds the link.
+
 Open:
 
 1. **Read state and `LastModificationTime`**: if marking a message read
@@ -2190,6 +2527,18 @@ Open:
     in SPEC §20.3, installs only a newer full release whose SHA-256
     matches `SHA256SUMS.txt`, and the only program it starts is the
     installed `ClippysRevenge.exe`. A test scans the source for this."
+16. **Whose calendar for meeting times in shared-mailbox drafts (M13).**
+    Proposed default: the user's own calendar (the person who will
+    attend), as for own-mailbox drafts. Alternatives: the shared
+    mailbox's calendar (as `find_free_times` with `mailbox`), or both.
+17. **Earliest offered time in AI drafts (M13).** Proposed default: the
+    start of the next local day, because the draft is sent later and the
+    other person needs notice. Alternative: a few hours from now (same-day
+    options).
+18. **Where the invite note goes (M15).** Proposed default: a separate
+    reply draft with a highlighted note line, even when an AI draft for
+    the same email exists. Alternative: put the note at the top of an
+    existing Clippy draft for that email when there is one.
 
 ## 19. AI drafting
 
@@ -2210,10 +2559,14 @@ so it is opt-in (§1.10).
    messages of the same thread from the local index (own text only,
    attachment **names** only). It returns JSON: reply or not, confidence,
    and an HTML body.
-4. The body is sanitized (§19.8) and saved as a reply draft through the
+4. When the email asks for a meeting, Clippy computes free times from
+   Outlook free/busy and inserts them at the model's `[[meeting_times]]`
+   placeholder (§21.6). This happens after the model call; the times are
+   never sent to Claude.
+5. The body is sanitized (§19.8) and saved as a reply draft through the
    normal reply-draft path (§8, §11.6): `Re:: ` subject, `.Save()` only,
    in the mailbox's Drafts folder, marked `ClippyDraft = ai` (§19.4).
-5. The tray reports "N AI drafts ready" (§19.10).
+6. The tray reports "N AI drafts ready" (§19.10).
 
 What leaves the PC, and only while the feature is on: to Anthropic (via
 Claude Code or the API), the email being answered, its thread excerpts,
@@ -2243,6 +2596,8 @@ sends.
 | `TimeoutSeconds` | `180` | 30–900, per drafting call |
 | `ClaudeCliPath` | `""` | Empty = find it (§19.3); else a fully qualified local path to `claude.exe` or to an npm `cli.js` |
 | `AutoRegenerateStyle` | `true` | Weekly style refresh (§19.6) |
+| `MeetingTimes` | `true` | Offer free times in drafts that answer a meeting request (§21.6, M13) |
+| `MeetingTimeOptions` | `5` | 1–10 options per draft, both lists together (§21.4) |
 
 Validation errors use the §5.2 (field, message) form. `Enabled = true`
 without consent gives `Turn on AI drafts from the tray or Settings so
@@ -2508,8 +2863,10 @@ API backend details (M11.5):
   CLI's system-prompt files, the skill's temp files) are not Outlook
   calls and are allowed (§19.12).
 - Model output is untrusted: only `needs_reply`, `confidence`,
-  `reply_all` and `body_html` are used, after validation (§19.7) and
-  sanitizing (§19.8). The model gets no tools (`--tools ""`, no MCP, no
+  `reply_all`, `body_html` and the `meeting` hints (a boolean, a
+  duration, two dates and a short heading, §21.6) are used, after
+  validation (§19.7) and sanitizing (§19.8). The model never computes or
+  types meeting times; Clippy does, after the call. The model gets no tools (`--tools ""`, no MCP, no
   tool definitions in the API call), so a prompt-injected email can at
   worst produce a bad draft that the user sees before sending.
 - Prompts wrap mail in tagged blocks and say that their content is data,
@@ -2612,16 +2969,23 @@ it is redacted again with `MailText.Redact`. Clippy writes the file:
 ```
 ---
 name: my-email-style
-description: "<Display name>'s email writing style: greetings, sign-offs, tone, length and phrasing by audience. Use when drafting or replying to email as <Display name>."
+description: "<Display name>'s email writing style: greetings, sign-offs, tone, length and phrasing by audience, and how to offer meeting times. Use when drafting or replying to email as <Display name>."
 ---
 <!-- Generated by Clippy's Revenge on <yyyy-MM-dd> from <n> sent emails. You can edit this file; Clippy won't replace your edits without asking. -->
 
 <body_markdown>
+
+<the fixed "Offering meeting times" section of §21.7>
 ```
 
 (`<Display name>` is the Outlook current user's name, with `"` and `\`
 removed, control characters turned into spaces, whitespace collapsed,
-and cut to 80 characters; a blank name becomes `the user`.)
+and cut to 80 characters; a blank name becomes `the user`.) Since M13
+the description mentions meeting times and the file always ends with
+the Clippy-owned meeting-times section (§21.7), written from fixed text
+on every generation and regeneration, never by the model. The style
+schema since M13 also has an optional `meeting_phrasing` string (§21.7);
+`body_markdown` stays the only required field.
 
 The system prompt and the user prompt
 (`<context>today/samples</context><samples>…</samples>`) are pinned in
@@ -2697,6 +3061,10 @@ line is used); an unreadable user file falls through to the app copy.
 The body is returned raw (`StyleSkill.ReadBodyForPrompt()` /
 `StyleSkillFiles.ReadBodyForPrompt()`, never throws, never waits on a
 running generation); `DraftPrompt` does the wrapping and escaping.
+Since M13 the body for the prompt leaves out every complete
+meeting-times marker block (§21.7), because that section is written for
+interactive Claude Code (it names the `find_free_times` tool) and the
+drafting prompt has its own meeting rules (§21.6).
 
 **Seam (`IStyleGuideSource`, M11.7).** `DraftWorker` depends only on
 
@@ -2822,6 +3190,13 @@ Rule details (M11.7):
      `AI drafts: a Claude call failed (<kind>). I'll try again in <n> min.`
      A failed call ends the pass at once. `Failed(Cancelled)` caused by
      Clippy's own shutdown ends the pass and writes no row.
+6a. Meeting times (M13, §21.6): when `MeetingTimes` is on and the reply
+   asks for a meeting (or the body has the `[[meeting_times]]`
+   placeholder), read free/busy and insert the options into the
+   sanitized body. `OutlookUnavailableException` here is handled like
+   Outlook going away in step 7 (`failed` row, the pass ends); any other
+   error gives the "couldn't read your calendar" placeholder and the
+   draft is still created.
 7. Before creating the draft, the COM checks `gone`, `replied` (last
    verb) and `draft_exists` run again; a match → `skipped`. Outlook going
    away (or another error) after a model call writes a `failed` row, so
@@ -2862,8 +3237,23 @@ as "no reply needed"; the duration is invariant `0.#` seconds, e.g.
   "confidence":{"type":"number","minimum":0,"maximum":1},
   "reply_all":{"type":"boolean"},
   "body_html":{"type":"string"},
-  "reason":{"type":"string","maxLength":200}}}
+  "reason":{"type":"string","maxLength":200},
+  "meeting":{"type":"object","additionalProperties":false,"required":["requested"],
+   "properties":{
+    "requested":{"type":"boolean"},
+    "duration_minutes":{"type":"integer","minimum":15,"maximum":480},
+    "earliest_date":{"type":"string","maxLength":10},
+    "latest_date":{"type":"string","maxLength":10},
+    "outside_hours_heading":{"type":"string","maxLength":80}}}}}
 ```
+
+`meeting` was added in M13 (§21.6). It is optional and never makes a
+reply invalid: a `meeting` that isn't an object, or whose `requested`
+isn't `true`, means "no meeting asked"; a bad `duration_minutes`
+(not an integer in 15–480) means 60; a date that isn't exactly
+`yyyy-MM-dd` (invariant) is ignored; a bad heading uses the default
+(§21.4). `DraftReply` carries the result as `Meeting` (null when not
+asked).
 
 `DraftReply.Parse(JsonElement)` checks it again in Core (the CLI's
 validation isn't trusted): wrong types, `confidence` outside 0–1 or not
@@ -2896,6 +3286,20 @@ constant, exact text pinned in the M11.7 brief) says, at least:
 - `reply_all` only when the others on the email need the answer.
 - `confidence`: how sure you are that a reply is needed and that this
   draft is one the user would send with few edits.
+- Since M13, while `MeetingTimes` is on (exact text in the M13 brief):
+  when the email asks for or suggests a meeting or call with the user
+  and the reply offers to meet, set `meeting.requested`, write a short
+  lead-in sentence and then `[[meeting_times]]` alone in its own
+  paragraph; Clippy replaces it with free times from the calendar.
+  Never write times, dates or availability yourself. Set
+  `duration_minutes` when the email states a length, and
+  `earliest_date`/`latest_date` when it names a time frame (relative to
+  `today` in `<context>`). Set `outside_hours_heading` to
+  "Outside European office hours:" in the reply's language. When the
+  sender proposes a specific time, don't accept or decline it: write a
+  placeholder like `[[check whether Tue 3 pm works]]` and still offer
+  times. The "never invent" rule stays; `[[meeting_times]]` is the one
+  placeholder Clippy fills itself.
 
 The system prompt ends with `<writing_style>…</writing_style>` (§19.6).
 The user prompt (stdin) is:
@@ -2987,7 +3391,10 @@ Manual path details (M11.7):
 - Then `[[…]]` placeholders (no `]` or newline inside, at most 200
   characters) are wrapped in
   `<span style="background-color:#ffff00">[[…]]</span>`, added by Clippy
-  after sanitizing, so the user sees what to fill in.
+  after sanitizing, so the user sees what to fill in. `[[meeting_times]]`
+  is highlighted like any other placeholder by `Sanitize`; the M13
+  insertion (§21.6) runs on the sanitized result and replaces the
+  highlighted form. `Sanitize` itself doesn't change in M13.
 - A result with no visible text is `""` (→ failure, §19.7).
 - Details (M11.3): dropped block-level tags (`div`, `h1`–`h6`, `table`,
   `tr`, `pre`, `hr`, `section`, `article`, `header`, `footer`,
@@ -3064,6 +3471,9 @@ folder." Clicking the balloon calls `ShowDrafts()`.
 - Claude Code path (optional, with browse).
 - Model, Effort (drop-down), Daily limit, Minimum confidence, Ignore
   mail older than (days), *Only when I'm in To or CC*.
+- *Offer meeting times when an email asks for a meeting*
+  (`MeetingTimes`) and *Number of times to offer* (`MeetingTimeOptions`,
+  1–10) (M13, §21.6).
 - *Never draft for* and *Only draft for*: one entry per line.
 - *Mailboxes*: "My mailbox" (always on while enabled) and a checkbox per
   enabled shared mailbox (`AiDrafts`).
@@ -3094,6 +3504,10 @@ The window never runs a model call or a status check on the UI thread.
   run. Mail text goes over stdin only.
 - `ai_decisions` holds ids, outcomes and numbers only (§9.1). Its
   `conversation_topic` column is always NULL and never read.
+- Meeting times (§21.6): free/busy and the computed times stay on the PC
+  (they go only into the saved draft); nothing about the calendar is
+  sent to Claude. Logs record only counts (options, readable and unknown
+  attendees), never times, addresses or the Date header.
 - The manual's Security page documents the data flow of §19.1.
 
 ### 19.12 Tests
@@ -3114,6 +3528,7 @@ Core (Linux and Windows):
   hash differs, unchanged), atomic write, 64 KiB read limit.
 - `DraftRules`: each rule alone, first-match order, include/exclude
   address and domain matching with subdomains.
+- Meeting times (M13): see §21.9.
 - `DraftReply.Parse`: valid, each invalid case; `ClaudeCliOutput.Parse`:
   `structured_output`, `result` fallback, `NoStructuredOutput`,
   rate-limit texts with and without a reset time, not-signed-in texts,
@@ -3406,7 +3821,8 @@ overwrite times written in the background.
 ### 20.9 Installing
 
 **Idle** means no open `Serving`, `Drafting` or `AwaitingConfirmation`
-scope in `ActivityHub` (`IsActive`, §7) and no open Settings window.
+scope in `ActivityHub` (`IsActive`, §7) and no open Settings window
+(from M15 `AwaitingConfirmation` no longer exists, §22).
 **Update now** uses the same test without the Settings window
 (`IsBusyManual`, §20.8). Sync and backfill may be running: they stop
 with the app and resume after the restart. An automatic install tests
@@ -3584,3 +4000,577 @@ secrets).
   exe, `.old` and staging files. The updater never touches mail,
   Outlook, the index, settings, the token or Claude credentials.
 - The safety scans of §15 enforce this.
+
+## 21. Meeting times (`find_free_times` ranking, offers in AI drafts)
+
+Added in M13 (user-approved 2026-11-14). Two things change:
+`find_free_times` ranks its results by the owner's calendar, and an AI
+draft that answers a meeting request offers concrete times that Clippy
+computes itself. The writing-style skill teaches interactive Claude
+Code the same format.
+
+### 21.1 Overview
+
+- The model never computes, sees or types times. In AI drafting it only
+  says "a meeting was asked for" (plus an optional duration, date range
+  and a translated heading) in its structured output (§19.7) and leaves
+  `[[meeting_times]]` in the body. Clippy reads free/busy after the model
+  call and inserts the options (§21.6). The model still has no tools.
+- No new Outlook calls: the owner's free/busy string, already fetched
+  through `GetFreeBusy` (§8), gives both the free blocks and the tiers.
+  The Date header comes from `PR_TRANSPORT_MESSAGE_HEADERS`, which
+  `GetFacts` already reads (§19.9).
+- All logic is in Core (`MeetingTimes.cs`, `SenderRegion.cs`) and
+  testable on Linux.
+
+### 21.2 Ranking tiers (`MeetingRanking`)
+
+- **Owner calendar** (`OwnerCalendar.FromFreeBusy(fb, start, intervalMinutes)`):
+  from the owner's free/busy string, the merged runs of code `2` (busy:
+  accepted meetings and other busy appointments) and, separately, of
+  code `1` (tentative). Codes `0`, `3` (out of office), `4` (working
+  elsewhere) and `5` don't count. An invalid code makes the owner
+  calendar unknown (all tiers `none`).
+- **Adjacent.** A time range R is adjacent to an owner interval I when
+  they are on the same local day and either `0 ≤ R.Start − I.End ≤ 15 min`
+  or `0 ≤ I.Start − R.End ≤ 15 min`
+  (`MeetingRanking.AdjacencyToleranceMinutes = 15`). Overlap doesn't
+  count. (With 30-minute free/busy, this means "touching".)
+- **Tier** of R: `busy` when it is adjacent to a busy run, else
+  `tentative` when adjacent to a tentative run, else `none`.
+- **Order**: tier (`busy`, `tentative`, `none`), then start time.
+- Known limit: free/busy doesn't tell meetings from other busy time
+  (focus blocks, appointments), so "next to a meeting" means "next to
+  busy time".
+
+### 21.3 Options of an exact length (`MeetingOffers.Candidates`, `Select`)
+
+- **Candidates**: inside each free block (from `FreeBusy.FreeSlots` with
+  `minMinutes = duration`), every range of exactly `duration` minutes
+  that starts at the block start plus a multiple of 30 minutes, plus the
+  one that ends exactly at the block end. Duplicates are removed.
+- **Selection** for a target count N: sort the candidates by tier, then
+  start; walk the list and take a candidate unless it overlaps one
+  already taken, until N are taken. Options are shown in that order and
+  numbered from 1.
+
+### 21.4 Senders in Europe (`SenderRegion`, CET)
+
+**Detection** (`SenderRegion.IsEurope(senderSmtp, transportHeaders)`, pure):
+- *Offset*: the `Date` header (`MailText.Headers`, first value). The
+  zone is the trailing `+hhmm`/`-hhmm` (an optional `(comment)` after it
+  is allowed); `GMT`, `UT`, `UTC` and `Z` mean `+0000`; `-0000` (RFC
+  5322 "unknown") and anything else unparsable mean no offset. Hours
+  above 14 or minutes above 59 mean no offset.
+- *TLD*: the last label of the sender address's domain, lower-case.
+  European: `ad al at ax ba be bg ch cy cz de dk ee es eu fi fo fr gb gg
+  gi gr hr hu ie im is it je li lt lu lv mc md me mk mt nl no pl pt ro rs
+  se si sk sm ua uk va`. Any other two-letter TLD is a non-European
+  country TLD; everything else (`com`, `org`, `edu`, `net`, …) is
+  generic.
+- *Decision*:
+
+  | Date offset | European TLD | other country TLD | generic TLD |
+  |---|---|---|---|
+  | `+0100`, `+0200` | Europe | not | Europe |
+  | `+0000`, `+0300` | Europe | not | not |
+  | any other | not | not | not |
+  | none (no headers, no `Date`, unknown) | Europe | not | not |
+
+- Limits (documented in the manual): internal Exchange mail has no
+  transport headers, so only the TLD is used; a European sender with a
+  generic domain in winter UK/Portugal time (`+0000`) or eastern
+  summer time (`+0300`) isn't detected; `by`, `ru`, `tr`, `ge`, `am`,
+  `az` and `kz` are not in the list; a sender's mail client can write
+  any offset.
+
+**CET.** `SenderRegion.CentralEurope()` returns the zone for
+`Europe/Berlin` (then `W. Europe Standard Time`), or null when neither
+exists. The actual offset is used (+01:00 in winter, +02:00 in summer),
+but the label is always `CET` (the user's choice). When the zone is
+missing, offers have no CET part and no split (Warning logged once).
+When the owner's own zone has the same UTC offset as CET at the time of
+the first candidate, the CET part and the split are left out too (the
+times are already European).
+
+**Office hours split** (for European senders only):
+- An option is *in office hours* when, in CET, it starts at or after
+  08:00 and ends at or before 18:00 on the same CET day
+  (`MeetingOffers.EuropeStartHour = 8`, `EuropeEndHour = 18`; an end of
+  exactly 18:00 counts).
+- The **main list** takes in-hours candidates only, by §21.3, up to N.
+- When it has fewer than N, a **second list** takes the out-of-hours
+  candidates (same ranking, no overlap with options already taken) up to
+  N minus the main count. Numbering continues from the main list.
+- The second list is headed `Outside European office hours:` (default,
+  `MeetingOffers.OutsideHoursHeading`). In AI drafts, a valid
+  `meeting.outside_hours_heading` from the model replaces it: control
+  characters removed, whitespace collapsed, `<`, `>`, `[` and `]`
+  removed, trimmed, 1–80 characters with at least one letter, and a `:`
+  appended when it doesn't end with one; otherwise the default is used.
+- With no in-hours candidates at all, only the second list appears,
+  with its heading. With all N in hours, there is no second list.
+
+### 21.5 Line format (`MeetingOffers.FormatLine`)
+
+One option per line, plain text, invariant culture:
+
+```
+1. Tue 11/18  10:00–11:00 PT  (19:00–20:00 CET)
+2. Wed 11/19  14:00–15:00 PT  (23:00–00:00 CET)
+```
+
+- `<n>. <ddd> <M/d>`, two spaces, `HH:mm–HH:mm` (24-hour, U+2013 en
+  dash), a space and the local label (`TimeZoneLabels.Resolve`, §12;
+  a blank label leaves out the space too).
+- European senders: two spaces and `(HH:mm–HH:mm CET)` in CET. An end at
+  midnight is `00:00` (local or CET).
+- Lists as text (`offer_text`, §11.8): the main lines joined with `\n`;
+  then, when there is a second list, a blank line, the heading line and
+  its lines.
+
+### 21.6 Offers in AI drafts (`DraftWorker` step 6a, §19.7)
+
+**When.** `AiDrafting.MeetingTimes` is on and either
+`DraftReply.Meeting` is set or the sanitized body contains the
+placeholder. The placeholder matches `[[meeting_times]]`
+case-insensitively, also with a space or `-` instead of `_` and spaces
+inside the brackets, highlighted by `Sanitize` or bare. Works the same in
+automatic passes (`Background` priority) and the manual path
+(`Interactive`).
+
+**Attendees.** The owner is the Outlook current user (the own mailbox's
+SMTP from `GetIdentityAsync`), also for shared-mailbox drafts (§18 open
+question 16). Others: the sender; plus everyone in To and CC when the
+reply is reply-all. The own address and the shared mailbox address are
+left out, entries are parsed one by one (an entry without a valid
+address is skipped, duplicates removed) and at most 10 others are
+checked (sender first). Attendees whose free/busy is unknown are left out
+of the check, as in §11.8.
+
+**Range.** Duration: `Meeting.DurationMinutes ?? 60`. From the start of
+the next local day (open question 17), or `earliest_date` when later;
+to the end of `latest_date`, else 10 days after the start; never more
+than 60 days from today. When `latest_date` is before the start, the
+default range is used. Working hours, business days and
+`TentativeIsBusy` come from the settings (§5.2), interval 30 minutes.
+N = `MeetingTimeOptions`.
+
+**Europe.** `SenderRegion.IsEurope(sender, headers)`. Automatic passes
+use the headers from step 2's facts. The manual path calls
+`GetFactsAsync(…, Interactive)` for them only when an offer is needed;
+if that fails for any reason other than Outlook being gone, the TLD rule
+alone applies.
+
+**Insertion** (`MeetingTimesHtml.Insert`, pure, on the sanitized HTML):
+- Lines are HTML-escaped; each double space becomes `&nbsp; ` so the
+  columns survive HTML. Lines are joined with `<br>`. With a second list:
+  `<br><br>`, the heading, `<br>`, its lines.
+- The first placeholder is replaced. A `<br>` is added before the block
+  unless the placeholder directly follows (whitespace aside) the start,
+  `<p>`, `<li>`, `<blockquote>` or `<br>`, and after it unless it
+  directly precedes the end, `</p>`, `</li>`, `</blockquote>` or `<br>`.
+  Later placeholders stay as they are (highlighted).
+- No placeholder (the model set `requested` but forgot it): the block
+  goes into a new `<p>` before the last top-level `<p>` when there are
+  at least two top-level paragraphs (the last is usually the sign-off),
+  else at the end.
+- The result goes through `DraftBody.Fragment` as before, so it is still
+  a sanitized fragment plus Clippy's own markup. `DraftHtml.ToPlainText`
+  of it shows one option per line.
+
+**Nothing to offer.** The placeholder (or, without one, the new
+paragraph) becomes a highlighted placeholder instead:
+- no candidate: `[[add meeting times: no free time found between <yyyy-MM-dd> and <yyyy-MM-dd>]]`;
+- the owner's free/busy is unknown or reading it failed:
+  `[[add meeting times: Clippy couldn't read your calendar]]`.
+The draft is still created. `OutlookUnavailableException` while reading
+free/busy is handled as in §19.7 step 6a (automatic) or gives
+`I couldn't draft that reply: Outlook isn't running` (manual, the call
+counts).
+
+**Logging.** Debug: `AI drafts: offered <n> meeting times (<k> of <m> attendees readable)`.
+No times, addresses or headers.
+
+### 21.7 The writing-style skill's meeting section (`StyleSkillText`)
+
+**Fixed section.** `StyleSkillText.MeetingSection(displayName, phrasing)`
+returns this text (`<name>` is the cleaned display name of §19.6,
+`<phrasing>` below), always written at the end of `SKILL.md` and its
+app copy by `Render`:
+
+~~~~
+<!-- clippy:meeting-times v1 -->
+## Offering meeting times
+
+This section is written by Clippy's Revenge and replaced when the skill is regenerated.
+
+When an email asks for or suggests a meeting or a call and <name> wants to meet, offer concrete times in the reply:
+
+- Never make up times or guess <name>'s availability. Get them from the Clippy's Revenge MCP server: call `find_free_times` with the people who should attend (the sender, plus the others on the email when they are invited too), `duration_minutes` from the email (60 when it doesn't say), and `offer_cet: true` when the person you are writing to is in Europe.
+- Paste the tool's `offer_text` unchanged, one option per line, so <name> can delete the lines that don't suit:
+
+  ```
+  1. Tue 11/18  10:00–11:00 PT  (19:00–20:00 CET)
+  2. Wed 11/19  14:00–15:00 PT  (23:00–00:00 CET)
+  ```
+
+- The options are already ranked: times right before or after <name>'s meetings come first, then times next to tentative meetings, then the rest, each group in date order. Don't reorder them.
+- For someone in Europe, each option also shows the time in CET (always labelled CET, also in summer). Options between 08:00 and 18:00 CET come first. If there aren't enough, the others follow in a second list headed "Outside European office hours:"; translate that heading into the language of the reply.
+- If `find_free_times` finds no time or isn't available, write that <name> will suggest times, and list none.
+- Don't book a meeting or create an invite unless <name> asks.
+
+### How <name> offers times
+
+<phrasing>
+<!-- /clippy:meeting-times -->
+~~~~
+
+- `<phrasing>`: the validated `meeting_phrasing` from the style call, or
+  the default `Introduce the options with one short sentence in the same tone and language as the rest of the reply, and ask the other person to pick one or suggest another time.`
+- **Style schema** (since M13):
+  `{"type":"object","additionalProperties":false,"required":["body_markdown"],"properties":{"body_markdown":{"type":"string"},"meeting_phrasing":{"type":"string","maxLength":600}}}`.
+  The style system prompt asks for `meeting_phrasing`: one to three
+  sentences, in English, on how the user proposes meeting times (their
+  usual lead-in and how they ask the other person to choose), quoting
+  their wording, with no names. Validation: a string; control characters
+  and line breaks become spaces, whitespace collapsed, trimmed, then
+  `MailText.Redact`, then `<!--` and `-->` removed; 1–600 characters,
+  else the default. An invalid `meeting_phrasing` never fails the run.
+- **Hash and edit detection.** The section is part of the bytes written,
+  so `state.json`'s hash covers it and edit detection (§19.6) is
+  unchanged: changing anything in the section, like anything else, makes
+  the file *edited*. Clippy never adds the section to an edited file.
+- **Existing skills** (written before M13, or with an older section
+  version) get the section without a model call
+  (`StyleSkillFiles.RefreshMeetingSection()`): when the user file and the
+  app copy exist, the user file is not edited, and the user file doesn't
+  contain the current start marker (`<!-- clippy:meeting-times v1`),
+  Clippy re-renders it from the app copy's body (minus any old marker
+  block), the display name from the existing `description:` line (else
+  `the user`), the phrasing from the old section (else the default), and
+  `generatedUtc`/`sampleCount` from `state.json`. It writes the three
+  files in the §19.6 order; `state.json` keeps every field except
+  `hash`. It runs once at app start (off the UI thread, after settings
+  load, without consent or `Enabled`, because it sends nothing) and at
+  the start of `StyleSkill.RunIfDueAsync`. Info log
+  `Writing style skill: meeting-times section updated.` and `Ai` event
+  `writing style: added how to offer meeting times`. A failure is logged
+  (Warning, type only) and retried at the next start. A Regenerate
+  always writes the current section.
+- **Drafting prompt.** `ReadBodyForPrompt` leaves out every complete
+  block from `<!-- clippy:meeting-times` to `<!-- /clippy:meeting-times -->`
+  (both lines included). A start marker without an end marker removes
+  nothing.
+
+### 21.8 `find_free_times` (§11.8)
+
+`offer_cet` (default false) turns on the CET part and the split for
+`offers`/`offer_text`. Offers use `duration_minutes`, at most
+`max_suggestions` options in total, and the default English heading.
+The tool doesn't detect the region itself; the skill (§21.7) tells
+Claude Code when to set `offer_cet`.
+
+### 21.9 Tests
+
+Core (Linux and Windows):
+- `OwnerCalendar`: busy and tentative runs from codes, `3`/`4`/`5`
+  ignored, invalid code → unknown.
+- `MeetingRanking`: a slot starting at a busy end, ending at a busy
+  start, 15 and 16 minutes apart, on the next day (not adjacent),
+  overlapping (not adjacent), busy beats tentative, unknown owner →
+  `none`.
+- `MeetingOffers`: candidates at 30-minute steps plus the end-aligned
+  one; selection order (busy tier first even when later in the week,
+  date order within a tier); no overlaps; count N.
+- Europe split: all in hours (one list), mixed (main + second list with
+  continued numbering, total N), none in hours (only the second list
+  with its heading); 08:00 start and 18:00 end count as in hours,
+  17:30–18:30 doesn't; the summer offset (CEST) with the `CET` label;
+  owner already in CET → no CET part; CET zone missing → no CET part, no
+  split.
+- `FormatLine`: the two example lines exactly (with a fake US Pacific
+  zone and Europe/Berlin), midnight end `00:00`, blank label.
+- `SenderRegion`: every row of the decision table, `-0000`, `GMT`,
+  `(CET)` comment, a missing `Date`, `co.uk`, `.eu`, `.za` with `+0200`
+  (not Europe).
+- `MeetingTimesHtml.Insert`: placeholder alone in `<p>`, inline in a
+  sentence (breaks added), highlighted and bare forms, case and `-`
+  variants, no placeholder (before the last of two paragraphs; one
+  paragraph → end), second list with a model heading and with the
+  default, failure placeholders, `ToPlainText` shows one option per line,
+  HTML-special characters in the heading are escaped.
+- `DraftReply.Parse`: `meeting` valid, missing, not an object,
+  `requested` false, duration 14/481/non-integer → 60, bad dates
+  ignored, the reply stays valid in every case.
+- `DraftWorker` with a fake `IFreeBusySource`: an offer is inserted
+  (automatic and manual), Europe detected from facts headers, the
+  manual path reads facts only when needed, the owner unknown → the
+  calendar placeholder, no slots → the range placeholder,
+  `OutlookUnavailableException` → failed row and the pass ends,
+  `MeetingTimes = false` → body unchanged and no free/busy calls, the
+  free/busy source is never called before the model returns.
+- `FreeTimeFinder`: ranked suggestions with `adjacent`, `offers` and
+  `offer_text` with and without `offer_cet`, `include_me=false` → all
+  `none`.
+- Style skill: `Render` ends with the exact section; the description
+  text; the hash covers the section; `RefreshMeetingSection` adds it to
+  an unedited pre-M13 file (state fields kept, new hash), skips an
+  edited file, a missing app copy and a file that already has v1;
+  `ReadBodyForPrompt` drops the block and keeps everything else;
+  `meeting_phrasing` validation and default.
+
+Live (opt-in): `[Trait("live","outlook")]` `find_free_times` with
+`offer_cet=true` for the current user returns `offer_text` lines that
+match the §21.5 pattern; `[Trait("live","outlook")]` +
+`[Trait("live","claude")]` the manual draft of a synthetic "can we meet
+next week for 30 minutes?" email has option lines in the draft and no
+`[[meeting_times]]` left; it deletes only what it created and sends
+nothing.
+
+## 22. Draft-only meeting invites (M15)
+
+Added in M15 (user-approved 2026-11-14, **including the hard-rule change
+of §1.4**). Outlook's object model can't add a Teams or Zoom link, and
+the user always adds one by hand, so Clippy never sends invites. It
+saves them unsent and makes sure they can't be forgotten: a category,
+a tray list and, when the invite answers an email, a note in Drafts.
+
+New hard rule (§1.4, CLAUDE.md wording, applied by M15.1):
+"**Never send anything.** Clippy has no `.Send()` call. Mail drafts only
+`.Save()`; meetings are saved unsent in the calendar for the user to
+finish and send in Outlook."
+
+### 22.1 `create_meeting_draft(recipients, subject, start, end, body?, location?, mailbox?, reply_to_id?)`
+
+Replaces `send_meeting_invite` (§11.9). `ReadOnly = false`,
+`Destructive = false`, `Idempotent = false`, `OpenWorld = false`.
+
+- Arguments as §11.9 Details (M8.4): `start`/`end` in the §11.1
+  date-time forms (not date-only), an offset converted to local time,
+  `end` after `start` and in the future, blank `recipients`, `subject`,
+  `start` or `end` are errors. `teams` is gone (an unknown argument is
+  ignored by the SDK); the result always tells the model about the link.
+- `MeetingInviteMode`: `DraftOnly` (default) or `Disabled`. `Disabled`
+  refuses before anything else with
+  `Meeting drafts are disabled in Clippy's Revenge. Ask the user to enable them in the tray settings (Meeting invites: Draft only), then try again.`
+  Settings migration: a stored `Send` (or any unknown value) loads as
+  `DraftOnly`; `InviteConfirmTimeoutSeconds` is ignored when read and
+  not written again.
+- Recipients are resolved first (`Recipients.ResolveAll()`); if any is
+  unresolved, nothing is created (§8). Then the meeting is created with
+  the category (§22.2) and **saved**, never sent. With `mailbox`, in that
+  mailbox's calendar (§8, delegate rights needed).
+- Then it is added to the tracking list (§22.3), and when `reply_to_id`
+  is given, the note draft is saved (§22.4).
+- **Result**:
+  `{status: "saved_as_draft", message, subject, start, end, mailbox, organizer, recipients, category, note_draft_id?, note_error?}`
+  (`start`/`end` in the find_free_times format; `category` is the
+  category name, or null when it couldn't be set). `message`:
+  `The meeting was saved in <your calendar | the calendar of <smtp>> without sending. It has no Teams or Zoom link: the user adds one in Outlook and sends the invite. It is listed in the Clippy tray under Draft invites.`
+  plus, with a note, ` A note was saved in Drafts as a reply to the email.`
+- **Tool description** says plainly: nothing is sent; the user adds the
+  meeting link and sends it in Outlook; pass `reply_to_id` (the `id` of
+  the email that asked for the meeting, from `search_emails`) to leave a
+  note in Drafts; to book option N of a `find_free_times` result or of
+  times offered in a draft, pass that option's start and end.
+- One `Invite` event per call (bold): `meeting draft saved for <n> attendees: <ddd M/d HH:mm–HH:mm>`
+  (with the mailbox tag), or `meeting draft not created: <reason>`. No
+  notification. The body never appears in events.
+- Orchestration in Core (`MeetingInvites` reworked, `IMeetingCalendar`
+  keeps the COM seam). `InviteGate`, `InviteConfirm`'s queue and
+  dialog model, `InviteConfirmForm`, `ActivityState.AwaitingConfirmation`
+  and its icon are deleted.
+
+### 22.2 The `Clippy draft invite` category
+
+- Name: `Clippy draft invite` (`DraftInvites.CategoryName`). Every
+  meeting `create_meeting_draft` creates gets it in `Categories` before
+  its first `.Save()`.
+- Master list: when the name is not in `Session.Categories` (the own
+  mailbox's master category list), Clippy adds it once with
+  `olCategoryColorOrange`. It never changes an existing category of that
+  name (the user may have recoloured it) and never removes it from the
+  master list. For a shared mailbox calendar the name is still set on
+  the item; Outlook shows it without a colour unless that mailbox's
+  list has it (documented). A failure to add to the master list is
+  logged (Warning, type only) and the item is still categorized. A
+  failure to set the item's category gives `category: null` and the
+  meeting is still saved.
+- **Removal once sent.** When a tracked meeting is no longer an unsent
+  draft (§22.3 check: the user sent it), Clippy removes **only** its own
+  category from the item's `Categories` (the list is split on the
+  locale list separator and `,`/`;`, entries trimmed, compared
+  case-insensitively; every other entry is kept in its order, re-joined
+  with `, `), sets nothing else and calls `.Save()`. If the category
+  isn't there any more (the user removed it), nothing is written. Then
+  the meeting is dropped from tracking.
+- **Why a Categories-only save is safe on a sent meeting.** In the
+  Outlook object model, `AppointmentItem.Save()` never sends a meeting
+  request or update; only `.Send()` does, and Clippy has none.
+  `Categories` is a local property of the organizer's copy, not a
+  meeting property that attendees receive, so Outlook doesn't mark the
+  meeting as having unsent changes, and no prompt appears because no
+  Inspector is involved (`Save()` from code doesn't prompt). Residual
+  risk: if the user has the meeting open in an Inspector at the same
+  time, Outlook may report a conflict later ("item changed by another
+  process"). The check therefore skips items that are open in an
+  Inspector (`Application.Inspectors`, compared by EntryID) and retries
+  next time. A live test (§22.7) saves a Categories change on an unsent
+  meeting and asserts it is still unsent and that the Outbox and Sent
+  Items counts are unchanged; the sent case is checked by the user in
+  M15's end-to-end task.
+
+### 22.3 Tracking and the **Draft invites** tray item
+
+- **Store** (`DraftInvitesStore`, Core): `%APPDATA%\ClippysRevenge\draft-invites.json`,
+  written atomically (temp file + rename, like `update-state.json`):
+  `[{entryId, storeId, mailbox, createdUtc}]`, at most 200 entries
+  (oldest dropped). No subject, times or recipients are stored (they are
+  read from Outlook when needed). A missing or malformed file is an
+  empty list (malformed → Warning log, file replaced on the next
+  write).
+- **Check** (`DraftInvites.CheckAsync(priority)`, Core logic over an
+  `IDraftInviteCalendar` COM seam; one COM work item for all entries,
+  at most 50 per check, oldest first, the rest next time). Per entry:
+  1. `GetItemFromID(entryId, storeId)`; not found, or in Deleted Items
+     → drop from tracking, no write.
+  2. Read `MeetingStatus`, `Categories`, subject, start, end and
+     `PidLidFInvited` (`http://schemas.microsoft.com/mapi/id/{00062002-0000-0000-C000-000000000046}/8229000B`,
+     true once the request has been sent).
+  3. Unsent (`FInvited` false or missing and `MeetingStatus = olMeeting`)
+     → keep; it is listed. Sent (`FInvited` true), or no longer a meeting
+     (the user removed all attendees, `olNonMeeting`), or cancelled
+     → remove the category (§22.2, skipping open Inspectors) and drop.
+  4. An entry whose meeting ended more than 30 days ago and is still
+     unsent is dropped from tracking; its category stays (it still
+     needs the user).
+  5. Releases every COM object. `OutlookUnavailableException` ends the
+     check without changing the store.
+- **When**: after each sync cycle (`SyncService.CycleCompleted`) at most
+  once every 5 minutes, `Background` priority; when the tray menu opens,
+  `Interactive` (the menu shows the last known list at once and updates
+  the submenu when the check finishes); right after
+  `create_meeting_draft` adds an entry (the list updates without a COM
+  read). Nothing runs while Outlook is unavailable.
+- **Tray item** `Draft invites (<n>)` (§6.2), hidden when the list is
+  empty. While Outlook isn't running, its lines come from the last check
+  and are disabled, with a last disabled line
+  `Start Outlook to open them`. One submenu line per listed meeting,
+  sorted by start: `<ddd M/d> <HH:mm–HH:mm>  <subject cut to 40 chars>`
+  (shared-mailbox meetings add ` (<mailbox display name>)`). Clicking a
+  line calls `OpenDraftInvite(entryId, storeId)`: `GetItemFromID`, then
+  `.Display()` (non-modal) on that `AppointmentItem`. This is the only
+  `.Display(` in the codebase; Outlook is already running, so it never
+  launches Outlook. If the item is gone, it is dropped and the
+  click-feedback balloon says `That draft invite is no longer in your calendar.`
+  Shared-mailbox calendars are included.
+
+### 22.4 Note in Drafts (`reply_to_id`)
+
+- `reply_to_id` is an index id (as `get_message`/`reply_draft` take). It
+  is checked before the meeting is created: an unknown id is an error
+  (the `ItemNotFoundException` message, §8), nothing is created.
+- After the meeting is saved, Clippy saves a reply draft to that email
+  through the normal reply path (`ReplyPlan`: reply, not reply-all; the
+  email's mailbox; `Re:: ` subject; marker `tool`; signature as for
+  `reply_draft`; `.Save()` only, into that mailbox's Drafts). Its body
+  is one highlighted paragraph (Clippy's own markup, `DraftHtml`'s
+  highlight span) and an empty paragraph for the user's text:
+  `[[Draft invite saved in your calendar: <ddd M/d HH:mm–HH:mm label> "<subject>". Open it from the Clippy tray (Draft invites) or your calendar, add the Teams or Zoom link and send it. Delete this note before you send this reply.]]`
+  (`<subject>` cut to 80 characters with `…`, HTML-escaped; the time as
+  in §21.5 without the number; this text is fixed English).
+- A failure to save the note doesn't undo the meeting: the result gets
+  `note_error` (`The meeting was saved, but the note in Drafts couldn't be created: <reason>.`)
+  and a Warning log (type only).
+- Without `reply_to_id`, no note (the category and the tray list still
+  apply). An AI draft that already answers the email is not changed;
+  the note is a second reply draft (documented).
+
+### 22.5 Integration with meeting times (M13)
+
+The skill's meeting section (§21.7) moves to version 2
+(`<!-- clippy:meeting-times v2 -->`); `RefreshMeetingSection` updates
+unedited skills by itself (§21.7). In v2 the last bullet
+("Don't book a meeting or create an invite unless <name> asks.") is
+replaced by:
+
+```
+- When <name> picks one of the offered times (for example "make the invite for option 2"), call `create_meeting_draft` with that option's start and end, the attendees, a subject, and `reply_to_id` set to the `id` of the email that asked for the meeting. Clippy saves the invite unsent in the calendar, marks it "Clippy draft invite" and leaves a note in Drafts; <name> adds the Teams or Zoom link in Outlook and sends it. Never create an invite unless <name> asks.
+```
+
+The option lines carry date and local time but no year; the tool
+description tells the model to use the next occurrence of that date.
+
+### 22.6 Attention badge on the tray icon
+
+When something needs the user (for now: draft invites), the tray icon
+shows a small yellow badge with the number, on top of whatever state
+icon is current (§6.1).
+
+- **Count** (`AttentionCount`, Core): the sum of pending-item sources;
+  M15 has one source, the tracked draft invites (§22.3: every tracked
+  entry not yet found sent, deleted or expired). It changes when
+  `create_meeting_draft` adds an entry and after each check (sent →
+  category removed → dropped; deleted → dropped). The source list is
+  generic so later kinds can add to it.
+- **Outlook unavailable**: the badge keeps the last known count (the
+  list is persisted and the meetings still need the user); it is
+  rechecked when Outlook is back. At start-up the count is the stored
+  list's size until the first check.
+- **Text** (`AttentionBadge.Text(count)`, Core): `""` for 0 (no badge),
+  `1`…`9`, `9+` above 9.
+- **Layout** (`AttentionBadge.Layout(iconPx)`, Core, pure): for 16, 20,
+  24 and 32 px icons, the badge rectangle in the bottom-right corner
+  (about 60% of the icon height, at least 9 px; wider for `9+`), the
+  outline width (1 px; 2 px at 32 px) and the font pixel size; exact
+  numbers in the M15 brief and tested. Colours: fill `#FFD400`, outline
+  and digits `#1A1A1A`, so it reads on light and dark taskbars.
+- **Composition** (App, `TrayBadgeRenderer`): draws the badge over each
+  size of the current state icon with GDI+ (anti-aliased, bold sans
+  font), builds an `Icon`, and caches it per (state icon, frame, count
+  text). Every `Bitmap`, `Graphics`, `Font`, `Brush` and `Pen` is
+  disposed; an `Icon` made from `GetHicon()` has its handle released
+  with `DestroyIcon` when it leaves the cache. The cache is cleared when
+  the count changes, so repeated swaps (including the backfill
+  animation) don't leak GDI handles. A test of the Core layout runs on
+  Linux; a Windows-only test renders 1,000 swaps and checks that the
+  process GDI object count doesn't grow (`[Trait("os","windows")]`).
+- **Tooltip**: when the count is above 0, ` · <n> draft invite needs your attention`
+  / ` · <n> draft invites need your attention` is appended; the base
+  text is cut first so the whole stays within 127 characters (§6.1).
+- **Click**: the tray menu's **Draft invites (n)** lines open the
+  meeting (`.Display()`, §22.3) so the user can add the link and send.
+
+### 22.7 Tests
+
+Core:
+- Settings: `Send` and unknown values load as `DraftOnly`;
+  `InviteConfirmTimeoutSeconds` ignored; round trip writes neither.
+- `MeetingInvites` with a fake calendar: `Disabled` refuses first;
+  unresolved recipients → nothing created; `reply_to_id` unknown →
+  nothing created; success → saved once, tracked, note planned with the
+  exact text; note failure → `note_error`, meeting kept; result texts.
+- `DraftInvites` check with a fake calendar: sent → category removed,
+  other categories kept in order, one save, dropped; still unsent →
+  kept, no write; category already gone → no write, dropped; deleted →
+  dropped, no COM write; open in an Inspector → no write, kept for the
+  next check; ended more than 30 days ago and unsent → dropped, no
+  write; at most 50 per check; `OutlookUnavailableException` → store
+  unchanged.
+- `Categories` helpers: split on `,` and `;`, case-insensitive removal,
+  re-join with `, `.
+- `DraftInvitesStore`: round trip, 200 cap, malformed file.
+- Skill section v2 text; refresh from v1 to v2.
+- Attention badge: `AttentionBadge.Text` for 0, 1, 9, 10, 250; `Layout` for 16/20/24/32 px (inside the icon, minimum size, wider for `9+`); `AttentionCount` sums sources and keeps the last count while Outlook is unavailable; tooltip suffix (singular, plural, 127-character cut keeps the suffix); Windows-only: 1,000 icon swaps don't grow the GDI object count.
+- Safety scan: **no `.Send(` anywhere in `src/`** (replaces "exactly
+  one"); `.Display(` only in `OutlookCalendar.cs`, once (the
+  `OpenDraftInvite` call), still none in the AI files; no
+  `InviteGate`/`InviteConfirmForm` types remain.
+
+Live (`[Trait("live","outlook")]`, never sends): the M10.2 `DraftOnly`
+meeting test becomes `create_meeting_draft`: the meeting is in the
+calendar, unsent (`FInvited` false), has the category; a
+Categories-only save keeps it unsent; with `reply_to_id` on a synthetic
+email the note draft exists with `Re:: ` and marker `tool`; Outbox and
+Sent Items counts are unchanged. It deletes only what it created.
