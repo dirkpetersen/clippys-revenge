@@ -59,7 +59,7 @@ public sealed record IndexStatusDto(
 /// <summary>Pure logic behind search_emails, get_message and index_status (SPEC §11.1, §11.2, §11.10).</summary>
 public static class MailQueries
 {
-    private static string Iso(DateTimeOffset t, TimeZoneInfo tz) =>
+    internal static string Iso(DateTimeOffset t, TimeZoneInfo tz) =>
         TimeZoneInfo.ConvertTime(t, tz).ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
 
     private static AttachmentDto[] Map(IReadOnlyList<AttachmentInfo> a) =>
@@ -72,30 +72,22 @@ public static class MailQueries
         string? mailbox, int limit, int offset)
     {
         ArgumentNullException.ThrowIfNull(indexes);
-        SearchFilter filter;
-        try
+        var filter = new SearchArgs
         {
-            filter = new SearchFilter
-            {
-                Query = query,
-                Sender = sender,
-                Recipient = recipient,
-                Subject = subject,
-                DateFrom = SearchDates.ParseFrom(dateFrom, tz),
-                DateTo = SearchDates.ParseTo(dateTo, tz),
-                Folder = folder,
-                HasAttachment = hasAttachment,
-                AttachmentName = attachmentName,
-                AttachmentExt = attachmentExt,
-                Unread = unread,
-                Limit = Math.Clamp(limit, 1, SearchFilter.MaxLimit),
-                Offset = Math.Max(offset, 0),
-            };
-        }
-        catch (FormatException ex)
-        {
-            throw new McpException(ex.Message);
-        }
+            Query = query,
+            Sender = sender,
+            Recipient = recipient,
+            Subject = subject,
+            DateFrom = dateFrom,
+            DateTo = dateTo,
+            Folder = folder,
+            HasAttachment = hasAttachment,
+            AttachmentName = attachmentName,
+            AttachmentExt = attachmentExt,
+            Unread = unread,
+            Limit = limit,
+            Offset = offset,
+        }.ToFilter(tz);
         return indexes.Search(filter, mailbox).Select(h => new SearchResultDto(
             h.Email.Id, h.Mailbox, h.Email.Folder, Iso(h.Email.Date, tz), h.Email.From, h.Email.SenderEmail,
             h.Email.To, h.Email.Subject, h.Email.HasAttachments, Map(h.Email.Attachments), h.Email.Snippet)).ToList();
