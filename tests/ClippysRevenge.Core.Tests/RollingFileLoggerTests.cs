@@ -168,4 +168,38 @@ public sealed class RollingFileLoggerTests : IDisposable
     [Fact]
     public void RejectsZeroRetention() =>
         Assert.Throws<ArgumentOutOfRangeException>(() => Make(0));
+
+    [Fact]
+    public void McpExceptionMessage_IsNotWritten()
+    {
+        _level = LogLevel.Debug;
+        using var p = Make();
+        p.CreateLogger("ModelContextProtocol.Server.McpServer").LogError(
+            new ModelContextProtocol.McpException("SQL error: near \"zebra7731\": syntax error."),
+            "\"query_index\" threw an unhandled exception.");
+        var text = File.ReadAllText(Path.Combine(_dir, Today));
+        Assert.Contains("\"query_index\" threw an unhandled exception.", text);
+        Assert.Contains("ModelContextProtocol.McpException", text);
+        Assert.DoesNotContain("zebra7731", text);
+    }
+
+    [Fact]
+    public void McpProtocolExceptionMessage_IsNotWritten()
+    {
+        _level = LogLevel.Debug;
+        using var p = Make();
+        p.CreateLogger("Cat").LogError(
+            new ModelContextProtocol.McpProtocolException("bad zebra7731", ModelContextProtocol.McpErrorCode.InvalidParams), "x");
+        var text = File.ReadAllText(Path.Combine(_dir, Today));
+        Assert.Contains("ModelContextProtocol.McpProtocolException", text);
+        Assert.DoesNotContain("zebra7731", text);
+    }
+
+    [Fact]
+    public void OtherExceptionMessages_AreStillWritten()
+    {
+        using var p = Make();
+        p.CreateLogger("Cat").LogError(new InvalidOperationException("disk zebra7731"), "x");
+        Assert.Contains("System.InvalidOperationException: disk zebra7731", File.ReadAllText(Path.Combine(_dir, Today)));
+    }
 }

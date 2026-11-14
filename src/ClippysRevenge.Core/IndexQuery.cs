@@ -41,6 +41,37 @@ public static class IndexQueryTexts
 
     public static string Unavailable(string mailboxKey) =>
         $"The index for {(mailboxKey.Length == 0 ? "your own mailbox" : mailboxKey)} isn't available right now. Check index_status.";
+    public const string ExampleTopSenders =
+        "SELECT sender_email, count(*) AS n FROM mail WHERE folder = 'Inbox' AND unix_time >= strftime('%s','now','-1 year') GROUP BY sender_email ORDER BY n DESC LIMIT 10";
+    public const string ExampleMailPerMonth =
+        "SELECT substr(date,1,7) AS month, count(*) AS n FROM mail GROUP BY month ORDER BY month";
+    public const string ExampleFullText =
+        "SELECT m.id, m.date, m.subject, snippet(mail_fts, 1, '**', '**', '…', 12) AS hit FROM mail_fts JOIN mail m ON m.doc = mail_fts.doc WHERE mail_fts MATCH 'budget AND 2026' ORDER BY rank LIMIT 20";
+    public const string ExamplePdfsBySender =
+        "SELECT m.sender_email, count(*) AS n FROM mail_attachments a JOIN mail m ON m.doc = a.doc WHERE lower(a.filename) LIKE '%.pdf' GROUP BY 1 ORDER BY n DESC LIMIT 20";
+
+    public static readonly IReadOnlyList<string> Examples =
+        [ExampleTopSenders, ExampleMailPerMonth, ExampleFullText, ExamplePdfsBySender];
+
+    public const string ToolDescription =
+        "Runs one read-only SQLite SELECT over the local email index, for questions the other tools can't answer in one call: joins, custom grouping, full-text search with snippets. For plain counts by sender, domain, recipient, folder or time, email_stats is simpler. Works while Outlook is busy or closed; only synced mail is indexed.\n" +
+        "Views:\n" +
+        "mail(id, doc, mailbox, folder, date, unix_time, sender_name, sender_email, to_addrs, cc_addrs, subject, topic, body, unread, has_attachments, attachment_names): one row per email. id is the id get_message takes. doc joins to mail_fts.doc and mail_attachments.doc. mailbox is '' for the user's own mailbox. folder is a path like 'Inbox' or 'Sent Items'. date is local time as text 'yyyy-MM-ddTHH:mm:ss'; unix_time is UTC seconds. to_addrs and cc_addrs are 'Name <email>; ...'. topic is the conversation topic, body is plain text. unread and has_attachments are 0/1 (has_attachments ignores inline images). attachment_names has one file name per line.\n" +
+        "mail_fts(mail_fts, rank, doc, subject, body, sender_name, sender_email, to_addrs, cc_addrs, attachment_names): the FTS5 full-text index. Filter with WHERE mail_fts MATCH '...' (FTS5 syntax: words are ANDed, OR, NOT, \"a phrase\", prefix*, column:word) and sort with ORDER BY rank (best first). snippet(mail_fts, n, ...) and highlight(mail_fts, n, ...) take a column number: 0 subject, 1 body, 2 sender_name, 3 sender_email, 4 to_addrs, 5 cc_addrs, 6 attachment_names. bm25(mail_fts) also works. Join to mail on doc.\n" +
+        "mail_attachments(doc, position, filename, size, is_inline): one row per attachment. Only file names are indexed, never attachment content.\n" +
+        "Limits: one read-only SELECT (WITH and VALUES also work), no ? parameters, 10 s, at most 1000 rows (max_rows), long text cut at 2,000 characters. Nothing else in the database can be read; PRAGMA, ATTACH and any write are refused. With mailbox=\"all\" each mailbox is queried separately and the rows are concatenated with a leading mailbox column, so counts and other aggregates are per mailbox; use email_stats for counts merged across mailboxes.\n" +
+        "Returns {columns, rows (one array per row), row_count, truncated, truncated_reason, truncated_cells, elapsed_ms}.\n" +
+        "Examples:\n" +
+        "Top senders last year: " + ExampleTopSenders + "\n" +
+        "Mail per month: " + ExampleMailPerMonth + "\n" +
+        "Full text with snippets: " + ExampleFullText + "\n" +
+        "PDFs by sender: " + ExamplePdfsBySender;
+
+    public const string SqlParameterDescription =
+        "One SQLite SELECT over the views mail, mail_fts and mail_attachments (see the tool description). Write values into the SQL; ? parameters are not supported. On large mailboxes add a LIMIT and a date or folder filter.";
+    public const string MailboxParameterDescription =
+        "Empty = the user's own mailbox, an SMTP address = that shared mailbox, 'all' = every enabled mailbox, each queried separately (rows get a leading mailbox column).";
+    public const string MaxRowsParameterDescription = "Maximum rows returned, 1 to 1000.";
 }
 
 /// <summary>SPEC §11.12 authorizer as a pure function. Allow gives (true, null); deny gives (false, what).</summary>

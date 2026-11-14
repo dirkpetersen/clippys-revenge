@@ -482,4 +482,42 @@ public class EmailStatsTests : IDisposable
         var months = RunStats(mi, Utc, new SearchArgs(), "month", order: "key");
         Assert.Equal(["2026-03", "2026-05", "2026-06"], months.Rows.Select(r => r.Key).ToArray());
     }
+
+    [Fact]
+    public void ToolDescription_NamesEveryGroupBy()
+    {
+        foreach (var g in Enum.GetValues<StatsGroupBy>())
+        {
+            Assert.Contains(EmailStats.WireName(g), EmailStats.ToolDescription);
+            Assert.Contains(EmailStats.WireName(g), EmailStats.GroupByParameterDescription);
+        }
+        foreach (var s in new[] { "never mail text", "query_index", "mailbox=\"all\"", "include_cc" })
+        {
+            Assert.Contains(s, EmailStats.ToolDescription);
+        }
+    }
+
+    [Fact]
+    public void Dto_SerializesAsSpecified()
+    {
+        var o = ModelContextProtocol.McpJsonUtilities.DefaultOptions;
+        var dto = new EmailStatsDto("month", "", 3, 1, false,
+            [new StatsRowDto("2026-01", null, 3, "2026-01-01T09:00:00-08:00", "2026-01-31T17:00:00-08:00")]);
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(dto, o));
+        var root = doc.RootElement;
+        Assert.Equal("month", root.GetProperty("group_by").GetString());
+        Assert.Equal("", root.GetProperty("mailbox").GetString());
+        Assert.Equal(3, root.GetProperty("total").GetInt64());
+        Assert.Equal(1, root.GetProperty("distinct").GetInt32());
+        Assert.False(root.GetProperty("truncated").GetBoolean());
+        var row = root.GetProperty("rows")[0];
+        Assert.False(row.TryGetProperty("name", out _));
+        Assert.Equal("2026-01", row.GetProperty("key").GetString());
+        Assert.Equal(3, row.GetProperty("count").GetInt64());
+        Assert.Equal("2026-01-01T09:00:00-08:00", row.GetProperty("first").GetString());
+        Assert.Equal("2026-01-31T17:00:00-08:00", row.GetProperty("last").GetString());
+
+        var named = dto with { Rows = [new StatsRowDto("a@x.org", "", 1, "f", "l")] };
+        Assert.Contains("\"name\":\"\"", JsonSerializer.Serialize(named, o));
+    }
 }
