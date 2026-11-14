@@ -5,6 +5,8 @@
     <TargetFramework Condition="'$(OS)' == 'Windows_NT'">net10.0-windows</TargetFramework>
     <TargetFramework Condition="'$(OS)' != 'Windows_NT'">net10.0</TargetFramework>
     <ClippyLive Condition="'$(OS)' == 'Windows_NT'">true</ClippyLive>
+    <!-- System.Drawing for TrayBadgeRenderer (Windows build only). -->
+    <UseWindowsForms Condition="'$(ClippyLive)' == 'true'">true</UseWindowsForms>
     <OutputType>Exe</OutputType>            <!-- required by xunit v3 -->
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
@@ -28,7 +30,9 @@
   <ItemGroup Condition="'$(ClippyLive)' == 'true'">
     <!-- Compile-time only, embedded like in the App. -->
     <PackageReference Include="Microsoft.Office.Interop.Outlook" Version="15.0.4797.1004" ExcludeAssets="runtime" />
-    <!-- Explicit list of App sources. Never add the launcher, the entry point, the MCP tools or the tray. -->
+    <!-- Explicit list of App sources. Never add the launcher, the entry point, the MCP tools or the tray
+         (except TrayBadgeRenderer.cs, which needs only System.Drawing). -->
+    <Compile Include="..\..\src\ClippysRevenge.App\Tray\TrayBadgeRenderer.cs"   Link="AppLinked\TrayBadgeRenderer.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookWorker.cs"            Link="AppLinked\OutlookWorker.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookStores.cs"            Link="AppLinked\OutlookStores.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookMail.cs"              Link="AppLinked\OutlookMail.cs" />
@@ -47,6 +51,14 @@
     <Compile Include="..\..\src\ClippysRevenge.App\SignatureRegistry.cs"        Link="AppLinked\SignatureRegistry.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookAiMailbox.cs"         Link="AppLinked\OutlookAiMailbox.cs" />
   </ItemGroup>
+
+  <!-- Keep the existing tests free of the WinForms global usings (Timer etc. would become ambiguous). -->
+  <Target Name="ClippyDropWinFormsUsings" BeforeTargets="GenerateGlobalUsings" Condition="'$(ClippyLive)' == 'true'">
+    <ItemGroup>
+      <Using Remove="System.Windows.Forms" />
+      <Using Remove="System.Drawing" />
+    </ItemGroup>
+  </Target>
 
   <!-- Same embed target as the App csproj. -->
   <Target Name="EmbedOutlookInteropTypes" AfterTargets="ResolveAssemblyReferences" Condition="'$(ClippyLive)' == 'true'">

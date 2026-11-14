@@ -44,6 +44,25 @@ public static class TrayText
         return string.Concat(text.AsSpan(0, cut), "…");
     }
 
+    /// <summary>text + suffix within max: when too long, text is cut with Truncate(text, max - suffix.Length) so the
+    /// suffix is always whole. Empty suffix = Truncate(text, max).</summary>
+    public static string AppendSuffix(string text, string suffix, int max = MaxTooltipLength)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(suffix);
+        if (suffix.Length > max - 2)
+        {
+            throw new ArgumentException("Suffix is too long.", nameof(suffix));
+        }
+        if (suffix.Length == 0)
+        {
+            return Truncate(text, max);
+        }
+        return text.Length + suffix.Length <= max
+            ? text + suffix
+            : Truncate(text, max - suffix.Length) + suffix;
+    }
+
     public static string RelativePast(DateTimeOffset then, DateTimeOffset now)
     {
         var d = now - then;
@@ -94,9 +113,12 @@ public sealed class TrayPresenter
         _time = timeProvider ?? TimeProvider.System;
     }
 
-    public TrayView Update(ActivityState state, ActivityProgress progress, TrayStats stats, ActivityEvent? lastTool)
+    public TrayView Update(ActivityState state, ActivityProgress progress, TrayStats stats, ActivityEvent? lastTool,
+        int attentionCount = 0)
     {
         ArgumentNullException.ThrowIfNull(stats);
+        ArgumentOutOfRangeException.ThrowIfNegative(attentionCount);
+        var suffix = AttentionBadge.TooltipSuffix(attentionCount);
         var now = _time.GetUtcNow();
         var label = progress.Label ?? "";
         var p = TrayText.Prefix;
@@ -115,7 +137,7 @@ public sealed class TrayPresenter
                 {
                     text += " (" + ((long)Math.Round(dur.TotalMilliseconds, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture) + " ms)";
                 }
-                return Build(TrayIconKey.Serving, false, text, text, stats, state, now);
+                return Build(TrayIconKey.Serving, false, text, text, stats, state, now, suffix: suffix);
             }
             _servingSince = null;
         }
@@ -179,10 +201,10 @@ public sealed class TrayPresenter
                 tip = status + (stats.LastSync is { } ls ? " · synced " + TrayText.RelativePast(ls, now) : "");
                 break;
         }
-        return Build(icon, animated, tip, status ?? tip, stats, state, now, label);
+        return Build(icon, animated, tip, status ?? tip, stats, state, now, label, suffix);
     }
 
-    private static TrayView Build(TrayIconKey k, bool anim, string tooltip, string statusLine, TrayStats s, ActivityState st, DateTimeOffset now, string label = "")
+    private static TrayView Build(TrayIconKey k, bool anim, string tooltip, string statusLine, TrayStats s, ActivityState st, DateTimeOffset now, string label = "", string suffix = "")
     {
         var sync = "Last sync: " + (s.LastSync is { } l ? TrayText.RelativePast(l, now) : "never");
         if (s.Paused)
@@ -196,7 +218,7 @@ public sealed class TrayPresenter
         return new TrayView(
             k,
             anim,
-            TrayText.Truncate(tooltip),
+            TrayText.AppendSuffix(tooltip, suffix),
             TrayText.Truncate(statusLine),
             sync,
             st == ActivityState.OutlookUnavailable && label != OutlookConnection.NotRespondingLabel,

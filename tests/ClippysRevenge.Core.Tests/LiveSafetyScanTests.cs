@@ -43,6 +43,8 @@ public class LiveSafetyScanTests
     public void Linked_app_sources_exclude_launcher()
     {
         var csproj = File.ReadAllText(Path.Combine(RepoRoot(), "tests", "ClippysRevenge.Core.Tests", "ClippysRevenge.Core.Tests.csproj"));
+        // The one allowed tray source needs only System.Drawing (SPEC 22.6).
+        csproj = csproj.Replace("Tray\\TrayBadgeRenderer.cs", "", StringComparison.Ordinal);
         foreach (var token in new[] { "OutlookLauncher.cs", "Program.cs", "McpTools", "Tray\\", "Tray/" })
             Assert.DoesNotContain(token, csproj, StringComparison.Ordinal);
     }
