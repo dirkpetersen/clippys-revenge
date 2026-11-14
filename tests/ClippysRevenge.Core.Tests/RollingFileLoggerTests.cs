@@ -184,11 +184,21 @@ public sealed class RollingFileLoggerTests : IDisposable
     }
 
     [Fact]
+    public void McpExceptionMessage_IsWritten_ForOtherCategories()
+    {
+        _level = LogLevel.Debug;
+        using var p = Make();
+        p.CreateLogger("SyncService").LogError(new ModelContextProtocol.McpException("sync failed zebra7731"), "x");
+        var text = File.ReadAllText(Path.Combine(_dir, Today));
+        Assert.Contains("zebra7731", text);
+    }
+
+    [Fact]
     public void McpProtocolExceptionMessage_IsNotWritten()
     {
         _level = LogLevel.Debug;
         using var p = Make();
-        p.CreateLogger("Cat").LogError(
+        p.CreateLogger("ModelContextProtocol.Server.McpServer").LogError(
             new ModelContextProtocol.McpProtocolException("bad zebra7731", ModelContextProtocol.McpErrorCode.InvalidParams), "x");
         var text = File.ReadAllText(Path.Combine(_dir, Today));
         Assert.Contains("ModelContextProtocol.McpProtocolException", text);

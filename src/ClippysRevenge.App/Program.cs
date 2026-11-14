@@ -12,6 +12,7 @@ internal static class Program
     private static int Main(string[] args)
     {
         var startedUtc = DateTimeOffset.UtcNow;
+        SqliteHeapLimit.Ensure();   // before any index opens (process-wide 1 GiB SQLite heap cap)
         ApplicationConfiguration.Initialize();
 
         using var instance = SingleInstance.TryAcquire();

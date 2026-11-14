@@ -26,6 +26,8 @@ public static class IndexQueryTexts
     public const string MultipleStatements = "query_index runs exactly one SELECT statement. Remove everything after the first statement.";
     public const string NoParameters = "query_index takes no parameters; write the values into the SQL.";
     public const string TooManyColumns = "query_index returns at most 100 columns.";
+    public const string OutOfMemory = "The query needs too much memory. Simplify it: fewer nested WITH clauses, fewer or shorter computed columns.";
+    public const string TooBig = "A value in the query is too large (more than 16 MB).";
     public const string Timeout = "The query ran longer than 10 seconds and was stopped. Add a date range, a folder or a LIMIT, or use email_stats for counts.";
 
     public static string SqlError(string sqliteMessage)
@@ -108,7 +110,10 @@ public static class IndexQueryAuthorizer
     /// <param name="arg2">4th C argument (column / function name / pragma value / ...).</param>
     /// <param name="dbName">"main", "temp", ... or null.</param>
     /// <param name="viewName">Inner-most trigger or view responsible, or null for top-level SQL.</param>
-    public static Decision Decide(int action, string? arg1, string? arg2, string? dbName, string? viewName)
+    /// <param name="realTables">Names of the tables and views the opened database really has (from sqlite_master), or null for the
+    /// built-in Clippy schema. Only used for reads without a column.</param>
+    public static Decision Decide(int action, string? arg1, string? arg2, string? dbName, string? viewName,
+        IReadOnlySet<string>? realTables = null)
     {
         switch (action)
         {
@@ -116,7 +121,7 @@ public static class IndexQueryAuthorizer
             case raw.SQLITE_RECURSIVE:
                 return Allowed;
             case raw.SQLITE_READ:
-                return DecideRead(arg1, arg2, dbName, viewName);
+                return DecideRead(arg1, arg2, dbName, viewName, realTables);
             case raw.SQLITE_FUNCTION:
                 if (arg2 is null) return Deny("function (unknown)");
                 if (DeniedFunctions.Contains(arg2)
@@ -153,10 +158,15 @@ public static class IndexQueryAuthorizer
         }
     }
 
-    private static readonly HashSet<string> HiddenTables = new(StringComparer.OrdinalIgnoreCase)
-        { "meta", "sync_state", "ai_decisions", "dbstat" };
+    /// <summary>Tables of the Clippy schema, used for the no-column rule when no live table list is passed (unit tests).</summary>
+    private static readonly HashSet<string> DefaultRealTables = new(StringComparer.OrdinalIgnoreCase)
+        { "emails", "attachments", "emails_fts", "meta", "sync_state", "ai_decisions" };
 
-    private static Decision DecideRead(string? table, string? column, string? dbName, string? viewName)
+    /// <summary>Eponymous virtual tables: never in sqlite_master, so the live table list can't name them.</summary>
+    private static readonly HashSet<string> EponymousHidden = new(StringComparer.OrdinalIgnoreCase) { "dbstat" };
+
+    private static Decision DecideRead(string? table, string? column, string? dbName, string? viewName,
+        IReadOnlySet<string>? realTables)
     {
         var col = column ?? "";
         if (table is not null)
@@ -177,8 +187,10 @@ public static class IndexQueryAuthorizer
             }
         }
         // A read with no column ("" : count(*), a constant-only select list, FROM x with no columns used) shows
-        // at most that rows exist. SQLite reports it for CTE names (no schema to tell them apart), and for the
-        // views' own "FROM main.emails" once flattened (dbName "main"; a user's plain "FROM emails" has none).
+        // at most that rows exist. Allow-list: emails and attachments (db "main": the views' own "FROM main.emails"
+        // once flattened; a user's plain "FROM emails" reports no db, and users can write "main.emails" themselves,
+        // which only shows a row count), plus names that are not real tables or views of this database, i.e. CTE
+        // names and subquery aliases (SQLite reports them with no schema). Every other real table is denied.
         if (table is not null && col.Length == 0)
         {
             var real = table.Equals("emails", StringComparison.OrdinalIgnoreCase)
@@ -187,7 +199,8 @@ public static class IndexQueryAuthorizer
             {
                 if (string.Equals(dbName, "main", StringComparison.OrdinalIgnoreCase)) return Allowed;
             }
-            else if (!HiddenTables.Contains(table)
+            else if (!(realTables ?? DefaultRealTables).Contains(table)
+                     && !EponymousHidden.Contains(table)
                      && !table.StartsWith("sqlite_", StringComparison.OrdinalIgnoreCase)
                      && !table.StartsWith("pragma_", StringComparison.OrdinalIgnoreCase))
                 return Allowed;
@@ -214,7 +227,7 @@ public static class IndexQuery
     public const int MaxCellChars = 2_000;
     public const int MaxTotalChars = 1_000_000;
     public const int ProgressInterval = 1_000;
-    public const int MaxValueBytes = 50_000_000;
+    public const int MaxValueBytes = 16_000_000;
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
     private const int DeadlineRowCheck = 100;
@@ -229,6 +242,7 @@ public static class IndexQuery
         ArgumentNullException.ThrowIfNull(indexes);
         ct.ThrowIfCancellationRequested();
         var sw = Stopwatch.StartNew();
+        SqliteHeapLimit.Ensure();
 
         if (string.IsNullOrWhiteSpace(sql)) throw new McpException(IndexQueryTexts.SqlRequired);
         if (sql.Length > MaxSqlChars) throw new McpException(IndexQueryTexts.SqlTooLong);
@@ -313,7 +327,11 @@ public static class IndexQuery
     {
         if (!File.Exists(dbPath)) throw new McpException(IndexQueryTexts.Unavailable(key));
 
+        // The wait for a locked index counts against the same deadline as the query (max 10 s in total, also for "all").
+        var remaining = timeout - sw.Elapsed;
+        if (remaining < TimeSpan.Zero) remaining = TimeSpan.Zero;
         SqliteConnection? connection = null;
+        IReadOnlySet<string> realTables = new HashSet<string>();
         try
         {
             try
@@ -323,9 +341,19 @@ public static class IndexQuery
                     DataSource = dbPath,
                     Mode = SqliteOpenMode.ReadOnly,
                     Pooling = false,
+                    DefaultTimeout = (int)Math.Ceiling(remaining.TotalSeconds),
                 }.ToString());
                 connection.Open();
-                Exec(connection, "PRAGMA busy_timeout=5000;");
+                // The real tables and views of this database, for the authorizer's no-column rule. Read before the
+                // authorizer exists; the temp views created below are not in main.sqlite_master.
+                var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                using (var list = connection.CreateCommand())
+                {
+                    list.CommandText = "SELECT name FROM main.sqlite_master WHERE type IN ('table','view')";
+                    using var rd = list.ExecuteReader();
+                    while (rd.Read()) names.Add(rd.GetString(0));
+                }
+                realTables = names;
                 // Still without the authorizer: the file must be a Clippy index.
                 using (var check = connection.CreateCommand())
                 {
@@ -348,13 +376,17 @@ public static class IndexQuery
             raw.sqlite3_limit(db, raw.SQLITE_LIMIT_SQL_LENGTH, MaxSqlChars);
             raw.sqlite3_limit(db, raw.SQLITE_LIMIT_LENGTH, MaxValueBytes);
             raw.sqlite3_db_config(db, raw.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 0, out _);
+            // The wait for a lock ends with the deadline, so "all" can't run past the 10 s in total.
+            // Set last: executing commands through Microsoft.Data.Sqlite may reset the busy timeout.
+            remaining = timeout - sw.Elapsed;
+            raw.sqlite3_busy_timeout(db, remaining > TimeSpan.Zero ? (int)remaining.TotalMilliseconds : 0);
 
             var call = new CallState();
             strdelegate_authorizer authorizer = (_, action, p0, p1, dbName, view) =>
             {
                 try
                 {
-                    var d = IndexQueryAuthorizer.Decide(action, p0, p1, dbName, view);
+                    var d = IndexQueryAuthorizer.Decide(action, p0, p1, dbName, view, realTables);
                     if (d.Allow) return raw.SQLITE_OK;
                     call.Denied ??= d.What;
                     return raw.SQLITE_DENY;
@@ -408,7 +440,12 @@ public static class IndexQuery
         call.Denied = null;
         var rc = raw.sqlite3_prepare_v2(db, sql, out var stmt, out var tail);
         stmtRef = stmt;
-        if (rc != raw.SQLITE_OK) throw Failure(db, call);
+        if (rc != raw.SQLITE_OK)
+        {
+            // The progress handler also runs while preparing (deadline or cancellation).
+            ThrowIfInterrupted(rc, call.InterruptFired, ct);
+            throw Failure(db, call, rc);
+        }
         if (stmt is null || stmt.IsInvalid) throw new McpException(IndexQueryTexts.SqlRequired);
         if (!IndexQuery.IsEmptyTail(tail)) throw new McpException(IndexQueryTexts.MultipleStatements);
         if (raw.sqlite3_stmt_readonly(stmt) == 0) throw new McpException(IndexQueryTexts.Denied("writing"));
@@ -431,12 +468,8 @@ public static class IndexQuery
             if (rc == raw.SQLITE_DONE) return;
             if (rc != raw.SQLITE_ROW)
             {
-                if (rc == raw.SQLITE_INTERRUPT || call.InterruptFired)
-                {
-                    if (ct.IsCancellationRequested) throw new OperationCanceledException(ct);
-                    throw new McpException(IndexQueryTexts.Timeout);
-                }
-                throw Failure(db, call);
+                ThrowIfInterrupted(rc, call.InterruptFired, ct);
+                throw Failure(db, call, rc);
             }
 
             if (state.Rows.Count >= state.MaxRows)
@@ -465,10 +498,23 @@ public static class IndexQuery
         }
     }
 
-    private static McpException Failure(sqlite3 db, CallState call) =>
+    /// <summary>Deadline or cancellation seen by the progress handler (while preparing or stepping): maps to the Timeout text or OperationCanceledException.</summary>
+    internal static void ThrowIfInterrupted(int rc, bool interruptFired, CancellationToken ct)
+    {
+        if ((rc & 0xFF) != raw.SQLITE_INTERRUPT && !interruptFired) return;
+        if (ct.IsCancellationRequested) throw new OperationCanceledException(ct);
+        throw new McpException(IndexQueryTexts.Timeout);
+    }
+
+    private static McpException Failure(sqlite3 db, CallState call, int rc) =>
         call.Denied is { } what
             ? new McpException(IndexQueryTexts.Denied(what))
-            : new McpException(IndexQueryTexts.SqlError(raw.sqlite3_errmsg(db).utf8_to_string() ?? ""));
+            : (rc & 0xFF) switch
+            {
+                raw.SQLITE_NOMEM => new McpException(IndexQueryTexts.OutOfMemory),
+                raw.SQLITE_TOOBIG => new McpException(IndexQueryTexts.TooBig),
+                _ => new McpException(IndexQueryTexts.SqlError(raw.sqlite3_errmsg(db).utf8_to_string() ?? "")),
+            };
 
     private static IReadOnlyList<object?> BuildRow(sqlite3_stmt stmt, int colCount, string key, bool withMailbox,
         out long rowChars, ref int cutCells)
@@ -489,13 +535,7 @@ public static class IndexQuery
                     cell = double.IsFinite(d) ? d : null;
                     break;
                 case raw.SQLITE_TEXT:
-                    var s = raw.sqlite3_column_text(stmt, i).utf8_to_string() ?? "";
-                    if (s.Length > MaxCellChars)
-                    {
-                        var cut = char.IsHighSurrogate(s[MaxCellChars - 1]) ? MaxCellChars - 1 : MaxCellChars;
-                        s = s[..cut] + "\u2026";
-                        cutCells++;
-                    }
+                    var s = ReadText(stmt, i, ref cutCells);
                     chars += s.Length;
                     cell = s;
                     break;
@@ -512,6 +552,34 @@ public static class IndexQuery
         }
         rowChars = chars;
         return row;
+    }
+
+    /// <summary>Longest UTF-8 prefix that can still matter for MaxCellChars UTF-16 units (3 bytes per unit at most).</summary>
+    private const int MaxCellBytes = (MaxCellChars + 1) * 3;
+
+    /// <summary>Reads a TEXT cell, decoding at most the first MaxCellBytes bytes so a huge value is never copied whole.</summary>
+    internal static string ReadText(sqlite3_stmt stmt, int i, ref int cutCells)
+    {
+        var bytes = raw.sqlite3_column_bytes(stmt, i);   // no conversion: the database is UTF-8
+        if (bytes == 0) return "";
+        var span = raw.sqlite3_column_blob(stmt, i);
+        var big = span.Length > MaxCellBytes;
+        if (big)
+        {
+            // Cut on a character boundary: skip back over UTF-8 continuation bytes (10xxxxxx).
+            var end = MaxCellBytes;
+            while (end > 0 && (span[end] & 0xC0) == 0x80) end--;
+            span = span[..end];
+        }
+        var s = System.Text.Encoding.UTF8.GetString(span);
+        if (big || s.Length > MaxCellChars)
+        {
+            if (s.Length > MaxCellChars) s = s[..MaxCellChars];
+            if (s.Length > 0 && char.IsHighSurrogate(s[^1])) s = s[..^1];
+            s += "\u2026";
+            cutCells++;
+        }
+        return s;
     }
 
     /// <summary>The CREATE TEMP VIEW script for one mailbox key ("" = own); the key is a doubled-quote SQL literal.</summary>

@@ -257,6 +257,8 @@ public class MeetingOffersTests
     [InlineData("Außerhalb der Bürozeiten", "Außerhalb der Bürozeiten:")]
     [InlineData("Hors des heures de bureau européennes :", "Hors des heures de bureau européennes :")]
     [InlineData("a\u0007b", "ab:")]
+    [InlineData("a\u202Eb\u200Bc", "abc:")]
+    [InlineData("\u202E\u200B", "Outside European office hours:")]
     [InlineData("x \t\n  y", "x y:")]
     [InlineData("[[x]] <b>", "x b:")]
     [InlineData("12345", "Outside European office hours:")]

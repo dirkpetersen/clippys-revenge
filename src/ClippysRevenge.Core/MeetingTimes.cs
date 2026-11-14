@@ -308,7 +308,7 @@ public static class MeetingOffers
 
         var sb = new StringBuilder(modelHeading.Length);
         foreach (var ch in modelHeading)
-            if (!char.IsControl(ch)) sb.Append(ch);
+            if (!char.IsControl(ch) && char.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.Format) sb.Append(ch);
 
         var collapsed = new StringBuilder(sb.Length);
         var inSpace = false;

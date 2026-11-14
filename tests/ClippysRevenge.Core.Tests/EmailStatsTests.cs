@@ -491,7 +491,7 @@ public class EmailStatsTests : IDisposable
             Assert.Contains(EmailStats.WireName(g), EmailStats.ToolDescription);
             Assert.Contains(EmailStats.WireName(g), EmailStats.GroupByParameterDescription);
         }
-        foreach (var s in new[] { "never mail text", "query_index", "mailbox=\"all\"", "include_cc" })
+        foreach (var s in new[] { "never mail text", "query_index", "mailbox=\"all\"", "include_cc", "recipients with no valid address are skipped", "(unknown) is a sender with no valid address" })
         {
             Assert.Contains(s, EmailStats.ToolDescription);
         }

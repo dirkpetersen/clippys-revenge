@@ -431,7 +431,7 @@ public class FreeTimeFinderTests
     [Fact]
     public async Task Dst()
     {
-        var la = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
+        var la = TestZones.PacificDst();
         var day0 = new DateTime(2026, 10, 30);
         var map = new Dictionary<string, string?> { ["a@x.org"] = new string('0', 4 * 48) };
         var (f, _) = Make(map, new DateTime(2026, 10, 30, 7, 0, 0), la);
@@ -489,7 +489,7 @@ public class FreeTimeFinderTests
         "4. Tue 10/13  11:00–12:00 PT", "5. Mon 10/12  08:00–09:00 PT",
     ];
 
-    private static TimeZoneInfo Berlin() => TimeZoneInfo.FindSystemTimeZoneById("Europe/Berlin");
+    private static TimeZoneInfo Berlin() => TestZones.Berlin();
 
     [Fact]
     public async Task Ranked_suggestions()
