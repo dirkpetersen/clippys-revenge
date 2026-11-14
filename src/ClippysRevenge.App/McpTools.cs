@@ -1,12 +1,13 @@
 using System.ComponentModel;
 using System.Text.Json.Serialization;
 using ClippysRevenge.Core;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 
 namespace ClippysRevenge.App;
 
 [McpServerToolType]
-internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker)
+internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker, ILogger<McpTools> log)
 {
     [McpServerTool(Name = "search_emails", ReadOnly = true, Idempotent = true)]
     [Description("Searches the local email index (fast, works while Outlook is busy). All filters are optional and combine with AND; results are newest first. Each result has id, mailbox, folder, date (local time), from, sender_email, to, subject, has_attachments, attachments[] (name, size, inline flag) and snippet. Pass a result's id to get_message to read the full body. Only synced mail is indexed; use index_status to check coverage if something seems missing.")]
@@ -85,6 +86,9 @@ internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker)
             window.Start, window.End, events.Count, events.Count >= CalendarEvents.MaxEvents,
             events.Select(e => new EventResult(e.Id, e.Subject, e.Start, e.End, e.AllDay, e.Location, e.Organizer, e.IsRecurring, e.BusyStatus)).ToList());
     }
+
+    /// <summary>"" becomes "own"; anything else as is (already a normalized, configured key or "all").</summary>
+    private static string MailboxLabel(string key) => key.Length == 0 ? "own" : key;
 
     private const string FindFreeTimesDescription =
         "Finds meeting times when everyone is free, from Outlook free/busy. Paste recipients as \"Last, First <email>; ...\" (separate with \";\"). Returns \"suggestions\": whole free blocks, numbered, with start/end (local time, ISO with offset), ranked so that times right before or after the calendar owner's meetings come first, then times next to tentative meetings, then the rest, each group in date order (\"adjacent\" says which), plus a ready-to-show \"text\". Also returns \"offers\": up to max_suggestions options of exactly duration_minutes, in the same ranking, and \"offer_text\" with one option per line. When proposing times in an email, paste offer_text as is, without reordering or retyping the times, and set offer_cet=true when the person you are writing to is in Europe. People whose free/busy can't be read (e.g. outside the organization) are listed in unknown_attendees and ignored. Nothing is booked. To book a suggestion or offer, pass its start and end to send_meeting_invite.";

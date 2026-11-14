@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Text;
 using ClippysRevenge.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -54,6 +55,13 @@ public sealed class DiProbeTools
 {
     [McpServerTool(Name = "di_probe"), Description("probe")]
     public string Probe(ProbeService svc, string text) => svc.Prefix + text;
+}
+
+[McpServerToolType]
+public sealed class SecretFailTools
+{
+    [McpServerTool(Name = "secret_fail_test"), Description("fail")]
+    public string Fail() => throw new McpException("SQL error: no such column: zebra7731. query_index reads the views mail, mail_fts and mail_attachments (see the tool description).");
 }
 
 public class McpHttpHostTests
@@ -486,5 +494,43 @@ public class McpHttpHostTests
         await c.CallToolAsync(name, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(await WaitFor(() => f.Hub.GetEvents().Count == 1));
         Assert.Equal(McpHttpHost.MaxToolLabelLength, f.Hub.GetEvents()[^1].Summary.Length);
+    }
+
+    [Fact]
+    public async Task ToolError_ReachesClient_NotTheLogFile()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "clippy-mcplog-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var provider = new RollingFileLoggerProvider(new RollingFileLogOptions { Directory = dir, MinLevel = () => Microsoft.Extensions.Logging.LogLevel.Trace });
+            using var hub = new ActivityHub();
+            var host = new McpHttpHost(new McpHostOptions
+            {
+                Tokens = new TokenHolder("test-token-1"),
+                Hub = hub,
+                ConfigureMcp = b => b.WithTools<SecretFailTools>(),
+                ConfigureLogging = b => b.AddProvider(provider),
+            });
+            try
+            {
+                Assert.True(await host.StartAsync(0, TestContext.Current.CancellationToken));
+                await using var c = await Client(host.Port!.Value);
+                var r = await c.CallToolAsync("secret_fail_test", cancellationToken: TestContext.Current.CancellationToken);
+                Assert.True(r.IsError);
+                Assert.Contains("zebra7731", Assert.IsType<TextContentBlock>(r.Content[0]).Text);
+            }
+            finally
+            {
+                await host.DisposeAsync();
+            }
+            var all = Directory.EnumerateFiles(dir).Select(File.ReadAllText).ToList();
+            Assert.NotEmpty(all);
+            Assert.All(all, t => Assert.DoesNotContain("zebra7731", t));
+            Assert.Contains(all, t => t.Contains("ModelContextProtocol.McpException", StringComparison.Ordinal));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
     }
 }

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 
 namespace ClippysRevenge.Core;
 
@@ -51,6 +52,7 @@ public static partial class LogRedactor
 /// <summary>
 /// Small rolling file logger (SPEC 2, 5.1): one file per local day, old files deleted.
 /// Callers must not pass tokens, bodies or search text; the token is also masked defensively.
+/// The message of an <see cref="McpException"/> is never written (tool errors can quote SQL or search text); its type and stack trace are.
 /// </summary>
 public sealed class RollingFileLoggerProvider : ILoggerProvider
 {
@@ -108,7 +110,12 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
           .Append(' ').Append(Abbrev(level)).Append(' ').Append(category).Append(": ").Append(message);
         if (ex is not null)
         {
-            sb.Append(Environment.NewLine).Append(ex.GetType().FullName).Append(": ").Append(ex.Message);
+            sb.Append(Environment.NewLine).Append(ex.GetType().FullName);
+            if (ex is not McpException)
+            {
+                // Tool errors (McpException) can quote SQL, search text or SQLite messages back to the model.
+                sb.Append(": ").Append(ex.Message);
+            }
             if (ex.StackTrace is { } st)
             {
                 sb.Append(Environment.NewLine).Append(st);

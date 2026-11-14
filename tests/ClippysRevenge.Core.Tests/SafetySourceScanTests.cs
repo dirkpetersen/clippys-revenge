@@ -604,6 +604,75 @@ public class SafetySourceScanTests
         var hits = core.Where(f => comTypes.IsMatch(f.Code)).Select(f => f.Rel).ToList();
         AssertNone(hits, "AI files in Core must not reference COM types or CreateReplyDraft.");
         Assert.True(Hit(comTypes, "x.CreateReplyDraft()"));
-    }}
+    }
 
+    // ---- Log safety (SPEC 5.1, 11.11, 11.12) ----
 
+    private static readonly Regex LogCall = new(@"\.Log(Trace|Debug|Information|Warning|Error|Critical)?\s*\(");
+    private static readonly Regex LogArgBad = new(
+        @"\b(sql|query|sender|recipient|subject|body|folder|date_from|date_to|attachment_name|attachment_ext|mailbox|group_by|order|text|id)\b|\.Rows\b|\.Columns\b(?!\.Count\b)");
+
+    internal static List<string> LogArgumentHits(string code, string rel)
+    {
+        var hits = new List<string>();
+        foreach (Match m in LogCall.Matches(code))
+        {
+            var end = code.IndexOf(';', m.Index);
+            var call = code[m.Index..(end < 0 ? code.Length : end)];
+            if (LogArgBad.IsMatch(call))
+            {
+                hits.Add($"{rel}:{LineOf(code, m.Index)}: {call.Trim()}");
+            }
+        }
+        return hits;
+    }
+
+    [Fact]
+    public void IndexQueryAndEmailStats_NeverLog()
+    {
+        foreach (var rel in new[] { "src/ClippysRevenge.Core/IndexQuery.cs", "src/ClippysRevenge.Core/EmailStats.cs" })
+        {
+            var f = Scan.Value.Files.SingleOrDefault(x => x.Rel == rel);
+            Assert.NotNull(f);
+            Assert.DoesNotMatch(@"\bILogger\b|\bLog(Trace|Debug|Information|Warning|Error|Critical)?\s*\(|\bConsole\.|\bDebug\.Write|\bTrace\.Write", f!.Code);
+        }
+    }
+
+    [Fact]
+    public void McpToolsLogCalls_NeverTakeSqlSearchTextOrCells()
+    {
+        var files = Scan.Value.Files.Where(f => f.Rel.StartsWith("src/ClippysRevenge.App/McpTools", StringComparison.Ordinal)).ToList();
+        Assert.NotEmpty(files);
+        var hits = files.SelectMany(f => LogArgumentHits(f.Code, f.Rel)).ToList();
+        AssertNone(hits, "Log calls in McpTools*.cs must not take SQL, search text, cell values or column names.");
+        var index = files.Single(f => f.Rel.EndsWith("McpTools.Index.cs", StringComparison.Ordinal));
+        Assert.True(LogCall.Matches(index.Code).Count >= 2);
+    }
+
+    [Fact]
+    public void LogArgumentMatcher_CatchesPlantedViolations()
+    {
+        Assert.Single(LogArgumentHits("log.LogDebug(\"\", sql);", "x"));
+        Assert.Single(LogArgumentHits("log.LogDebug(\"\", r.Rows[0][1]);", "x"));
+        Assert.Single(LogArgumentHits("log.LogDebug(\"\", r.Columns);", "x"));
+        Assert.Single(LogArgumentHits("log.LogError(ex, \"\", query);", "x"));
+        Assert.Empty(LogArgumentHits("log.LogDebug(\"\", r.RowCount, r.Columns.Count, MailboxLabel(key), r.ElapsedMs);", "x"));
+    }
+
+    [Fact]
+    public void IndexTools_ReadOnly_CoreTexts_NoCom()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel.EndsWith("McpTools.Index.cs", StringComparison.Ordinal));
+        foreach (var s in new[]
+        {
+            "Name = \"email_stats\", ReadOnly = true, Idempotent = true",
+            "Name = \"query_index\", ReadOnly = true, Idempotent = true",
+            "[Description(EmailStats.ToolDescription)]",
+            "[Description(IndexQueryTexts.ToolDescription)]",
+        })
+        {
+            Assert.Contains(s, f.WithStrings);
+        }
+        Assert.DoesNotMatch(@"\bworker\.|\bstores\.|\bRunAsync\b|\bEnsureResolvedAsync\b|\bOutlookMail\b", f.Code);
+    }
+}
