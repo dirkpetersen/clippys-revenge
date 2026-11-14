@@ -50,7 +50,9 @@ public sealed record DraftWorkerServices(
     Func<bool> SyncPaused,                   // sync.IsPaused
     TimeZoneInfo Zone,
     TimeProvider? Time = null,
-    ILogger? Logger = null);
+    ILogger? Logger = null,
+    IFreeBusySource? FreeBusy = null,                 // null = calendar never readable (placeholder)
+    Func<TimeZoneInfo?>? CentralEurope = null);       // null = SenderRegion.CentralEurope
 
 public enum DraftPassEnd
 {
@@ -58,8 +60,10 @@ public enum DraftPassEnd
     RateLimited, Failed, Yielded, Cancelled,
 }
 
-/// <summary>NoReply includes low_confidence. ModelCalls counts calls made in this pass.</summary>
-public sealed record DraftPassResult(DraftPassEnd End, int Drafted, int NoReply, int Skipped, int Failed, int ModelCalls);
+/// <summary>NoReply is needs_reply = false only; LowConfidence counts low_confidence skips.
+/// ModelCalls counts calls made in this pass.</summary>
+public sealed record DraftPassResult(DraftPassEnd End, int Drafted, int NoReply, int LowConfidence, int Skipped,
+    int Failed, int ModelCalls);
 
 /// <summary>Today's Claude calls and created drafts (Settings "Today" line).</summary>
 public sealed record AiDraftsToday(int Calls, int Drafts);
@@ -101,10 +105,30 @@ public static class DraftTexts
         return "AI reply draft created: " + s;
     }
 
-    public static string Summary(int drafted, int noReply, int skipped, int failed, TimeSpan duration)
+    /// <summary>Invariant "0.00#": 0.5 gives "0.50", 0.6 "0.60", 0.555 "0.555".</summary>
+    public static string Confidence(double value) => value.ToString("0.00#", CultureInfo.InvariantCulture);
+
+    /// <summary>The Ai event for one low-confidence skip. No subject, sender or body.</summary>
+    public static string LowConfidence(DateTimeOffset received, TimeZoneInfo zone, double confidence, double minimum) =>
+        "AI drafts: no draft for the email received "
+        + TimeZoneInfo.ConvertTime(received, zone).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
+        + ": Claude's confidence " + Confidence(confidence) + " is below your minimum of " + Confidence(minimum)
+        + ". To draft it anyway, select it in Outlook and use \"Draft a reply to the selected email\" in the tray menu, "
+        + "or lower Minimum confidence in Settings → AI drafts.";
+
+    /// <summary>The detail after "&lt;n&gt; low confidence" in the pass log line.</summary>
+    public static string LowConfidenceLogDetail(int count, double highest, double minimum) => count switch
+    {
+        <= 0 => "",
+        1 => " (" + Confidence(highest) + " < " + Confidence(minimum) + ")",
+        _ => " (highest " + Confidence(highest) + " < " + Confidence(minimum) + ")",
+    };
+
+    public static string Summary(int drafted, int noReply, int lowConfidence, int skipped, int failed, TimeSpan duration)
     {
         var s = Fmt($"AI drafts: {drafted} drafted");
         if (noReply > 0) s += Fmt($", {noReply} no reply needed");
+        if (lowConfidence > 0) s += Fmt($", {lowConfidence} low confidence");
         if (skipped > 0) s += Fmt($", {skipped} skipped");
         if (failed > 0) s += Fmt($", {failed} failed");
         return s + " (" + duration.TotalSeconds.ToString("0.#", CultureInfo.InvariantCulture) + " s)";
@@ -140,6 +164,8 @@ public sealed class DraftWorker : BackgroundService
     private DateOnly? _limitReportedDay;
     private int _yield;     // number of manual drafts waiting for the gate; a running pass yields while it is above 0
     private int _waits;
+    private int _cetWarned;
+    private readonly DraftMeetingTimes _meetings;
 
     /// <exception cref="ArgumentNullException">services or any non-nullable member is null.</exception>
     public DraftWorker(DraftWorkerServices services)
@@ -160,6 +186,7 @@ public sealed class DraftWorker : BackgroundService
         _s = services;
         _time = services.Time ?? TimeProvider.System;
         _log = services.Logger;
+        _meetings = new DraftMeetingTimes(services.FreeBusy, services.Zone, services.CentralEurope ?? SenderRegion.CentralEurope);
     }
 
     /// <summary>Test hook: how many times the loop has started waiting for its next pass.</summary>
@@ -353,6 +380,9 @@ public sealed class DraftWorker : BackgroundService
         public int Total { get; set; }
         public int Drafted { get; set; }
         public int NoReply { get; set; }
+        public int LowConfidence { get; set; }
+        public double HighestLow { get; set; }
+        public double LowMinimum { get; set; }
         public int Skipped { get; set; }
         public int Failed { get; set; }
         public int Calls { get; set; }
@@ -392,7 +422,7 @@ public sealed class DraftWorker : BackgroundService
         return result;
     }
 
-    private static DraftPassResult Ended(DraftPassEnd end) => new(end, 0, 0, 0, 0, 0);
+    private static DraftPassResult Ended(DraftPassEnd end) => new(end, 0, 0, 0, 0, 0, 0);
 
     /// <summary>The cheap reasons a pass doesn't start. Null = go on.</summary>
     private DraftPassEnd? StartCheck()
@@ -452,12 +482,14 @@ public sealed class DraftWorker : BackgroundService
             p.Scope = null;
             var elapsed = _time.GetElapsedTime(p.Start);
             if (p.Rows > 0)
-                _s.Hub.Event(ActivityKind.Ai, DraftTexts.Summary(p.Drafted, p.NoReply, p.Skipped, p.Failed, elapsed), duration: elapsed);
+                _s.Hub.Event(ActivityKind.Ai, DraftTexts.Summary(p.Drafted, p.NoReply, p.LowConfidence, p.Skipped, p.Failed, elapsed),
+                    duration: elapsed);
             if (p.Drafted > 0) _s.Balloons.Post(BalloonTexts.AiDrafted(p.Drafted), BalloonKind.Info, BalloonAction.ShowDrafts);
-            _log?.LogInformation("AI drafts pass: {End}, {Drafted} drafted, {NoReply} no reply, {Skipped} skipped, {Failed} failed, {Calls} calls in {Ms} ms",
-                end, p.Drafted, p.NoReply, p.Skipped, p.Failed, p.Calls, (long)elapsed.TotalMilliseconds);
+            _log?.LogInformation("AI drafts pass: {End}, {Drafted} drafted, {NoReply} no reply, {LowConfidence} low confidence{LowConfidenceDetail}, {Skipped} skipped, {Failed} failed, {Calls} calls in {Ms} ms",
+                end, p.Drafted, p.NoReply, p.LowConfidence, DraftTexts.LowConfidenceLogDetail(p.LowConfidence, p.HighestLow, p.LowMinimum),
+                p.Skipped, p.Failed, p.Calls, (long)elapsed.TotalMilliseconds);
         }
-        return new DraftPassResult(end, p.Drafted, p.NoReply, p.Skipped, p.Failed, p.Calls);
+        return new DraftPassResult(end, p.Drafted, p.NoReply, p.LowConfidence, p.Skipped, p.Failed, p.Calls);
     }
 
     private string UserSmtp(AiIdentity identity)
@@ -525,7 +557,8 @@ public sealed class DraftWorker : BackgroundService
         switch (outcome)
         {
             case AiOutcome.Drafted: p.Drafted++; break;
-            case AiOutcome.NoReply or AiOutcome.LowConfidence: p.NoReply++; break;
+            case AiOutcome.NoReply: p.NoReply++; break;
+            case AiOutcome.LowConfidence: p.LowConfidence++; break;
             case AiOutcome.Skipped: p.Skipped++; break;
             case AiOutcome.Failed: p.Failed++; break;
         }
@@ -638,6 +671,10 @@ public sealed class DraftWorker : BackgroundService
                 {
                     _consecutiveFailures = 0;
                     Write(p, index, c, factsImid, prior, AiOutcome.LowConfidence, calls: 1, confidence: reply.Confidence);
+                    p.HighestLow = Math.Max(p.HighestLow, reply.Confidence);
+                    p.LowMinimum = ai.MinConfidence;
+                    _s.Hub.Event(ActivityKind.Ai, DraftTexts.LowConfidence(c.EventTime, _s.Zone, reply.Confidence, ai.MinConfidence),
+                        mailbox: key.Length == 0 ? null : key);
                     return null;
                 }
                 html = DraftHtml.Sanitize(reply.BodyHtml);
@@ -681,6 +718,29 @@ public sealed class DraftWorker : BackgroundService
             _retryAt = now + TimeSpan.FromMinutes(minutes);
             _s.Hub.Event(ActivityKind.Ai, DraftTexts.CallFailed(kind.ToString(), minutes));
             return DraftPassEnd.Failed;
+        }
+
+        // 6a. Meeting times (SPEC 21.6): free/busy is read only now, after the model has answered.
+        if (DraftMeetingTimes.IsWanted(ai, reply!, html))
+        {
+            try
+            {
+                var europe = SenderRegion.IsEurope(c.SenderEmail, facts!.TransportHeaders);
+                var mt = await _meetings.ApplyAsync(new MeetingTimesRequest(html, reply!.Meeting, userSmtp, key, c.SenderEmail,
+                    c.To, c.Cc, reply.ReplyAll ?? false, europe, now, cur), WorkPriority.Background, ct).ConfigureAwait(false);
+                html = mt.Html;
+                LogMeetingTimes(mt);
+            }
+            catch (OutlookUnavailableException)
+            {
+                Write(p, index, c, factsImid, prior, AiOutcome.Failed, calls: 1, failed: 1);
+                return DraftPassEnd.OutlookUnavailable;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                Write(p, index, c, factsImid, prior, AiOutcome.Failed, calls: 1, failed: 1);
+                return DraftPassEnd.Cancelled;
+            }
         }
 
         // 7. Re-check.
@@ -754,6 +814,27 @@ public sealed class DraftWorker : BackgroundService
     private static IReadOnlyList<string> NonInlineNames(IReadOnlyList<AttachmentInfo> atts) =>
         atts.Where(a => !a.IsInline && !string.IsNullOrWhiteSpace(a.FileName)).Select(a => a.FileName).ToList();
 
+    /// <summary>Counts and outcomes only: no times, dates, addresses or headers (SPEC 19.11).</summary>
+    private void LogMeetingTimes(MeetingTimesResult mt)
+    {
+        switch (mt.Outcome)
+        {
+            case MeetingTimesOutcome.Offered:
+                _log?.LogDebug("AI drafts: offered {Count} meeting times ({Readable} of {Checked} attendees readable)",
+                    mt.Offered, mt.Readable, mt.Checked);
+                break;
+            case MeetingTimesOutcome.NoFreeTime:
+                _log?.LogDebug("AI drafts: no free meeting times to offer ({Readable} of {Checked} attendees readable)",
+                    mt.Readable, mt.Checked);
+                break;
+            default:
+                _log?.LogDebug("AI drafts: couldn't read the calendar for meeting times ({Type})", mt.ErrorType ?? "unknown");
+                break;
+        }
+        if (mt.CetMissing && Interlocked.Exchange(ref _cetWarned, 1) == 0)
+            _log?.LogWarning("{Message}", FreeTimeFinder.CetMissingWarning);
+    }
+
     private ReplyPlan MakePlan(string entryId, bool replyAll, string html, WorkPriority priority)
     {
         var sig = _s.ReplySignatureHtml();
@@ -772,7 +853,7 @@ public sealed class DraftWorker : BackgroundService
         var label = TimeZoneLabels.Resolve(settings.TimeZoneLabel, _s.Zone, localNow.DateTime);
         var input = new DraftPromptInput(now, _s.Zone, label, key, sig is not null, thread, email, sigText);
         return new ModelRequest(
-            DraftPrompt.SystemPrompt(identity.DisplayName, userSmtp, manual, _s.Style.ReadForPrompt()),
+            DraftPrompt.SystemPrompt(identity.DisplayName, userSmtp, manual, _s.Style.ReadForPrompt(), ai.MeetingTimes),
             DraftPrompt.UserPrompt(input), DraftModel.ReplySchema, ai.Model, ai.Effort,
             TimeSpan.FromSeconds(ai.TimeoutSeconds), DraftModel.DraftMaxOutputTokens);
     }
@@ -909,6 +990,48 @@ public sealed class DraftWorker : BackgroundService
                 {
                     text = DraftTexts.ManualFailed("Claude didn't write a reply");
                     break;
+                }
+                if (DraftMeetingTimes.IsWanted(ai, reply, html))
+                {
+                    bool europe;
+                    try
+                    {
+                        var facts = await _s.Mailbox.GetFactsAsync(key, e.EntryId, WorkPriority.Interactive, ct).ConfigureAwait(false);
+                        europe = SenderRegion.IsEurope(e.SenderEmail, facts?.TransportHeaders);
+                    }
+                    catch (OutlookUnavailableException)
+                    {
+                        text = DraftTexts.ManualFailed("Outlook isn't running");
+                        break;
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        WriteManualRow(index, e, prior, null, now, null);
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        europe = SenderRegion.IsEurope(e.SenderEmail, null);
+                        _log?.LogDebug("AI drafts: reading the email's headers for meeting times failed ({Type}).", ex.GetType().Name);
+                    }
+
+                    try
+                    {
+                        var mt = await _meetings.ApplyAsync(new MeetingTimesRequest(html, reply.Meeting, userSmtp, key, e.SenderEmail,
+                            e.To, e.Cc, reply.ReplyAll ?? false, europe, now, cur), WorkPriority.Interactive, ct).ConfigureAwait(false);
+                        html = mt.Html;
+                        LogMeetingTimes(mt);
+                    }
+                    catch (OutlookUnavailableException)
+                    {
+                        text = DraftTexts.ManualFailed("Outlook isn't running");
+                        break;
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        WriteManualRow(index, e, prior, null, now, null);
+                        throw;
+                    }
                 }
                 try
                 {

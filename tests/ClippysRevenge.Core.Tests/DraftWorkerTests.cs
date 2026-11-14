@@ -197,6 +197,8 @@ public class DraftWorkerTests
         h.Model.Enqueue(OkReply(0.95, needsReply: false));
         var r = await Pass(h);
         Assert.Equal(1, r.NoReply);
+        Assert.Equal(0, r.LowConfidence);
+        Assert.Contains(h.Log.Lines, l => l.Contains(", 1 no reply, 0 low confidence, ", StringComparison.Ordinal));
         var d = h.Decision("C1")!;
         Assert.Equal(AiOutcome.NoReply, d.Outcome);
         Assert.Equal(0.95, d.Confidence);
@@ -215,7 +217,73 @@ public class DraftWorkerTests
         var r = await Pass(h);
         Assert.Equal(AiOutcome.LowConfidence, h.Decision("C1")!.Outcome);
         Assert.Empty(h.Writer.Plans);
-        Assert.Equal(1, r.NoReply);
+        Assert.Equal(0, r.NoReply);
+        Assert.Equal(1, r.LowConfidence);
+
+        var ai = h.Events(ActivityKind.Ai);
+        Assert.Equal(2, ai.Count);
+        Assert.Equal(
+            "AI drafts: no draft for the email received 2026-11-13 11:50: Claude's confidence 0.50 is below your minimum of 0.60. "
+            + "To draft it anyway, select it in Outlook and use \"Draft a reply to the selected email\" in the tray menu, "
+            + "or lower Minimum confidence in Settings → AI drafts.",
+            ai[0].Summary);
+        Assert.Null(ai[0].Mailbox);
+        Assert.StartsWith("AI drafts: 0 drafted, 1 low confidence (", ai[1].Summary);
+        Assert.Contains(h.Log.Lines, l => l.Contains(
+            "AI drafts pass: Completed, 0 drafted, 0 no reply, 1 low confidence (0.50 < 0.60), 0 skipped, 0 failed, 1 calls in ",
+            StringComparison.Ordinal));
+        foreach (var bad in new[] { "Budget", "ann@", "BODYTEXT", "SECRET-REASON" })
+            Assert.DoesNotContain(h.AllText(), t => t.Contains(bad, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Two_low_confidence()
+    {
+        using var h = new DraftHarness();
+        h.Ai.MinConfidence = 0.6;
+        h.Seed("C1", age: TimeSpan.FromMinutes(3));
+        h.Seed("C2", age: TimeSpan.FromMinutes(4));
+        h.Model.Enqueue(OkReply(0.5), OkReply(0.55));
+        var r = await Pass(h);
+        Assert.Equal(2, r.LowConfidence);
+        Assert.Equal(0, r.NoReply);
+        Assert.Equal(2, h.Events(ActivityKind.Ai).Count(e => e.Summary.Contains("is below your minimum of 0.60", StringComparison.Ordinal)));
+        Assert.Contains(h.Log.Lines, l => l.Contains("2 low confidence (highest 0.55 < 0.60)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Low_confidence_shared_mailbox_tag()
+    {
+        using var h = new DraftHarness();
+        h.Ai.MinConfidence = 0.6;
+        h.Settings.SharedMailboxes[0].AiDrafts = true;
+        h.Seed("S1", mailbox: DraftHarness.Shared, to: "Help <helpdesk@example.org>");
+        h.Model.Enqueue(OkReply(0.5));
+        var r = await Pass(h);
+        Assert.Equal(1, r.LowConfidence);
+        var e = Assert.Single(h.Events(ActivityKind.Ai), x => x.Summary.Contains("is below your minimum", StringComparison.Ordinal));
+        Assert.Equal(DraftHarness.Shared, e.Mailbox);
+    }
+
+    [Fact]
+    public void Summary_texts()
+    {
+        Assert.Equal("AI drafts: 1 drafted, 2 no reply needed, 3 low confidence, 4 skipped, 5 failed (1.8 s)",
+            DraftTexts.Summary(1, 2, 3, 4, 5, TimeSpan.FromSeconds(1.8)));
+        Assert.Equal("AI drafts: 0 drafted, 1 low confidence (41 s)",
+            DraftTexts.Summary(0, 0, 1, 0, 0, TimeSpan.FromSeconds(41)));
+    }
+
+    [Fact]
+    public void Confidence_format()
+    {
+        Assert.Equal("0.50", DraftTexts.Confidence(0.5));
+        Assert.Equal("0.60", DraftTexts.Confidence(0.6));
+        Assert.Equal("0.555", DraftTexts.Confidence(0.555));
+        Assert.Equal("1.00", DraftTexts.Confidence(1));
+        Assert.Equal("", DraftTexts.LowConfidenceLogDetail(0, 0, 0.6));
+        Assert.Equal(" (0.50 < 0.60)", DraftTexts.LowConfidenceLogDetail(1, 0.5, 0.6));
+        Assert.Equal(" (highest 0.55 < 0.60)", DraftTexts.LowConfidenceLogDetail(2, 0.55, 0.6));
     }
 
     // 14-19

@@ -50,6 +50,8 @@ internal sealed class DraftHarness : IDisposable
     public bool Available { get; set; } = true;
     public bool Paused { get; set; }
     public string? SignatureHtml { get; set; }
+    public FakeFreeBusySource FreeBusy { get; } = new();
+    public Func<TimeZoneInfo?> Cet { get; set; } = TestZones.Berlin;
     public DraftWorker Worker { get; }
 
     public DraftHarness()
@@ -64,7 +66,8 @@ internal sealed class DraftHarness : IDisposable
         Settings.AiDrafting.MaxAgeDays = 2;
         Settings.SharedMailboxes.Add(new SharedMailbox { Smtp = Shared, Enabled = true, AiDrafts = false });
         Worker = new DraftWorker(new DraftWorkerServices(() => Settings, Indexes, Mailbox, Writer, Model, Style,
-            () => SignatureHtml, Hub, Balloons, () => Available, () => Paused, Zone, Time, Log));
+            () => SignatureHtml, Hub, Balloons, () => Available, () => Paused, Zone, Time, Log,
+            FreeBusy: FreeBusy, CentralEurope: () => Cet()));
     }
 
     public AiDraftingSettings Ai => Settings.AiDrafting;
@@ -84,7 +87,7 @@ internal sealed class DraftHarness : IDisposable
     /// <summary>Seeds one row. Default: Inbox of the own mailbox, 10 minutes old, from ann@contoso.example, to me@example.org.</summary>
     public IndexedEmail Seed(string id, string mailbox = "", string folder = "Inbox", TimeSpan? age = null, DateTimeOffset? at = null,
         string sender = "ann@contoso.example", string subject = "Budget", string topic = "Budget", string? imid = null,
-        string to = "Me <me@example.org>", string body = "BODYTEXT-123", string? irt = null)
+        string to = "Me <me@example.org>", string body = "BODYTEXT-123", string? irt = null, string? cc = null)
     {
         var e = new IndexedEmail
         {
@@ -94,6 +97,7 @@ internal sealed class DraftHarness : IDisposable
             SenderName = "Ann",
             SenderEmail = sender,
             To = to,
+            Cc = cc,
             Body = body,
             ConversationTopic = topic,
             InternetMessageId = imid ?? "<" + id + "@contoso.example>",
