@@ -82,6 +82,22 @@ public class IndexQueryBombTests(Xunit.ITestOutputHelper output) : IndexQueryFix
     }
 
     [Fact]
+    public void Expensive_Operations_Are_Interrupted_By_The_Deadline_Timer()
+    {
+        // Each step builds 15 MB temp keys; the progress handler (every 1000 ops) alone would overrun by far.
+        const string sql = "WITH RECURSIVE r(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM r LIMIT 200) "
+            + "SELECT count(*) FROM r WHERE printf('%.*c',15000000,'a')||x IN (SELECT printf('%.*c',15000000,'b')||x FROM r)";
+        var deadline = TimeSpan.FromSeconds(1);
+        var sw = Stopwatch.StartNew();
+        var e = Assert.Throws<McpException>(() =>
+            IndexQuery.Run(Indexes, sql, "", 5, deadline, TestContext.Current.CancellationToken));
+        output.WriteLine("timeout after " + sw.Elapsed.TotalMilliseconds.ToString("F0") + " ms");
+        Assert.Equal(IndexQueryTexts.Timeout, e.Message);
+        Assert.True(sw.Elapsed < deadline * 2, "took " + sw.Elapsed);
+        Healthy();
+    }
+
+    [Fact]
     public void Heap_Limit_Is_Set_Once_And_Idempotent()
     {
         SqliteHeapLimit.Ensure();

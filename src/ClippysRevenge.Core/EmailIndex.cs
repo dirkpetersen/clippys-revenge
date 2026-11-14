@@ -1,6 +1,7 @@
 using System.Globalization;
 using Dapper;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 
 namespace ClippysRevenge.Core;
 
@@ -215,10 +216,57 @@ public sealed partial class EmailIndex
         foreach (var e in emails) Validate(e);
         if (emails.Count == 0) return;
 
+        var capped = new List<IndexedEmail>(emails.Count);
+        foreach (var e in emails) capped.Add(CapBody(e));
+
+        try
+        {
+            UpsertAll(capped);
+        }
+        catch (SqliteException ex) when (IsOutOfMemory(ex))
+        {
+            // One huge item must not stall the folder's watermark: redo the batch item by item and skip what still fails.
+            foreach (var e in capped)
+            {
+                try { UpsertAll([e]); }
+                catch (SqliteException inner) when (IsOutOfMemory(inner))
+                {
+                    Logger?.LogWarning("Index: skipped one email that SQLite could not store (SQLite error {Code}, {Type}).",
+                        inner.SqliteErrorCode, nameof(IndexedEmail));
+                }
+            }
+        }
+    }
+
+    /// <summary>Longest body (UTF-16 units) that is indexed; FTS5 needs roughly 20 bytes of heap per byte of text.</summary>
+    public const int MaxIndexedBodyChars = 2_000_000;
+    public const string BodyCutMarker = "\n\n[Clippy indexed only the first 2,000,000 characters of this email.]";
+
+    /// <summary>Process-wide logger for index warnings (set once at startup).</summary>
+    public static ILogger? Logger { get; set; }
+
+    /// <summary>Test seam: runs for each email inside the upsert transaction, before it is written.</summary>
+    internal Action<IndexedEmail>? BeforeUpsertItem { get; set; }
+
+    private static bool IsOutOfMemory(SqliteException ex) =>
+        (ex.SqliteErrorCode & 0xFF) is 7 /* SQLITE_NOMEM */ or 18 /* SQLITE_TOOBIG */;
+
+    internal static IndexedEmail CapBody(IndexedEmail e)
+    {
+        var body = e.Body;
+        if (body is null || body.Length <= MaxIndexedBodyChars) return e;
+        var cut = MaxIndexedBodyChars;
+        if (char.IsHighSurrogate(body[cut - 1])) cut--;
+        return e with { Body = body[..cut] + BodyCutMarker };
+    }
+
+    private void UpsertAll(IReadOnlyList<IndexedEmail> emails)
+    {
         using var conn = OpenConnection();
         using var tx = conn.BeginTransaction();
         foreach (var e in emails)
         {
+            BeforeUpsertItem?.Invoke(e);
             var atts = e.Attachments.OrderBy(a => a.Position).ToList();
             var names = string.Join("\n", atts.Select(a => a.FileName).Where(n => n.Length > 0));
             var meta = MailThreadMeta.FromValues(e.InReplyTo, e.ConversationTopic, e.ClippyMarker);

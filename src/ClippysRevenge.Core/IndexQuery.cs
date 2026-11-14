@@ -409,6 +409,25 @@ public static class IndexQuery
             raw.sqlite3_set_authorizer(db, authorizer, null);
             raw.sqlite3_progress_handler(db, ProgressInterval, progress, null);
 
+            // The progress handler only runs every ProgressInterval VM ops, and one op can take seconds (huge temp
+            // B-tree keys). A timer interrupts at the deadline (and on cancellation) regardless; the gate keeps it from
+            // touching the connection once the query is over. Temp spill size has no SQLite-level cap, so the timer is the bound.
+            var gate = new object();
+            var finished = false;
+            void Interrupt()
+            {
+                lock (gate)
+                {
+                    if (finished) return;
+                    call.InterruptFired = true;
+                    raw.sqlite3_interrupt(db);
+                }
+            }
+            var left = timeout - sw.Elapsed;
+            using var deadlineTimer = new System.Threading.Timer(_ => Interrupt(), null,
+                left > TimeSpan.Zero ? left : TimeSpan.Zero, System.Threading.Timeout.InfiniteTimeSpan);
+            using var cancelReg = ct.Register(Interrupt);
+
             sqlite3_stmt? stmt = null;
             try
             {
@@ -416,6 +435,9 @@ public static class IndexQuery
             }
             finally
             {
+                lock (gate) finished = true;
+                deadlineTimer.Dispose();
+                cancelReg.Dispose();
                 stmt?.Dispose();
                 GC.KeepAlive(authorizer);
                 GC.KeepAlive(progress);
@@ -568,7 +590,7 @@ public static class IndexQuery
         {
             // Cut on a character boundary: skip back over UTF-8 continuation bytes (10xxxxxx).
             var end = MaxCellBytes;
-            while (end > 0 && (span[end] & 0xC0) == 0x80) end--;
+            for (var back = 0; back < 3 && end > 0 && (span[end] & 0xC0) == 0x80; back++) end--;
             span = span[..end];
         }
         var s = System.Text.Encoding.UTF8.GetString(span);

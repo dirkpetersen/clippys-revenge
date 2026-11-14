@@ -155,6 +155,7 @@ internal static class Program
         StyleSkill? styleSkill = null;
         try
         {
+            EmailIndex.Logger = loggerFactory.CreateLogger<EmailIndex>();
             indexes = new MailboxIndexes(localDir, settings.SharedMailboxes.Where(m => m?.Enabled == true).Select(m => m.Smtp));
             mail = new OutlookMail(stores, indexes, settings);
             var mailSource = new OutlookMailSource(worker, stores, mail);

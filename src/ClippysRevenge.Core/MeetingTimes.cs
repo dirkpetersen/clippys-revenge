@@ -307,8 +307,15 @@ public static class MeetingOffers
         if (modelHeading is null) return OutsideHoursHeading;
 
         var sb = new StringBuilder(modelHeading.Length);
-        foreach (var ch in modelHeading)
-            if (!char.IsControl(ch) && char.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.Format) sb.Append(ch);
+        for (var pos = 0; pos < modelHeading.Length;)
+        {
+            var status = Rune.DecodeFromUtf16(modelHeading.AsSpan(pos), out var rune, out var used);
+            pos += Math.Max(used, 1);
+            if (status != System.Buffers.OperationStatus.Done) continue;   // lone surrogate: dropped
+            var cat = Rune.GetUnicodeCategory(rune);
+            if (cat is UnicodeCategory.Control or UnicodeCategory.Format) continue;
+            sb.Append(rune.ToString());
+        }
 
         var collapsed = new StringBuilder(sb.Length);
         var inSpace = false;
