@@ -8,6 +8,14 @@ namespace ClippysRevenge.App;
 /// <summary>Reply drafts (SPEC section 8 CreateReplyDraft, 11.6). Worker thread only. Drafts are only ever saved.</summary>
 internal sealed partial class OutlookMail
 {
+    /// <summary>Worker thread. Resolves the email (SPEC section 8 chain), releases it, returns its mailbox key. Throws ItemNotFoundException.</summary>
+    internal string CheckReplyTarget(Outlook.Application app, string id)
+    {
+        var r = Resolve(app, id);
+        try { return r.Mailbox; }
+        finally { Release(r.Item); }
+    }
+
     internal CreatedReply CreateReplyDraft(Outlook.Application app, ReplyPlan plan)
     {
         ArgumentNullException.ThrowIfNull(app);

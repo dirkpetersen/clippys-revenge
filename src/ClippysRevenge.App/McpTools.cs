@@ -127,8 +127,9 @@ internal sealed partial class McpTools(ActivityHub hub, OutlookWorker worker, IL
         [Description("Optional plain-text body of the meeting.")] string? body = null,
         [Description("Optional location, e.g. a room.")] string? location = null,
         [Description("Optional SMTP address of a configured shared mailbox whose calendar gets the meeting. Empty = the user's own calendar.")] string? mailbox = null,
+        [Description("Optional id of the email that asked for the meeting, from search_emails. Clippy then also saves a reply draft to that email in Drafts with a highlighted note to add the meeting link and send the invite.")] string? reply_to_id = null,
         CancellationToken cancellationToken = default)
-        => invites.CreateDraftAsync(recipients, subject, start, end, body, location, mailbox, cancellationToken);
+        => invites.CreateDraftAsync(recipients, subject, start, end, body, location, mailbox, reply_to_id, cancellationToken);
 }
 
 public sealed record ListEventsResult(

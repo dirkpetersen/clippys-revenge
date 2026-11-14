@@ -357,8 +357,11 @@ internal static class Program
             tray.ShowSettings();
         });
 
+        var meetingNotes = replyWriter is null ? null
+            : new MeetingNotes(replyWriter, replyWriter, () => signatures.Default(SignatureKind.Reply),
+                loggerFactory.CreateLogger<MeetingNotes>());
         var invites = new MeetingInvites(new OutlookMeetingCalendar(worker, stores, () => settings),
-            () => settings, hub, TimeZoneInfo.Local);
+            () => settings, hub, TimeZoneInfo.Local, notes: meetingNotes);
 
         var host = new McpHttpHost(new McpHostOptions
         {

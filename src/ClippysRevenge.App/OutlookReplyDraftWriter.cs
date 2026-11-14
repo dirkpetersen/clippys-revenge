@@ -3,8 +3,16 @@ using Microsoft.Extensions.Logging;
 
 namespace ClippysRevenge.App;
 
-internal sealed class OutlookReplyDraftWriter(OutlookWorker worker, OutlookMail mail, OutlookStores stores, ILogger? log = null) : IReplyDraftWriter
+internal sealed class OutlookReplyDraftWriter(OutlookWorker worker, OutlookMail mail, OutlookStores stores, ILogger? log = null)
+    : IReplyDraftWriter, IReplyTargetCheck
 {
+    public async Task<string> CheckAsync(string id, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        await stores.EnsureResolvedAsync(WorkPriority.Interactive, ct).ConfigureAwait(false);
+        return await worker.RunAsync(app => mail.CheckReplyTarget(app, id), WorkPriority.Interactive, ct).ConfigureAwait(false);
+    }
+
     public async Task<RepliedDraft> ReplyAsync(ReplyPlan plan, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(plan);
