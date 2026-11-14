@@ -408,9 +408,47 @@ public class SafetySourceScanTests
 
     // ---- Mail items ----
 
+    // ---- Draft invite window (M15.4, SPEC 22.3) ----
+
+    private const string OpenInviteApp = "src/ClippysRevenge.App/OutlookCalendar.OpenInvite.cs";
+    private const string DisplayRegex = @"\.\s*Display\s*\(";
+
     [Fact]
-    public void NoDisplayCalls() =>
-        AssertNone(Find(f => f.Code, @"\.\s*Display\s*\("), ".Display( is forbidden: drafts are saved, never shown.");
+    public void Display_OnlyInOpenDraftInvite()
+    {
+        var hits = Find(f => f.Code, DisplayRegex);
+        Assert.True(hits.Count == 1 && hits[0].StartsWith(OpenInviteApp + ":", StringComparison.Ordinal),
+            ".Display( is allowed once, in OpenDraftInvite (SPEC 22.3); drafts are saved, never shown. Found:"
+            + Environment.NewLine + string.Join(Environment.NewLine, hits));
+    }
+
+    [Fact]
+    public void OpenDraftInvite_WritesNothing()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == OpenInviteApp);
+        Assert.DoesNotMatch(@"\.\s*(Save|Send|Close|Move|Delete|PermanentDelete|Copy)\s*\(", f.Code);
+        Assert.DoesNotMatch(@"\b\w+\s*\.\s*\w+\s*=(?![=>])", f.Code);
+        Assert.Contains("Display(false)", f.Code);
+    }
+
+    [Fact]
+    public void OpenInviteFile_NeverCreatesOutlook()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == OpenInviteApp);
+        foreach (var bad in new[] { "new Outlook.Application", "Activator.CreateInstance", "CoCreateInstance", "GetActiveObject" })
+        {
+            Assert.DoesNotContain(bad, f.Code);
+        }
+    }
+
+    [Fact]
+    public void DisplayMatcher_CatchesPlantedViolations()
+    {
+        Assert.Matches(DisplayRegex, "item.Display(false);");
+        Assert.Matches(DisplayRegex, "item . Display ();");
+        Assert.DoesNotMatch(DisplayRegex, "x.DisplayName");
+        Assert.DoesNotMatch(DisplayRegex, "Display(false);");
+    }
 
     [Fact]
     public void NeverDeletesOutlookItems()

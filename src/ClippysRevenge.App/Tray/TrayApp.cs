@@ -12,6 +12,12 @@ internal sealed record AiTrayServices(
     AiDraftingToggler Toggler,
     AiStatusChecker Checker);
 
+internal sealed record DraftInviteTrayServices(
+    DraftInvites Invites,
+    IDraftInviteWindow Window,
+    Func<OutlookConnectionState> State,     // worker.State
+    TimeZoneInfo TimeZone);
+
 internal sealed record TrayServices(
     ActivityHub Hub,
     BalloonCenter Balloons,
@@ -31,10 +37,11 @@ internal sealed record TrayServices(
     SharedMailboxToggler? SharedToggler = null,
     Func<SettingsTab, Form>? CreateSettingsForm = null,
     AiTrayServices? Ai = null,
-    Func<AboutForm>? CreateAboutForm = null);
+    Func<AboutForm>? CreateAboutForm = null,
+    DraftInviteTrayServices? DraftInvites = null);
 
 /// <summary>Tray icon and menu (SPEC 6.1, 6.2). All UI objects are touched on the UI thread only.</summary>
-internal sealed class TrayApp : ApplicationContext
+internal sealed partial class TrayApp : ApplicationContext
 {
     private readonly TrayServices _s;
     private readonly SynchronizationContext _ui;
@@ -130,6 +137,7 @@ internal sealed class TrayApp : ApplicationContext
 
         _s.Hub.Changed += OnHubChanged;
         _s.Balloons.Shown += OnBalloon;
+        AttachDraftInvites();
         Render();
     }
 
@@ -383,11 +391,12 @@ internal sealed class TrayApp : ApplicationContext
             _startWithWindows.Checked = _s.GetSettings().StartWithWindows;
             _syncNow.Enabled = _s.SyncNow is not null && !_s.GetStats().Paused;
             ApplyAiMenu();
+            OnMenuOpeningDraftInvites();
         };
 
         _menu.Items.AddRange([
             _status1, _status2, new ToolStripSeparator(),
-            _startOutlook, _syncNow, _pause, _rebuild, _shared, _ai, new ToolStripSeparator(),
+            _startOutlook, _syncNow, _pause, _rebuild, _shared, _ai, _invites, new ToolStripSeparator(),
             copyCmd, copyToken, regen, new ToolStripSeparator(),
             activity, settings, logs, data, new ToolStripSeparator(),
             _startWithWindows, about, exit,
@@ -733,6 +742,7 @@ internal sealed class TrayApp : ApplicationContext
             _disposed = true;
             _s.Hub.Changed -= OnHubChanged;
             _s.Balloons.Shown -= OnBalloon;
+            DetachDraftInvites();
             _animTimer.Stop();
             _animTimer.Dispose();
             _houseTimer.Stop();
