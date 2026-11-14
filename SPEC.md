@@ -137,6 +137,7 @@ src/ClippysRevenge.Core/        net10.0: no Windows, no COM, testable on Linux/W
     MeetingTimes.cs         owner calendar tiers, ranking, exact-length options, the offer line format, the
                             European office-hours split, HTML insertion at [[meeting_times]] (§21)
     SenderRegion.cs         "is the sender in Europe" from the Date header offset and the domain TLD; the CET zone (§21.4)
+    DraftMeetingTimes.cs    AI-draft step 6a: attendees, range, free/busy reads, offers or placeholder (§21.6, M13.4)
     EmailStats.cs           email_stats grouping and merging (§11.11, M14)
     IndexQuery.cs           query_index: read-only connection, temp views, authorizer, limits (§11.12, M14)
     DraftInvites.cs         DraftInvitesStore, the tracked-meeting check, category helpers, note text (§22, M15)
@@ -183,6 +184,7 @@ src/ClippysRevenge.App/         net10.0-windows (WinExe): COM, tray, host
     OutlookDraftWriter.cs   IDraftWriter on OutlookWorker + OutlookMail.CreateDraft
     OutlookFreeBusySource.cs IFreeBusySource on OutlookWorker
     McpTools.cs             [McpServerToolType] tool definitions
+    McpTools.Index.cs       partial: email_stats and query_index (§11.11, §11.12, M14.3)
     AttachmentTools.cs      the two attachment tools
     DpapiProtector.cs       ISecretProtector over DPAPI (CurrentUser)
     StartupRegistration.cs  HKCU Run key
@@ -350,6 +352,13 @@ host:
 - One file per **local** date, `clippy-YYYYMMDD.log`, appended as UTF-8.
   Lines read `yyyy-MM-dd HH:mm:ss.fff <TRC|DBG|INF|WRN|ERR|CRT> <category>: <message>`,
   plus the exception type, message and stack trace when there is one.
+  For an `McpException` the message is left out (type and stack trace
+  only; M14.3): tool errors can quote search text, dates, SQL or
+  SQLite's messages back to the model, and the MCP SDK logs every
+  exception a tool throws (`ModelContextProtocol…`, Error, which passes
+  the Warning cap below) with the exception object. The formatted line
+  itself (`"<tool>" threw an unhandled exception.`) is still written.
+  Inner exceptions are not written.
 - 7 days kept, today included. Older `clippy-YYYYMMDD.log` files are
   deleted when the first line after start-up or after midnight is
   written. Other files in
@@ -1153,6 +1162,17 @@ There is **no attachment content column, ever**. The FTS table is
 `snippet()` still works. `id` is an explicit `INTEGER PRIMARY KEY` because
 `VACUUM` may renumber implicit rowids, which would break the FTS mapping.
 
+**New tables and `query_index` (M14.2).** `query_index` (§11.12) lets
+the model run SQL against this file. Its authorizer
+(`IndexQueryAuthorizer.DecideRead`) allows a no-column read (`count(*)`
+and the like, which reveal only that rows exist) of **any table name it
+doesn't know**, because SQLite reports CTE names the same way. So any
+table added to this schema in the future must also be added to
+`IndexQueryAuthorizer`'s `HiddenTables` set (today `meta`, `sync_state`,
+`ai_decisions`, `dbstat`), or the brief must say why its row count may
+be visible. New `emails`/`attachments` columns are not exposed: the
+column allow-lists in §11.12 are explicit.
+
 ### 9.2 `EmailIndex` API
 
 Every connection is opened with `journal_mode=WAL`, `synchronous=NORMAL`,
@@ -1581,6 +1601,18 @@ Details (M8.2):
   owner's free/busy is unknown, every block and offer is `none`.
 - Offers use the same free blocks, the same `now` cut-off and no extra
   lead time (unlike AI drafts, §21.6).
+- Outlook calls go through `IFreeBusySource` (Core;
+  `OutlookFreeBusySource` in the App). Both of its methods,
+  `GetCurrentUserAsync(priority, ct)` and
+  `GetFreeBusyAsync(email, from, to, intervalMinutes, priority, ct)`,
+  take the `WorkPriority` as an explicit parameter (no C# default);
+  `find_free_times` passes `Interactive`, the drafting worker passes its
+  own priority (§21.6) (M13.2).
+- With `offer_cet=true` and no Central European zone on the PC, the
+  offers have no CET part and `FreeTimeFinder` logs the Warning
+  `FreeTimeFinder.CetMissingWarning` once per instance (one per process):
+  `Meeting times: no Central European time zone (Europe/Berlin or W. Europe Standard Time) on this PC; offers have no CET times.`
+  (M13.2, §21.4).
 - With no suggestions, `text` explains why: no readable free/busy, or no
   free block between the first and last day searched.
 
@@ -1678,11 +1710,23 @@ who emailed me last year" take one call instead of paging
     Windows time zone (injected `TimeZoneInfo`).
 - **Order**: `order="count"` (default): count descending, then key
   ascending (ordinal). `order="key"`: key ascending (for month, week,
-  hour: chronological; weekday `Mon`→`Sun`). Anything else is an error.
+  hour: chronological; weekday `Mon`→`Sun`). Null or blank means
+  `count`. Anything else → `order must be count or key.` `group_by` and
+  `order` are matched trimmed and case-insensitively (M14.1).
 - **`top`**: 1–200 (clamped), default 10.
+- **Names and ties** (M14.1): "newest" is the highest `event_time`; ties
+  are broken by the higher index row id. `recipient` `name` is the
+  display name in the newest email that contains the address, `""` when
+  that email had none (even when an older one did). Sender keys are
+  grouped in SQLite (`lower(trim(sender_email))`) and re-normalized in
+  C# (`Trim` + `ToLowerInvariant`), so non-ASCII case variants merge.
 - **`mailbox="all"`**: each enabled mailbox is counted and the groups
   are merged by key (counts added, earliest `first`, latest `last`,
-  `name` from the newest). An email in two mailboxes counts twice.
+  `name` from the group with the strictly later `last`; on a tie the
+  earlier mailbox, own first, keeps its name). An email in two mailboxes
+  counts twice. A mailbox whose index can't be resolved (the §11
+  mailbox `McpException`) is left out of `all`; an error while counting
+  an available mailbox fails the call.
 - **Result**:
   ```json
   {"group_by":"sender","mailbox":"","total":5321,"distinct":812,"truncated":true,
@@ -1694,13 +1738,26 @@ who emailed me last year" take one call instead of paging
   `name` is present only for `sender` and `recipient`. `first`/`last`
   use the `find_free_times` ISO format with the local offset.
 - **How it runs**: `sender`, `sender_domain` and `folder` are one
-  `GROUP BY` query in SQLite (`count(*)`, `min`/`max(event_time)`; the
-  domain via `substr`/`instr` on the last `@`, done in C# when SQLite
-  can't do "last `@`" simply). The other groupings stream only the
-  needed columns (`event_time`, plus `to_addrs`/`cc_addrs` and
-  `sender_name` where used) of the matching rows and aggregate in C#.
-  Nothing is cached. Performance targets in §17.
-- No text is logged; the tool event is the tool name, as for every tool.
+  `GROUP BY` query in SQLite (`count(*)`, `min`/`max(event_time)`, and
+  for `sender` the newest `sender_name`). `sender_domain` is derived in
+  C# from the per-address groups (the part after the last `@`). The
+  other groupings stream only the needed columns (`event_time`, plus
+  `id`, `to_addrs` and `cc_addrs` for the recipient groupings; `cc_addrs`
+  only when `include_cc`) of the matching rows and aggregate in C#.
+  Cancellation is checked every 1,024 streamed rows. Nothing is cached.
+  `MailQueries.Search` maps its arguments through the same
+  `SearchArgs.ToFilter`, so there is one filter mapping for both tools.
+  Performance targets and measured numbers in §17.
+- **Logging**: no filter text is logged; the tool event is the tool
+  name, as for every tool. One Debug line per call (M14.3), exactly:
+  `email_stats: group_by {GroupBy}, mailbox {Mailbox}, {Total} emails, {Groups} groups, {Ms} ms`
+  (`{Mailbox}` is `own` for the own mailbox, else the key, e.g. `all`).
+- **Texts**: the tool and parameter descriptions are the constants
+  `EmailStats.ToolDescription`, `GroupByParameterDescription`,
+  `TopParameterDescription`, `OrderParameterDescription`,
+  `IncludeCcParameterDescription` and `MailboxParameterDescription`
+  (Core; exact text in the M14.3 brief). The filter parameters reuse the
+  `search_emails` descriptions.
 
 ### 11.12 `query_index(sql, mailbox?, max_rows=200)` (M14)
 
@@ -1723,15 +1780,19 @@ is not in the index, so it can't be queried.
 `date` is computed in SQL with `strftime('%Y-%m-%dT%H:%M:%S', event_time, 'unixepoch', 'localtime')`
 (SQLite's local time, which is the Windows local time zone in the app).
 `mail_fts` must support `MATCH`, `snippet()`, `highlight()`, `bm25()` and
-`ORDER BY rank` through the view; tests prove it. If the coder finds
-that FTS5 can't be used through a view, the brief falls back to
-exposing the FTS table under its real name with the same columns, and
-this section is updated.
+`ORDER BY rank` through the view; tests prove it (they do since M14.2,
+so no fallback to the real FTS table name is needed).
 
 **Connection** (`IndexQuery`, Core; one per mailbox per call):
 1. A new `SqliteConnection` to the mailbox's database with
    `Mode=ReadOnly`, `Pooling=False` (so the authorizer and pragmas never
-   reach a pooled connection) and `busy_timeout=5000`.
+   reach a pooled connection), then `PRAGMA busy_timeout=5000`. A
+   missing file, or a file without the `emails`, `attachments` and
+   `emails_fts` tables (checked in `sqlite_master` before the authorizer
+   is installed and before the views are created), is "unavailable"
+   (below). So is any `SqliteException` during steps 1–3 (rebuilding,
+   locked past the busy timeout, not a database; its message holds the
+   file path and is not passed on).
 2. Create the three views as `TEMP` views (`CREATE TEMP VIEW mail AS
    SELECT … FROM main.emails`, etc.). `mailbox` is a SQL string literal
    of the normalized key (single quotes doubled). Temp views live only
@@ -1740,89 +1801,181 @@ this section is updated.
    created **before** step 3, because `query_only` also blocks the temp
    schema.
 3. `PRAGMA query_only = ON`; `sqlite3_limit(SQLITE_LIMIT_ATTACHED, 0)`;
-   `SQLITE_LIMIT_SQL_LENGTH` 20,000.
+   `SQLITE_LIMIT_SQL_LENGTH` 20,000; `SQLITE_LIMIT_LENGTH` 50,000,000
+   (`IndexQuery.MaxValueBytes`; against `randomblob`/`zeroblob`/`printf`
+   memory bombs inside the 10 s window, M14.2); and
+   `SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION` set to 0 explicitly.
 4. Install the authorizer (`SQLitePCL.raw.sqlite3_set_authorizer` on
    `connection.Handle`, available in SQLitePCLRaw.core 2.1.13, which
    Microsoft.Data.Sqlite 10.0.15 references; verified 2026-11-14) and a
    progress handler (`sqlite3_progress_handler`, every 1,000 VM steps)
    that stops the statement after the deadline or on cancellation.
-   Extension loading stays off (`load_extension` is never enabled).
+   Extension loading stays off (`load_extension` is never enabled, and
+   the function is denied by the authorizer too).
 
 **Authorizer** (pure decision function `IndexQueryAuthorizer.Decide(action, arg1, arg2, dbName, viewName)`, unit-tested):
 - Allowed actions: `SQLITE_SELECT`, `SQLITE_READ` (below),
-  `SQLITE_FUNCTION` (below) and `SQLITE_RECURSIVE`. Everything else is
-  denied: `PRAGMA`, `ATTACH`, `DETACH`, every `CREATE_*`/`DROP_*`,
-  `INSERT`, `UPDATE`, `DELETE`, `TRANSACTION`, `SAVEPOINT`, `ANALYZE`,
-  `ALTER_TABLE`, `REINDEX`, `CREATE_VTABLE`, `DROP_VTABLE`, and unknown
-  codes.
-- `SQLITE_READ` is allowed when the access comes through one of the
-  three views (the "view" argument is `mail`, `mail_fts` or
-  `mail_attachments`), or directly on: the FTS5 shadow tables
-  (`emails_fts_data`, `emails_fts_idx`, `emails_fts_config`,
-  `emails_fts_docsize`) and `emails_fts` itself, and `emails` columns
-  `id`, `subject`, `body`, `sender_name`, `sender_email`, `to_addrs`,
-  `cc_addrs`, `attachment_names` (FTS5's own statements on the
-  external-content table read these; they are exposed by the views
-  anyway). Also `json_each` and `json_tree`. Every other table or column
-  is denied, including `sync_state`, `meta`, `ai_decisions`,
-  `sqlite_master`/`sqlite_schema`, `sqlite_temp_master`, `pragma_*`
-  table-valued functions and `emails.entry_id`/`store_id`/
-  `internet_message_id`/`in_reply_to`/`clippy_marker` outside the views.
-  If a test shows FTS5 needs one more shadow read, the brief adds
-  exactly that and this list is updated.
+  `SQLITE_FUNCTION` (below), `SQLITE_RECURSIVE`, and `SQLITE_PRAGMA`
+  only for FTS5's own internal statement: pragma name `data_version`,
+  no value (`arg2` null) and no view context (`fts5IndexDataVersion`
+  runs `PRAGMA main.data_version`; M14.2). User-typed `PRAGMA` never
+  gets that far (leading-keyword check below) and `pragma_*`
+  table-valued functions fail the READ rules. Everything else is denied:
+  other `PRAGMA`s → `PRAGMA`; `ATTACH`; `DETACH`; `TRANSACTION` and
+  `SAVEPOINT` → `transactions`; every `CREATE_*`/`DROP_*`, `INSERT`,
+  `UPDATE`, `ALTER_TABLE`, `REINDEX`, `ANALYZE`, `CREATE_VTABLE`,
+  `DROP_VTABLE` → `writing`; unknown codes → `action <n>`. (`DELETE`
+  falls in the `CREATE_*`/`DROP_*` code range and is `writing` too.)
+- **`SQLITE_READ`** (`IndexQueryAuthorizer.DecideRead`, M14.2). The
+  "view" argument is only a *name*, and a user CTE or alias can take it
+  (`WITH mail AS (SELECT store_id FROM emails) …`), so a read is never
+  allowed just because it claims a view context. Allowed:
+  - a read whose table is named `mail`, `mail_fts` or
+    `mail_attachments` itself;
+  - `json_each` and `json_tree`;
+  - `emails_fts` and its shadow tables (`emails_fts_data`,
+    `emails_fts_idx`, `emails_fts_config`, `emails_fts_docsize`), any
+    column;
+  - in any context, the `emails` columns FTS5's own statements on the
+    external-content table read: `id`, `subject`, `body`,
+    `sender_name`, `sender_email`, `to_addrs`, `cc_addrs`,
+    `attachment_names` (the views expose them anyway);
+  - inside a view context (view name `mail`, `mail_fts` or
+    `mail_attachments`), only the columns the views use: `emails`:
+    `id`, `entry_id`, `folder`, `event_time`, `sender_name`,
+    `sender_email`, `to_addrs`, `cc_addrs`, `subject`,
+    `conversation_topic`, `body`, `unread`, `has_attachments`,
+    `attachment_names`; `attachments`: `email_id`, `position`,
+    `filename`, `size`, `is_inline` (a spoofed view context can
+    therefore reach only data the views expose anyway);
+  - **no-column reads**: a READ with an empty column (`count(*)`,
+    constant-only select lists, a `FROM` whose columns aren't used)
+    reveals at most that rows exist. SQLite reports it for CTE names
+    (there is no schema to tell them apart from tables) and for the
+    views' own flattened `FROM main.emails`/`main.attachments`. Allowed
+    for `emails`/`attachments` only with database name `main` (the
+    views' qualified form; a user's plain `FROM emails` has none) or in
+    a view context, and for any other table name except `meta`,
+    `sync_state`, `ai_decisions`, `dbstat` (the `HiddenTables` set),
+    `sqlite_*` and `pragma_*`. **Any table added to the index schema
+    must be added to `HiddenTables`** (§9.1).
+  Everything else is denied, including `sync_state`, `meta`,
+  `ai_decisions`, `dbstat`, `sqlite_master`/`sqlite_schema`,
+  `sqlite_temp_master`, `pragma_*` table-valued functions and
+  `emails.store_id`/`internet_message_id`/`in_reply_to`/
+  `clippy_marker`/`last_modified` everywhere, and `emails.entry_id`,
+  `folder`, `event_time`, `unread`, `has_attachments`,
+  `conversation_topic` and every `attachments` column outside a view
+  context. A denied `emails`/`attachments` column reads
+  `column <table>.<column>` (lower-cased), anything else
+  `table <name>`. If a test shows FTS5 needs one more read, the brief
+  adds exactly that and this list is updated.
 - `SQLITE_FUNCTION` is allowed except `load_extension`, `fts3_tokenizer`,
   `readfile`, `writefile`, `edit` and any name starting with `sqlite_`
-  other than `sqlite_version`.
-- The first denied action is remembered for the error message.
+  other than `sqlite_version` (→ `function <name>`, lower-cased; a
+  missing name → `function (unknown)`).
+- The first denied action is remembered for the error message. An
+  exception inside the callback denies (`action <n>`).
 
-**Statement checks**: `sql` is required, non-blank, at most 20,000
-characters. It is prepared with `sqlite3_prepare_v2`; the tail must
-prepare to no statement (only whitespace, `;` and comments), else
-`query_index runs exactly one SELECT statement. Remove everything after the first statement.`
-The statement must be `sqlite3_stmt_readonly` and start (after
-comments) with `SELECT`, `WITH` or `VALUES`. No parameters are bound
-(`?` placeholders → error `query_index takes no parameters; write the values into the SQL.`).
+**Statement checks** (in this order, M14.2):
+1. `sql` null or blank → `sql is required: one SELECT over the views mail, mail_fts and mail_attachments.`
+   Longer than 20,000 characters →
+   `sql is longer than 20,000 characters. Shorten the query.`
+2. **Leading keyword, before anything is prepared or opened**: skip
+   whitespace, `;`, `--` line comments and `/* */` comments (an
+   unterminated `/*` runs to the end); nothing left → the "sql is
+   required" text. The first word (ASCII letters, digits, `_`),
+   upper-cased: `SELECT`, `WITH`, `VALUES` pass; `INSERT`, `REPLACE`,
+   `UPDATE`, `DELETE`, `CREATE`, `DROP`, `ALTER`, `REINDEX`, `ANALYZE`,
+   `VACUUM` → denied `writing`; `PRAGMA`, `ATTACH`, `DETACH`, `EXPLAIN`
+   → denied as themselves; `BEGIN`, `COMMIT`, `END`, `ROLLBACK`,
+   `SAVEPOINT`, `RELEASE` → denied `transactions`; anything else →
+   denied `statements that don't start with SELECT, WITH or VALUES`.
+   This check is needed because SQLite rejects e.g. `DELETE FROM mail`
+   ("cannot modify mail because it is a view") before it asks the
+   authorizer. The text from the first word on is what gets prepared.
+3. `max_rows` is clamped; the mailbox is resolved (§11 mailbox errors).
+4. Per mailbox, `sqlite3_prepare_v2`. A failure is the denied text when
+   the authorizer denied something, else the `SQL error` text. No
+   statement → the "sql is required" text.
+5. **Lexical tail check**: the text after the first statement may hold
+   only whitespace, `;` and comments (the same scanner as step 2); it is
+   not prepared again, because `sqlite3_prepare_v2` returns no
+   statement for an empty `;`, so `SELECT 1; ;DROP …` would pass a
+   single tail prepare. Else
+   `query_index runs exactly one SELECT statement. Remove everything after the first statement.`
+6. Not `sqlite3_stmt_readonly` → denied `writing`.
+7. No parameters are bound (`?` placeholders → error
+   `query_index takes no parameters; write the values into the SQL.`).
+8. More than 100 columns → `query_index returns at most 100 columns.`
 
 **Limits**:
 - Wall clock 10 s for the whole call (all mailboxes together) →
   `The query ran longer than 10 seconds and was stopped. Add a date range, a folder or a LIMIT, or use email_stats for counts.`
-- `max_rows` 1–1000 (clamped), default 200. Stepping stops after
-  `max_rows` rows; `truncated: true`, `truncated_reason: "max_rows"`.
+  Checked by the progress handler, every 100 rows, and before and after
+  each mailbox. Cancellation of the call is an
+  `OperationCanceledException`, not this text.
+- `max_rows` 1–1000 (clamped), default 200. `truncated: true`,
+  `truncated_reason: "max_rows"` only when another row really exists
+  (stepping found row `max_rows + 1`), or, with `all`, when the rows are
+  full and mailboxes were left unqueried.
 - At most 100 columns (`query_index returns at most 100 columns.`).
-- Text cells longer than 2,000 characters are cut to 2,000 + `…` and
+- Text cells longer than 2,000 characters are cut to 2,000 + `…` (one
+  character fewer when the cut would split a surrogate pair) and
   counted in `truncated_cells`. BLOBs become `"[blob, <n> bytes]"`.
-- The response stops at 1,000,000 characters of cell text in total
-  (`truncated_reason: "size"`).
+- The size cap is row-granular: a row is added only while the total of
+  string cells (text and the blob placeholders, after cutting) stays
+  ≤ 1,000,000 characters; numbers, nulls, the `mailbox` column and
+  column names don't count. Otherwise stop with `truncated_reason: "size"`.
 
 **`mailbox`**: empty (own), an address, or `all`. With `all` the query
 runs once per enabled mailbox (own first, then shared in settings
 order), the result gets a leading `mailbox` column, and rows are
 concatenated up to `max_rows`. Aggregates are therefore per mailbox;
 the description says so and points to `email_stats` for merged counts.
-Mailbox errors are the §11 ones.
+Mailbox errors are the §11 ones. Any error in one mailbox (including
+"unavailable") fails the whole `all` call. The column names are those
+of the first mailbox's statement.
 
 **Result**:
 ```json
 {"columns":["sender_email","n"],"rows":[["alice@example.edu",143]],"row_count":1,
  "truncated":false,"truncated_cells":0,"elapsed_ms":42}
 ```
-Integers as numbers, reals as numbers, NULL as `null`.
+Integers as numbers, reals as numbers (non-finite reals as `null`),
+NULL as `null`. `truncated_reason` is omitted when not truncated.
 
-**Errors** (`McpException`):
+**Errors** (`McpException`; constants and builders in `IndexQueryTexts`, Core):
 - SQLite errors: `SQL error: <SQLite's message>. query_index reads the views mail, mail_fts and mail_attachments (see the tool description).`
+  SQLite's message is trimmed and a trailing `.` dropped; an empty
+  message reads `unknown error`.
 - A denied action: `query_index only reads the views mail, mail_fts and mail_attachments with one SELECT. Not allowed here: <what>.`
   where `<what>` is e.g. `PRAGMA`, `ATTACH`, `writing`, `table ai_decisions`,
   `column emails.entry_id` or `function load_extension`.
-- A database that can't be opened (not indexed yet, being rebuilt):
+- A database that can't be opened (not indexed yet, being rebuilt,
+  not a Clippy index; Connection step 1):
   `The index for <mailbox> isn't available right now. Check index_status.`
+  `<mailbox>` is `your own mailbox` for the own mailbox, else the
+  normalized key.
+- `sql is required: one SELECT over the views mail, mail_fts and mail_attachments.`
+  and `sql is longer than 20,000 characters. Shorten the query.`
+  (Statement checks).
 
 **Logging and privacy**: the SQL text, cell values and SQLite error
-messages are never logged (like search text, §5.1). Debug log: rows,
-columns, mailboxes, elapsed ms, truncation. The tool event is the tool
-name. The `McpException` message may contain SQLite's error text (it
-goes back to the model, not to the log).
+messages are never logged (like search text, §5.1; `McpException`
+messages are kept out of the log file, §5.1). One Debug line per call
+(M14.3), exactly:
+`query_index: {Rows} rows, {Columns} columns, mailbox {Mailbox}, {Ms} ms, truncated {Reason}, {Cells} cells cut`
+(`{Mailbox}` is `own` or the key, `{Reason}` is `max_rows`, `size` or
+`no`); never column names. The tool event is the tool name. The
+`McpException` message may contain SQLite's error text (it goes back to
+the model, not to the log). `IndexQuery` itself logs nothing.
 
-**Tool description** (exact text in the M14 brief) lists the three
+**Tool description**: the constants `IndexQueryTexts.ToolDescription`,
+`SqlParameterDescription`, `MailboxParameterDescription` and
+`MaxRowsParameterDescription` (Core; exact text in the M14.3 brief;
+the examples below are the `Example*` constants, concatenated into the
+description, not copies). It lists the three
 views with their columns, says "one read-only SELECT, 10 s, at most
 1000 rows, long text cut at 2,000 characters", says that with
 `mailbox="all"` each mailbox is queried separately, and gives these
@@ -2139,6 +2292,8 @@ marker on tool drafts. Live Claude tests carry `[Trait("live","claude")]`
   To/CC text of every matching row in C#). A benchmark test with a
   synthetic 100k-row database checks this (`[PerfFact]`, runs only with
   `CLIPPY_PERF=1`, like the M2 benchmark in `PerfBenchmarkTests.cs`).
+  Measured 2026-11-14 (M14.1, synthetic 100k rows, dev PC): `sender`
+  125 ms, `recipient` 454 ms, both well inside the targets.
 - `query_index` (M14): bounded by its 10 s limit; opening the read-only
   connection and creating the temp views under 20 ms.
 - Tray icon updates within 250 ms of a state change.
@@ -2406,6 +2561,24 @@ including full-text search. Choices made by the spec owner:
 - It exposes only what `search_emails`/`get_message` already expose; the
   manual's Security page says so. The SQL text is never logged.
 
+Recorded after implementation (2026-11-14, M14.1–M14.3, spec sync):
+- `email_stats` measured on a synthetic 100k-row index: `sender`
+  125 ms, `recipient` 454 ms (§17 targets 1 s and 3 s).
+- The authorizer was tightened while implementing (§11.12): a read in a
+  "view" context is column-checked, because the view name SQLite passes
+  can be a user CTE name (`WITH mail AS (SELECT store_id FROM emails)`);
+  no-column reads are allowed except for the hidden tables, so every
+  future index table must join `HiddenTables` (§9.1); `PRAGMA
+  data_version` is allowed only for FTS5's own statement; the tail
+  check is lexical; a leading-keyword check runs before prepare;
+  `SQLITE_LIMIT_LENGTH` is 50 MB and extension loading is switched off
+  explicitly.
+- `McpException` messages are no longer written to the log file (§5.1),
+  because the MCP SDK logs every tool exception at Error with the
+  exception, and tool errors can quote SQL, SQLite messages, search text
+  or dates. This also closed an older leak of invalid `date_from`/
+  `date_to` texts into the log.
+
 Decided (2026-11-14, draft-only invites, M15; §22, §1.4). The user
 approved removing every send path and the new hard-rule wording
 "**Never send anything.** Clippy has no `.Send()` call. Mail drafts only
@@ -2620,6 +2793,8 @@ table A):
   `AiSettings.cs`) parses and matches entries for validation and
   `DraftRules`.
 - A non-empty `ClaudeCliPath` must also end in `.exe` or `.js`.
+- `MeetingTimeOptions` outside 1–10 → `Must be between 1 and 10.`
+  (M13.3, the style of the other range messages).
 
 `EnabledAtUtc` is set only through `AiDraftingSettings.SetEnabled`, which
 refuses to enable without consent. The candidate cutoff is
@@ -2962,7 +3137,8 @@ sign-offs by audience (internal, external, close colleagues), tone and
 formality, typical length and structure, formatting habits (lists, line
 breaks, bold), language(s) used, phrases often used, phrases avoided,
 and 5–8 short real examples (under 80 words each) with names, addresses
-and numbers removed. Schema: `{"type":"object","additionalProperties":false,"required":["body_markdown"],"properties":{"body_markdown":{"type":"string"}}}`.
+and numbers removed. Schema (before M13; the M13 schema with
+`meeting_phrasing` is in §21.7): `{"type":"object","additionalProperties":false,"required":["body_markdown"],"properties":{"body_markdown":{"type":"string"}}}`.
 `body_markdown` must be 200–30,000 characters and not start with `---`;
 it is redacted again with `MailText.Redact`. Clippy writes the file:
 
@@ -2989,7 +3165,15 @@ schema since M13 also has an optional `meeting_phrasing` string (§21.7);
 
 The system prompt and the user prompt
 (`<context>today/samples</context><samples>…</samples>`) are pinned in
-the M11.6 brief. `body_markdown` is CRLF-normalized and trimmed, and one
+the M11.6 brief. Since M13.5 the system prompt's last rule
+(`- Return JSON with one field, body_markdown, that holds the guide.`)
+is replaced by these three lines (everything above unchanged):
+
+```
+- Don't write about proposing meeting times in body_markdown.
+- Return JSON with body_markdown, which holds the guide, and meeting_phrasing.
+- meeting_phrasing: one to three sentences, in English, on how the user proposes meeting times: their usual lead-in and how they ask the other person to choose, quoting their wording. No names. Leave meeting_phrasing out when the samples show no meeting proposals.
+``` `body_markdown` is CRLF-normalized and trimmed, and one
 surrounding Markdown code fence is tolerated; the 200–30,000 rule applies
 after that.
 
@@ -3172,7 +3356,13 @@ Rule details (M11.7):
 6. Result:
    - `Ok` → `DraftReply.Parse` (below). Invalid → failure.
      `needs_reply = false` → `no_reply`. `confidence < MinConfidence` →
-     `low_confidence`. Otherwise sanitize (§19.8); empty → failure.
+     `low_confidence`, and the `Ai` event (M13.4, user-requested
+     2026-11-14; `DraftTexts.LowConfidence`)
+     `AI drafts: no draft for the email received <yyyy-MM-dd HH:mm>: Claude's confidence <c> is below your minimum of <m>. To draft it anyway, select it in Outlook and use "Draft a reply to the selected email" in the tray menu, or lower Minimum confidence in Settings → AI drafts.`
+     (received time in local time; `<c>` and `<m>` invariant `0.00#`,
+     e.g. `0.50`, `0.555`; tagged with the mailbox like `Draft` events;
+     no subject, sender or body). Otherwise sanitize (§19.8); empty →
+     failure.
    - `RateLimited` → retry at `RetryAt + 1 min` (when `RetryAt` is in the
      future), else in 60 min; the pass
      ends. `Ai` `AI drafts: Claude's usage limit was reached. I'll try again at <HH:mm>.`
@@ -3220,11 +3410,18 @@ candidate; the pass is started again afterwards.
 While a pass makes model calls it holds a `Drafting` scope and reports
 `done / total` (total = candidates that reached step 5). After a pass that
 decided anything: `Ai`
-`AI drafts: <d> drafted, <n> no reply needed, <s> skipped, <f> failed (<duration>)`
-(parts that are 0 are left out, except `drafted`; `low_confidence` counts
-as "no reply needed"; the duration is invariant `0.#` seconds, e.g.
-`41 s`, `1.8 s`; the summary has no mailbox tag). Then the balloon
-(§19.10) when `d > 0`.
+`AI drafts: <d> drafted, <n> no reply needed, <l> low confidence, <s> skipped, <f> failed (<duration>)`
+(parts that are 0 are left out, except `drafted`; `no reply needed`
+counts only `needs_reply = false`, low-confidence skips are counted
+separately (M13.4, user-requested 2026-11-14); the duration is
+invariant `0.#` seconds, e.g. `41 s`, `1.8 s`; the summary has no
+mailbox tag). Then the balloon (§19.10) when `d > 0`.
+
+The pass log line (Information) is
+`AI drafts pass: <end>, <d> drafted, <n> no reply, <l> low confidence<detail>, <s> skipped, <f> failed, <calls> calls in <ms> ms`
+where `<detail>` is ` (<c> < <m>)` for one low-confidence skip,
+` (highest <c> < <m>)` for more than one, and empty for none
+(`DraftTexts.LowConfidenceLogDetail`; numbers `0.00#`).
 
 **Reply JSON** (`DraftModel.ReplySchema`, passed as `--json-schema` /
 `output_config.format`):
@@ -3253,7 +3450,13 @@ isn't `true`, means "no meeting asked"; a bad `duration_minutes`
 (not an integer in 15–480) means 60; a date that isn't exactly
 `yyyy-MM-dd` (invariant) is ignored; a bad heading uses the default
 (§21.4). `DraftReply` carries the result as `Meeting` (null when not
-asked).
+asked). Details (M13.3): "not an integer" means
+`JsonElement.TryGetInt32` fails (so `30.0` → 60); "exactly
+`yyyy-MM-dd`" means ten characters, ASCII digits with `-` at positions
+4 and 7, and a real calendar date, with no trimming;
+`MeetingAsk.OutsideHoursHeading` carries the model's raw string, and the
+§21.4 cleaning/default rule is applied where the heading is used
+(`MeetingOffers`/`MeetingTimesHtml`), so the rule exists once.
 
 `DraftReply.Parse(JsonElement)` checks it again in Core (the CLI's
 validation isn't trusted): wrong types, `confidence` outside 0–1 or not
@@ -3299,7 +3502,11 @@ constant, exact text pinned in the M11.7 brief) says, at least:
   sender proposes a specific time, don't accept or decline it: write a
   placeholder like `[[check whether Tue 3 pm works]]` and still offer
   times. The "never invent" rule stays; `[[meeting_times]]` is the one
-  placeholder Clippy fills itself.
+  placeholder Clippy fills itself. This text is
+  `DraftPrompt.MeetingNote`, appended as its own block (`\n\n`) after
+  the template and before the manual note (`ManualNote`), not merged
+  into the template's lists, so the prompt with `MeetingTimes` off stays
+  byte-identical to the pre-M13 prompt (M13.3).
 
 The system prompt ends with `<writing_style>…</writing_style>` (§19.6).
 The user prompt (stdin) is:
@@ -3507,7 +3714,11 @@ The window never runs a model call or a status check on the UI thread.
 - Meeting times (§21.6): free/busy and the computed times stay on the PC
   (they go only into the saved draft); nothing about the calendar is
   sent to Claude. Logs record only counts (options, readable and unknown
-  attendees), never times, addresses or the Date header.
+  attendees) and, on a read error, the exception type name; never
+  times, addresses or the Date header.
+- Logs and events may contain confidences and the confidence threshold
+  (M13.4); the low-confidence `Ai` event (§19.7 step 6) carries the
+  email's received time but no subject, sender or body.
 - The manual's Security page documents the data flow of §19.1.
 
 ### 19.12 Tests
@@ -4035,7 +4246,14 @@ Code the same format.
   they are on the same local day and either `0 ≤ R.Start − I.End ≤ 15 min`
   or `0 ≤ I.Start − R.End ≤ 15 min`
   (`MeetingRanking.AdjacencyToleranceMinutes = 15`). Overlap doesn't
-  count. (With 30-minute free/busy, this means "touching".)
+  count. (With 30-minute free/busy, this means "touching".) "Same local
+  day" (M13.1): for R after I, the day of I's last instant
+  (`(I.End − 1 tick).Date`) equals `R.Start.Date`; for R before I, the
+  day of R's last instant equals `I.Start.Date`. So a run ending at
+  midnight isn't adjacent to a range starting at 00:00 the next day.
+- `OwnerCalendar.FromFreeBusy`: `null` → unknown; `""` → known with no
+  runs (callers already treat strings shorter than the range as
+  unknown before calling).
 - **Tier** of R: `busy` when it is adjacent to a busy run, else
   `tentative` when adjacent to a tentative run, else `none`.
 - **Order**: tier (`busy`, `tentative`, `none`), then start time.
@@ -4088,10 +4306,14 @@ Code the same format.
 `Europe/Berlin` (then `W. Europe Standard Time`), or null when neither
 exists. The actual offset is used (+01:00 in winter, +02:00 in summer),
 but the label is always `CET` (the user's choice). When the zone is
-missing, offers have no CET part and no split (Warning logged once).
-When the owner's own zone has the same UTC offset as CET at the time of
-the first candidate, the CET part and the split are left out too (the
-times are already European).
+missing, offers have no CET part and no split, and the Warning
+`Meeting times: no Central European time zone (Europe/Berlin or W. Europe Standard Time) on this PC; offers have no CET times.`
+(`FreeTimeFinder.CetMissingWarning`) is logged once per process by
+`find_free_times` (§11.8) and once per process by the drafting worker
+(§21.6). When the owner's own zone has the same UTC offset as CET at
+the time of the first candidate (the earliest candidate by start,
+before selection; M13.1), the CET part and the split are left out too
+(the times are already European).
 
 **Office hours split** (for European senders only):
 - An option is *in office hours* when, in CET, it starts at or after
@@ -4108,8 +4330,13 @@ times are already European).
   characters removed, whitespace collapsed, `<`, `>`, `[` and `]`
   removed, trimmed, 1–80 characters with at least one letter, and a `:`
   appended when it doesn't end with one; otherwise the default is used.
+  The steps run literally in that order (M13.1): a tab or newline is
+  removed, not turned into a space; the 1–80 check is before the `:` is
+  appended.
 - With no in-hours candidates at all, only the second list appears,
-  with its heading. With all N in hours, there is no second list.
+  with its heading; the text and HTML then start with the heading (no
+  leading blank line or `<br><br>`). With all N in hours, there is no
+  second list.
 
 ### 21.5 Line format (`MeetingOffers.FormatLine`)
 
@@ -4137,7 +4364,10 @@ placeholder. The placeholder matches `[[meeting_times]]`
 case-insensitively, also with a space or `-` instead of `_` and spaces
 inside the brackets, highlighted by `Sanitize` or bare. Works the same in
 automatic passes (`Background` priority) and the manual path
-(`Interactive`).
+(`Interactive`). Exactly (M13.1): "spaces inside the brackets" means
+ASCII spaces only, before and/or after the name (`[[ meeting_times ]]`);
+the separator is exactly one of `_`, space or `-`
+(`\[\[ *meeting[ _-]times *\]\]`, case-insensitive).
 
 **Attendees.** The owner is the Outlook current user (the own mailbox's
 SMTP from `GetIdentityAsync`), also for shared-mailbox drafts (§18 open
@@ -4146,7 +4376,11 @@ reply is reply-all. The own address and the shared mailbox address are
 left out, entries are parsed one by one (an entry without a valid
 address is skipped, duplicates removed) and at most 10 others are
 checked (sender first). Attendees whose free/busy is unknown are left out
-of the check, as in §11.8.
+of the check, as in §11.8. The owner is read first (M13.4); when the
+owner's free/busy is unknown (or the own SMTP is blank), the others are
+not read and the calendar placeholder is used. An error other than
+Outlook being gone while reading **any** attendee also gives the
+calendar placeholder.
 
 **Range.** Duration: `Meeting.DurationMinutes ?? 60`. From the start of
 the next local day (open question 17), or `earliest_date` when later;
@@ -4154,16 +4388,24 @@ to the end of `latest_date`, else 10 days after the start; never more
 than 60 days from today. When `latest_date` is before the start, the
 default range is used. Working hours, business days and
 `TentativeIsBusy` come from the settings (§5.2), interval 30 minutes.
-N = `MeetingTimeOptions`.
+N = `MeetingTimeOptions`. The 60-day cap is `today + 60 days` (as
+`find_free_times`' `MaxDaysAhead`), an exclusive end; when
+`earliest_date` is 60 or more days after today the range is empty: no
+free/busy is read and the placeholder is
+`no free time found between <earliest> and <earliest>` (M13.4).
 
 **Europe.** `SenderRegion.IsEurope(sender, headers)`. Automatic passes
 use the headers from step 2's facts. The manual path calls
 `GetFactsAsync(…, Interactive)` for them only when an offer is needed;
 if that fails for any reason other than Outlook being gone, the TLD rule
-alone applies.
+alone applies (Debug `AI drafts: reading the email's headers for meeting times failed (<type>).`).
+`OutlookUnavailableException` there gives
+`I couldn't draft that reply: Outlook isn't running` (the call counts),
+like the free/busy read (M13.4).
 
 **Insertion** (`MeetingTimesHtml.Insert`, pure, on the sanitized HTML):
-- Lines are HTML-escaped; each double space becomes `&nbsp; ` so the
+- Lines are HTML-escaped (`&`, `<`, `>` only, as `DraftHtml.Sanitize`
+  does, so `couldn't` keeps its apostrophe; M13.1); each double space becomes `&nbsp; ` so the
   columns survive HTML. Lines are joined with `<br>`. With a second list:
   `<br><br>`, the heading, `<br>`, its lines.
 - The first placeholder is replaced. A `<br>` is added before the block
@@ -4189,8 +4431,15 @@ free/busy is handled as in §19.7 step 6a (automatic) or gives
 `I couldn't draft that reply: Outlook isn't running` (manual, the call
 counts).
 
-**Logging.** Debug: `AI drafts: offered <n> meeting times (<k> of <m> attendees readable)`.
-No times, addresses or headers.
+**Logging.** Debug, one line per draft that wanted times (M13.4):
+- `AI drafts: offered <n> meeting times (<k> of <m> attendees readable)`
+- `AI drafts: no free meeting times to offer (<k> of <m> attendees readable)`
+- `AI drafts: couldn't read the calendar for meeting times (<type>)`
+  (`<type>` is the exception type name, `unknown` when the owner's
+  free/busy was simply unknown or unusable).
+`<k> of <m>` counts the owner. The CET-missing Warning (§21.4,
+`FreeTimeFinder.CetMissingWarning`) is logged once per process by the
+drafting worker too. No times, addresses or headers.
 
 ### 21.7 The writing-style skill's meeting section (`StyleSkillText`)
 
@@ -4235,29 +4484,40 @@ When an email asks for or suggests a meeting or a call and <name> wants to meet,
   usual lead-in and how they ask the other person to choose), quoting
   their wording, with no names. Validation: a string; control characters
   and line breaks become spaces, whitespace collapsed, trimmed, then
-  `MailText.Redact`, then `<!--` and `-->` removed; 1–600 characters,
-  else the default. An invalid `meeting_phrasing` never fails the run.
+  `MailText.Redact`, then `<!--` and `-->` removed repeatedly until none
+  remain, then whitespace collapsed and trimmed once more (M13.5);
+  1–600 characters, else the default. An invalid `meeting_phrasing`
+  never fails the run.
 - **Hash and edit detection.** The section is part of the bytes written,
   so `state.json`'s hash covers it and edit detection (§19.6) is
   unchanged: changing anything in the section, like anything else, makes
   the file *edited*. Clippy never adds the section to an edited file.
 - **Existing skills** (written before M13, or with an older section
   version) get the section without a model call
-  (`StyleSkillFiles.RefreshMeetingSection()`): when the user file and the
-  app copy exist, the user file is not edited, and the user file doesn't
-  contain the current start marker (`<!-- clippy:meeting-times v1`),
-  Clippy re-renders it from the app copy's body (minus any old marker
-  block), the display name from the existing `description:` line (else
-  `the user`), the phrasing from the old section (else the default), and
+  (`StyleSkillFiles.RefreshMeetingSection(zone)`): when the user file,
+  the app copy and `state.json` exist and are readable, the user file is
+  not edited, and the user file doesn't contain the full current start
+  marker line `<!-- clippy:meeting-times v1 -->` (the whole line, so a
+  future `v10` can't match; M13.5), Clippy re-renders it from the app
+  copy's body (minus any old marker block), the display name from the
+  app copy's `description:` line (else `the user`), the phrasing from
+  the app copy's old section (else the default), and
   `generatedUtc`/`sampleCount` from `state.json`. It writes the three
   files in the §19.6 order; `state.json` keeps every field except
-  `hash`. It runs once at app start (off the UI thread, after settings
-  load, without consent or `Enabled`, because it sends nothing) and at
-  the start of `StyleSkill.RunIfDueAsync`. Info log
+  `hash`. It is skipped when the result would exceed 64 KiB, and edits
+  are checked again right before writing. It runs once at app start
+  (off the UI thread, after settings load, without consent or
+  `Enabled`, because it sends nothing; also when AI drafting is off) and
+  at the start of every `StyleSkill.RunIfDueAsync`, but not when the app
+  couldn't build `StyleSkill` (the index failed to open). It is skipped
+  while a style run holds the run gate (that run writes the current
+  section itself). Info log
   `Writing style skill: meeting-times section updated.` and `Ai` event
   `writing style: added how to offer meeting times`. A failure is logged
-  (Warning, type only) and retried at the next start. A Regenerate
-  always writes the current section.
+  as the Warning
+  `Writing style skill: meeting-times section not updated (<ExceptionType>)`
+  and retried at the next start. A Regenerate always writes the current
+  section.
 - **Drafting prompt.** `ReadBodyForPrompt` leaves out every complete
   block from `<!-- clippy:meeting-times` to `<!-- /clippy:meeting-times -->`
   (both lines included). A start marker without an end marker removes
@@ -4327,6 +4587,26 @@ match the §21.5 pattern; `[Trait("live","outlook")]` +
 next week for 30 minutes?" email has option lines in the draft and no
 `[[meeting_times]]` left; it deletes only what it created and sends
 nothing.
+
+Live skip rules (M13.7; test-only):
+- Both live tests **skip** (not fail) when Outlook returns no free/busy
+  for the user's own address, or when there is no free 30-minute time
+  (in 10 days for the `find_free_times` test, in 3 weeks from tomorrow
+  for the draft test). The draft test checks this with
+  `FreeTimeFinder` **before** any Claude call.
+- The draft test also skips as inconclusive when the inserted block is
+  the "no free time" placeholder (the range the model asked for had no
+  free time), and skips when Outlook can't reply to an unsent test item
+  on the profile or Claude isn't ready / hits its usage limit. The
+  calendar placeholder fails the test (the pre-check could read it).
+- The draft test runs with `MeetingTimeOptions = 3` and reads free/busy
+  only for the user's own address and only after the model call
+  returned (a guarded `IFreeBusySource`; every read must be
+  `Interactive`). The option lines must be numbered from 1, 1–3 of them,
+  all the same length of 30 or 60 minutes (60 when the model leaves out
+  the duration), and all with or all without the CET part.
+- The M11.10 AI round trip now runs with `MeetingTimes = false`, so it
+  keeps testing the plain reply path.
 
 ## 22. Draft-only meeting invites (M15)
 
