@@ -2,7 +2,7 @@
   <!-- Single source of the product version. Bumping it on main publishes a
        GitHub release v$(Version) (see .github/workflows/release.yml). -->
   <PropertyGroup>
-    <Version>0.0.6</Version>
+    <Version>0.0.7</Version>
     <Product>Clippy's Revenge</Product>
     <Company>Dirk Petersen</Company>
     <Nullable>enable</Nullable>

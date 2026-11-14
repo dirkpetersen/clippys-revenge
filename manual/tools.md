@@ -1,6 +1,6 @@
 # Tools reference
 
-Clippy's Revenge gives Claude Code ten tools. You normally don't call them
+Clippy's Revenge gives Claude Code twelve tools. You normally don't call them
 yourself: you ask Claude in plain language and it picks the right tool. This page
 lists every tool and its parameters, which is useful when you want to know what
 Claude can and can't do.
@@ -17,6 +17,8 @@ Claude can and can't do.
 | [`find_free_times`](#find_free_times) | Suggest meeting times from free/busy |
 | [`send_meeting_invite`](#send_meeting_invite) | Create a meeting (the only tool that can send) |
 | [`index_status`](#index_status) | Show index and sync state |
+| [`email_stats`](#email_stats) | Count mail by sender, domain, folder or time |
+| [`query_index`](#query_index) | Run one read-only SELECT over the index |
 
 ## Common conventions
 
@@ -90,6 +92,147 @@ search found nothing, or to check indexing progress.
 |---|---|---|
 | `mailbox` | string | Optional shared mailbox address. Empty means all configured mailboxes |
 
+### email_stats
+
+Counts emails in the local index, grouped, in one call. Use it for questions such
+as "top 10 people who emailed me last year" or "how much mail do I get per month".
+It returns **counts and names only, never mail text**. It is read-only and fast,
+because the counting runs inside the index.
+
+All the filters of [`search_emails`](#search_emails) work here (`query`, `sender`,
+`recipient`, `subject`, `date_from`, `date_to`, `folder`, `has_attachment`,
+`attachment_name`, `attachment_ext`, `unread`, `mailbox`), with the same meaning.
+There is no `limit` or `offset`.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `group_by` | string, required | What to group by. See the table below |
+| `top` | int | Number of groups to return, 1 to 200 (default 10) |
+| `order` | string | `count`: largest groups first (default). `key`: by key, chronological for `month`, `week` and `hour`, Mon to Sun for `weekday` |
+| `include_cc` | bool | For `recipient` and `recipient_domain`: also count CC addresses (default true) |
+| `mailbox` | string | Empty, a shared mailbox address, or `all` |
+
+**`group_by` values**
+
+| Value | Key |
+|---|---|
+| `sender` | The sender's email address, lower case. `name` is the display name in the newest email of the group |
+| `sender_domain` | The part of the sender address after the `@` |
+| `recipient` | Each To address, plus each CC address when `include_cc` is true. An address counts once per email. `name` is the display name seen in the newest email |
+| `recipient_domain` | The same, by domain. A domain counts once per email |
+| `folder` | The folder path |
+| `month` | `yyyy-MM` |
+| `week` | ISO week, `yyyy-Www` |
+| `weekday` | `Mon` to `Sun` |
+| `hour` | `00` to `23` |
+
+`month`, `week`, `weekday` and `hour` use your Windows time zone. `(unknown)` means
+an email had no address. Any other `group_by` value returns an error that lists the
+valid ones.
+
+The result is `group_by`, `mailbox`, `total` (matching emails, not recipient
+entries), `distinct` (number of groups), `truncated` (true when there are more
+groups than `top`) and `rows`. Each row has `key`, `count`, `first` and `last` (the
+dates of the oldest and newest email in the group, local time with offset), and
+`name` for `sender` and `recipient`.
+
+With `mailbox="all"`, the counts of every enabled mailbox are added together by
+key. An email that is in two mailboxes counts twice.
+
+??? example "Example requests"
+    "Who emailed me most in the last year? Top 10 with counts."
+
+    Claude calls `email_stats` with `group_by="sender"`, `folder="inbox"`,
+    `date_from` one year ago.
+
+    "How much mail do I get per month?" is `group_by="month"`, `order="key"`.
+    "Who do I write to most?" is `group_by="recipient"`, `folder="sent"`.
+    "Which companies send me the most mail?" is `group_by="sender_domain"`.
+
+For joins, snippets or any other question that grouping can't answer, use
+[`query_index`](#query_index).
+
+### query_index
+
+Runs **one read-only SQLite `SELECT`** over the local email index. Use it for
+questions the other tools can't answer in one call: joins, custom grouping and
+full-text search with snippets. For plain counts, [`email_stats`](#email_stats) is
+simpler. It works while Outlook is busy or closed, and only synced mail is indexed.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `sql` | string, required | One `SELECT` (`WITH` and `VALUES` also work). Write values into the SQL; `?` parameters are not supported |
+| `mailbox` | string | Empty, a shared mailbox address, or `all` |
+| `max_rows` | int | Maximum rows returned, 1 to 1000 (default 200) |
+
+**Views.** The query sees exactly these three views, which hold the same data that
+`search_emails` and `get_message` return.
+
+| View | Columns |
+|---|---|
+| `mail` | `id` (the id that `get_message` takes), `doc` (join key), `mailbox` (empty for your own), `folder`, `date` (local time, `yyyy-MM-ddTHH:mm:ss`), `unix_time` (UTC seconds), `sender_name`, `sender_email`, `to_addrs`, `cc_addrs` (`Name <email>; ...`), `subject`, `topic` (conversation topic), `body` (plain text), `unread` (0 or 1), `has_attachments` (0 or 1, not counting inline images), `attachment_names` (one file name per line) |
+| `mail_fts` | The full-text index: `mail_fts` (use it with `MATCH`, `snippet()`, `highlight()`), `rank`, `doc`, `subject`, `body`, `sender_name`, `sender_email`, `to_addrs`, `cc_addrs`, `attachment_names`. Join to `mail` on `doc` |
+| `mail_attachments` | `doc`, `position`, `filename`, `size`, `is_inline` (0 or 1). Only file names are indexed, never attachment content |
+
+For full-text search, filter with `WHERE mail_fts MATCH '...'` (FTS5 syntax: words
+are ANDed, `OR`, `NOT`, `"a phrase"`, `prefix*`, `column:word`) and sort with
+`ORDER BY rank`. `snippet(mail_fts, n, ...)` and `highlight(mail_fts, n, ...)` take
+a column number: 0 subject, 1 body, 2 sender name, 3 sender email, 4 To, 5 CC, 6
+attachment names.
+
+**Limits**
+
+- One statement only. `PRAGMA`, `ATTACH`, every write and every other table are
+  refused, with an error that names what was not allowed.
+- 10 seconds in total, at most 1000 rows (`max_rows`), at most 100 columns, and
+  long text cells are cut at 2,000 characters. On a large mailbox add a `LIMIT` and
+  a date or folder filter.
+- With `mailbox="all"` each mailbox is queried separately and the rows are joined
+  with a leading `mailbox` column. Counts and other aggregates are therefore
+  **per mailbox**; use `email_stats` for counts merged across mailboxes.
+
+The result has `columns`, `rows` (numbers stay numbers, empty values are `null`),
+`row_count`, `truncated`, `truncated_cells` and `elapsed_ms`. When it stops early
+it also gives `truncated_reason`: `max_rows` or `size`.
+
+??? example "Example queries"
+    Top senders in your Inbox in the last year:
+
+    ```sql
+    SELECT sender_email, count(*) AS n FROM mail
+    WHERE folder = 'Inbox' AND unix_time >= strftime('%s','now','-1 year')
+    GROUP BY sender_email ORDER BY n DESC LIMIT 10
+    ```
+
+    Mail per month:
+
+    ```sql
+    SELECT substr(date,1,7) AS month, count(*) AS n FROM mail
+    GROUP BY month ORDER BY month
+    ```
+
+    Full-text search with snippets:
+
+    ```sql
+    SELECT m.id, m.date, m.subject,
+           snippet(mail_fts, 1, '**', '**', '…', 12) AS hit
+    FROM mail_fts JOIN mail m ON m.doc = mail_fts.doc
+    WHERE mail_fts MATCH 'budget AND 2026' ORDER BY rank LIMIT 20
+    ```
+
+    PDF attachments by sender:
+
+    ```sql
+    SELECT m.sender_email, count(*) AS n
+    FROM mail_attachments a JOIN mail m ON m.doc = a.doc
+    WHERE lower(a.filename) LIKE '%.pdf' GROUP BY 1 ORDER BY n DESC LIMIT 20
+    ```
+
+!!! note "Read-only, by several layers"
+    The query runs on a read-only connection to the index with writing switched
+    off, and every table and column access is checked. Only the three views above
+    can be read, not sync state, settings or anything else in the database. See
+    [Security](security.md#statistics-and-sql-queries).
 ## Attachments
 
 Attachments are saved with a live call to Outlook, so Outlook must be running.
@@ -190,9 +333,32 @@ Each event has `id`, `subject`, `start`, `end`, `all_day`, `location`,
 ### find_free_times
 
 Finds times when everyone is free, from Outlook free/busy. Nothing is booked.
-Returns numbered suggestions with `start`, `end` and a ready-to-show `text`.
-People whose free/busy can't be read (for example, people outside your
-organization) are listed in `unknown_attendees` and ignored.
+Returns numbered suggestions (whole free blocks) with `start`, `end`, `adjacent` and
+a ready-to-show `text`, and `offers`: options of exactly `duration_minutes`, with
+`offer_text` ready to paste into an email. People whose free/busy can't be read (for
+example, people outside your organization) are listed in `unknown_attendees` and
+ignored.
+
+**Ranking.** Times right before or after one of your meetings come first (within 15
+minutes, on the same day), then times next to a tentative meeting, then everything
+else, each group in date order. `adjacent` says which: `busy`, `tentative` or `none`.
+Free/busy can't tell a meeting from other busy time, so "next to a meeting" means
+"next to busy time". Without your own calendar (`include_me=false`, or your free/busy
+can't be read), every time is `none`.
+
+**Offers.** `offers` and `offer_text` hold at most `max_suggestions` options of
+exactly `duration_minutes`, in the same order, one per line:
+
+```
+1. Tue 11/18  10:00–11:00 PT  (19:00–20:00 CET)
+2. Wed 11/19  14:00–15:00 PT  (23:00–00:00 CET)
+```
+
+With `offer_cet=true` (for someone in Europe) each line also shows the time in
+Central European time, always labelled `CET`, also in summer. Options between 08:00
+and 18:00 CET come first. If there are fewer than wanted, the rest follow in a second
+list headed `Outside European office hours:`. Each offer has `list`: `main` or
+`outside_hours`. See [Meeting times in AI drafts](ai-drafts.md#meeting-times).
 
 | Parameter | Type | Description |
 |---|---|---|
@@ -204,8 +370,9 @@ organization) are listed in `unknown_attendees` and ignored.
 | `latest_hour` | int | Working-hours end, 1 to 24. Default: from Settings |
 | `business_days_only` | bool | Skip Saturdays and Sundays. Default: from Settings |
 | `include_me` | bool | Also check the calendar owner (default true) |
-| `max_suggestions` | int | 1 to 20 (default 5) |
+| `max_suggestions` | int | 1 to 20 (default 5). Also the most `offers` returned |
 | `mailbox` | string | Empty means your calendar, or an enabled shared mailbox |
+| `offer_cet` | bool | true when the person you are writing to is in Europe: offers also show CET, Europe office hours first (default false) |
 
 ### send_meeting_invite
 

@@ -74,11 +74,23 @@ public static class DraftPrompt
     public const string ManualNote =
         "{name} asked for a reply to this email, so it needs one: set needs_reply to true and write the reply in body_html.";
 
+    public const string MeetingNote =
+        "Meeting times:\n" +
+        "- When the email asks for or suggests a meeting or a call with {name} and your reply offers to meet, set meeting.requested to true. Write one short sentence that introduces the options, then [[meeting_times]] alone in its own paragraph: <p>[[meeting_times]]</p>. Clippy replaces it with free times from {name}'s calendar.\n" +
+        "- Never write times, dates or availability yourself, and don't promise any. [[meeting_times]] is the only placeholder Clippy fills in itself; the rule against inventing facts still holds for everything else.\n" +
+        "- If the sender proposes a specific time, don't accept or decline it. Write a placeholder like [[check whether Tue 3 pm works]] and still offer times with [[meeting_times]].\n" +
+        "- meeting.duration_minutes: the length of the meeting in minutes when the email states one (15 to 480); otherwise leave it out.\n" +
+        "- meeting.earliest_date and meeting.latest_date: when the email names a time frame, like \"next week\" or \"before the 20th\", its first and last day as yyyy-MM-dd, worked out from today in <context>; otherwise leave them out.\n" +
+        "- meeting.outside_hours_heading: the heading \"Outside European office hours:\" translated into the language of your reply.\n" +
+        "- When the email doesn't ask for a meeting or your reply doesn't offer one, leave meeting out and don't write [[meeting_times]].";
+
     private static readonly Regex StyleClose = new("<(?=/writing_style)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-    /// <summary>SystemTemplate with {name}/{smtp} filled, + ManualNote when manual, + the writing_style block.</summary>
+    /// <summary>SystemTemplate with {name}/{smtp} filled, + MeetingNote when meetingTimes, + ManualNote when manual,
+    /// + the writing_style block.</summary>
     /// <exception cref="ArgumentNullException">styleGuide is null.</exception>
-    public static string SystemPrompt(string? userName, string? userSmtp, bool manual, string styleGuide)
+    public static string SystemPrompt(string? userName, string? userSmtp, bool manual, string styleGuide,
+        bool meetingTimes = false)
     {
         ArgumentNullException.ThrowIfNull(styleGuide);
         var name = CleanName(userName);
@@ -90,6 +102,7 @@ public static class DraftPrompt
         style = StyleClose.Replace(style, "&lt;");
 
         var sb = new StringBuilder(SystemTemplate.Replace("{name}", name).Replace("{smtp}", smtp));
+        if (meetingTimes) sb.Append("\n\n").Append(MeetingNote.Replace("{name}", name));
         if (manual) sb.Append("\n\n").Append(ManualNote.Replace("{name}", name));
         sb.Append("\n\n<writing_style>\n").Append(style).Append("\n</writing_style>");
         return sb.ToString();

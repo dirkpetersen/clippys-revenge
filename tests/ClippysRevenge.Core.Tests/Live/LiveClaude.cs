@@ -120,8 +120,19 @@ internal sealed class FixedSelectionMailbox(IAiMailbox inner, SelectedEmail sele
 }
 
 /// <summary>Wraps the real model. Checks every request before the CLI runs, so a live test can't send more than planned.</summary>
-internal sealed class GuardedModel(IDraftModel inner, string expectedModel, string requiredToken) : IDraftModel
+internal sealed class GuardedModel(IDraftModel inner, string expectedModel, string requiredToken, bool? meetingNote = null)
+    : IDraftModel
 {
+    private static readonly string MeetingNoteHead = DraftPrompt.MeetingNote[..(DraftPrompt.MeetingNote.IndexOf('\n') + 1)];
+
+    private bool MeetingNoteWrong(string systemPrompt) => meetingNote switch
+    {
+        true => !systemPrompt.Contains(MeetingNoteHead, StringComparison.Ordinal)
+            || !systemPrompt.Contains("[[meeting_times]]", StringComparison.Ordinal),
+        false => systemPrompt.Contains(MeetingNoteHead, StringComparison.Ordinal),
+        null => false,
+    };
+
     /// <summary>Null while no check failed; else a fixed reason (never request text).</summary>
     public string? Tripped { get; private set; }
 
@@ -144,6 +155,7 @@ internal sealed class GuardedModel(IDraftModel inner, string expectedModel, stri
             : !request.UserPrompt.Contains(requiredToken, StringComparison.Ordinal) ? "token"
             : !request.UserPrompt.Contains("<thread>\n</thread>", StringComparison.Ordinal) ? "thread"
             : !request.SystemPrompt.Contains(DraftPrompt.NoStyleGuideText, StringComparison.Ordinal) ? "style"
+            : MeetingNoteWrong(request.SystemPrompt) ? "meeting-note"
             : request.UserPrompt.Contains("signature_added: yes", StringComparison.Ordinal) ? "signature"
             : null;
         if (reason is not null)

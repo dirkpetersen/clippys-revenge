@@ -456,4 +456,41 @@ public class EmailIndexSearchTests : IDisposable
         _ix.SetUnread([("a1", false)]);
         Assert.Equal(A("a4"), Ids(new SearchFilter { Unread = true }));
     }
+
+    [Fact]
+    public void BuildFilter_Empty()
+    {
+        var f = EmailIndex.BuildFilter(new SearchFilter());
+        Assert.Equal("emails e", f.From);
+        Assert.Equal("", f.Where);
+        Assert.Null(f.FtsMatch);
+        Assert.Empty(f.Parameters.ParameterNames);
+    }
+
+    [Fact]
+    public void BuildFilter_FtsFolderUnread()
+    {
+        var f = EmailIndex.BuildFilter(new SearchFilter { Query = "budget", Folder = "sent", Unread = true });
+        Assert.Contains("emails_fts JOIN emails e", f.From);
+        Assert.StartsWith(" WHERE emails_fts MATCH @q", f.Where);
+        Assert.Equal(FtsQuery.Build("budget"), f.FtsMatch);
+        var names = f.Parameters.ParameterNames.ToArray();
+        Assert.Contains("q", names);
+        Assert.Contains("folder", names);
+        Assert.Contains("u", names);
+        Assert.Equal("Sent Items", f.Parameters.Get<string>("folder"));
+        Assert.Equal(1, f.Parameters.Get<int>("u"));
+    }
+
+    [Fact]
+    public void BuildFilter_UnsearchableQuery_NoMatch()
+    {
+        var f = EmailIndex.BuildFilter(new SearchFilter { Query = "!!!" });
+        Assert.Null(f.FtsMatch);
+        Assert.Equal("emails e", f.From);
+    }
+
+    [Fact]
+    public void BuildFilter_NullThrows() =>
+        Assert.Throws<ArgumentNullException>(() => EmailIndex.BuildFilter(null!));
 }

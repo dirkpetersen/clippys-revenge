@@ -42,6 +42,52 @@ public class DraftPromptTests
     }
 
     [Fact]
+    public void Meeting_note_off_by_default()
+    {
+        var s = DraftPrompt.SystemPrompt("Dirk Example", "me@example.org", false, "x");
+        Assert.Equal(DraftPrompt.SystemPrompt("Dirk Example", "me@example.org", false, "x", meetingTimes: false), s);
+        Assert.DoesNotContain("[[meeting_times]]", s);
+        Assert.DoesNotContain("meeting.requested", s);
+        Assert.DoesNotContain("Meeting times:", s);
+    }
+
+    [Fact]
+    public void Meeting_note_exact_when_on()
+    {
+        var s = DraftPrompt.SystemPrompt("Dirk Example", "me@example.org", false, "x", true);
+        Assert.Contains("\n\n" + DraftPrompt.MeetingNote.Replace("{name}", "Dirk Example") + "\n\n<writing_style>\n", s);
+        Assert.DoesNotContain("{name}", s);
+        Assert.DoesNotContain("\r", s);
+    }
+
+    [Fact]
+    public void Meeting_note_order_with_manual()
+    {
+        var s = DraftPrompt.SystemPrompt("Dirk Example", "me@example.org", true, "x", true);
+        var meeting = s.IndexOf("\n\nMeeting times:\n", StringComparison.Ordinal);
+        var manual = s.IndexOf("\n\nDirk Example asked for a reply", StringComparison.Ordinal);
+        var style = s.IndexOf("\n\n<writing_style>\n", StringComparison.Ordinal);
+        Assert.True(meeting > 0 && meeting < manual && manual < style);
+    }
+
+    [Fact]
+    public void Meeting_note_blank_name() =>
+        Assert.Contains("free times from the user's calendar", DraftPrompt.SystemPrompt(null, "a@x.org", false, "x", true));
+
+    [Fact]
+    public void Meeting_note_pins_spec_points()
+    {
+        var n = DraftPrompt.MeetingNote;
+        foreach (var part in new[]
+        {
+            "[[meeting_times]]", "meeting.requested", "meeting.duration_minutes", "meeting.earliest_date",
+            "meeting.latest_date", "yyyy-MM-dd", "\"Outside European office hours:\"",
+            "[[check whether Tue 3 pm works]]", "today in <context>",
+        })
+            Assert.Contains(part, n);
+    }
+
+    [Fact]
     public void Blank_style_uses_default() =>
         Assert.Contains("<writing_style>\nNo style guide yet: write plainly, briefly and politely.\n</writing_style>",
             DraftPrompt.SystemPrompt("A", "a@x.org", false, "   "));

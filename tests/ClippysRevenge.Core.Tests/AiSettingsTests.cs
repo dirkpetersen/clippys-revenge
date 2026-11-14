@@ -43,6 +43,8 @@ public class AiSettingsTests
         Assert.Equal(180, a.TimeoutSeconds);
         Assert.Equal("", a.ClaudeCliPath);
         Assert.True(a.AutoRegenerateStyle);
+        Assert.True(a.MeetingTimes);
+        Assert.Equal(5, a.MeetingTimeOptions);
         Assert.Empty(a.Validate());
     }
 
@@ -93,6 +95,11 @@ public class AiSettingsTests
     [InlineData(29, false)] [InlineData(30, true)] [InlineData(900, true)] [InlineData(901, false)]
     public void TimeoutSeconds(int v, bool ok) =>
         AssertValid(ok, "AiDrafting.TimeoutSeconds", "Must be between 30 and 900.", a => a.TimeoutSeconds = v);
+
+    [Theory]
+    [InlineData(0, false)] [InlineData(1, true)] [InlineData(10, true)] [InlineData(11, false)] [InlineData(-1, false)]
+    public void MeetingTimeOptions(int v, bool ok) =>
+        AssertValid(ok, "AiDrafting.MeetingTimeOptions", "Must be between 1 and 10.", a => a.MeetingTimeOptions = v);
 
     [Theory]
     [InlineData("claude-opus-5-5", true)]
@@ -236,12 +243,14 @@ public class AiSettingsTests
             a.IncludeOnlySenders = ["y"];
             a.TimeoutSeconds = 0;
             a.ClaudeCliPath = "rel.exe";
+            a.MeetingTimeOptions = 0;
         });
         Assert.Equal(
             [
                 "AiDrafting.Enabled", "AiDrafting.Backend", "AiDrafting.Model", "AiDrafting.Effort", "AiDrafting.DailyCap",
                 "AiDrafting.MinConfidence", "AiDrafting.MaxAgeDays", "AiDrafting.ExcludeSenders[0]",
                 "AiDrafting.IncludeOnlySenders[0]", "AiDrafting.TimeoutSeconds", "AiDrafting.ClaudeCliPath",
+                "AiDrafting.MeetingTimeOptions",
             ], errors.Select(e => e.Field));
     }
 
@@ -352,6 +361,17 @@ public class AiSettingsTests
         Assert.Contains("\"Backend\": \"ClaudeCode\"", json);
         Assert.Contains("\"Effort\": \"medium\"", json);
         Assert.Contains("\"AiDrafts\": false", json);
+        Assert.Contains("\"MeetingTimes\": true", json);
+        Assert.Contains("\"MeetingTimeOptions\": 5", json);
+    }
+
+    [Fact]
+    public void Json_OldFileGetsMeetingDefaults()
+    {
+        var s = Settings.FromJson("{\"AiDrafting\":{\"DailyCap\":7}}");
+        Assert.True(s.AiDrafting.MeetingTimes);
+        Assert.Equal(5, s.AiDrafting.MeetingTimeOptions);
+        Assert.Empty(s.AiDrafting.Validate());
     }
 
     [Fact]
@@ -374,12 +394,16 @@ public class AiSettingsTests
         a.TimeoutSeconds = 60;
         a.ClaudeCliPath = Tmp("cli.js");
         a.AutoRegenerateStyle = false;
+        a.MeetingTimes = false;
+        a.MeetingTimeOptions = 3;
         s.SharedMailboxes.Add(new SharedMailbox { Smtp = "a@x.org", AiDrafts = true });
         var back = Settings.FromJson(s.ToJson());
         Assert.Equal(s.ToJson(), back.ToJson());
         Assert.Equal(Now.AddDays(-1), back.AiDrafting.ConsentedAtUtc);
         Assert.Equal(Now, back.AiDrafting.EnabledAtUtc);
         Assert.Equal(AiBackend.ApiKey, back.AiDrafting.Backend);
+        Assert.False(back.AiDrafting.MeetingTimes);
+        Assert.Equal(3, back.AiDrafting.MeetingTimeOptions);
         Assert.Equal(["b@x.org", "z.org"], back.AiDrafting.IncludeOnlySenders);
         Assert.True(back.SharedMailboxes[0].AiDrafts);
         Assert.Empty(back.Validate());
@@ -409,7 +433,9 @@ public class AiSettingsTests
     {
         var s = S();
         s.AiDrafting.ExcludeSenders = ["x.org"];
+        s.AiDrafting.MeetingTimeOptions = 9;
         var c = s.Clone();
+        Assert.Equal(9, c.AiDrafting.MeetingTimeOptions);
         Assert.NotSame(s.AiDrafting, c.AiDrafting);
         Assert.NotSame(s.AiDrafting.ExcludeSenders, c.AiDrafting.ExcludeSenders);
         Assert.NotSame(s.AiDrafting.IncludeOnlySenders, c.AiDrafting.IncludeOnlySenders);

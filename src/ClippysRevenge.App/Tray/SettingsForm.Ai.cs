@@ -35,6 +35,8 @@ internal sealed partial class SettingsForm
     private readonly TextBox _aiModel = new();
     private readonly ComboBox _aiEffort = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox _aiCap = new(), _aiMinConf = new(), _aiMaxAge = new();
+    private readonly CheckBox _aiMeeting = new() { Text = AiTabTexts.MeetingTimesText };
+    private readonly TextBox _aiMeetingCount = new();
     private readonly CheckBox _aiDirect = new() { Text = "Only when I'm in To or CC" };
     private readonly TextBox _aiExclude = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
     private readonly TextBox _aiInclude = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
@@ -96,27 +98,31 @@ internal sealed partial class SettingsForm
         Put(p, _aiMaxAge, 180, 362, 60, 24);
         Put(p, _aiDirect, 270, 362, 300, 24);
 
-        Lbl(p, "Never draft for", 8, 398, 200);
-        Lbl(p, "Only draft for", 330, 398, 200);
-        Put(p, _aiExclude, 8, 424, 310, 80);
-        Put(p, _aiInclude, 330, 424, 300, 80);
-        var listHint = Lbl(p, AiTabTexts.ListHint, 8, 506, 400);
+        Put(p, _aiMeeting, 8, 394, 370, 24);
+        Lbl(p, AiTabTexts.MeetingCountLabel, 384, 398, 150);
+        Put(p, _aiMeetingCount, 540, 394, 60, 24);
+
+        Lbl(p, "Never draft for", 8, 430, 200);
+        Lbl(p, "Only draft for", 330, 430, 200);
+        Put(p, _aiExclude, 8, 456, 310, 80);
+        Put(p, _aiInclude, 330, 456, 300, 80);
+        var listHint = Lbl(p, AiTabTexts.ListHint, 8, 538, 400);
         listHint.ForeColor = SystemColors.GrayText;
 
-        Lbl(p, "Mailboxes", 8, 534, 120);
-        Put(p, _aiOwnBox, 8, 560, 300, 22);
-        Put(p, _aiMailboxes, 8, 586, 622, 70);
+        Lbl(p, "Mailboxes", 8, 566, 120);
+        Put(p, _aiOwnBox, 8, 592, 300, 22);
+        Put(p, _aiMailboxes, 8, 618, 622, 70);
 
-        Lbl(p, "Writing style", 8, 664, 100);
-        Put(p, _aiStyleStatus, 110, 668, 520, 20);
-        Put(p, _aiWeekly, 8, 692, 200, 24);
-        Put(p, _aiView, 8, 722, 70, 26);
-        Put(p, _aiRegen, 84, 722, 110, 26);
-        Put(p, _aiOpen, 200, 722, 120, 26);
-        Put(p, _aiStyleNote, 8, 754, 620, 34);
+        Lbl(p, "Writing style", 8, 696, 100);
+        Put(p, _aiStyleStatus, 110, 700, 520, 20);
+        Put(p, _aiWeekly, 8, 724, 200, 24);
+        Put(p, _aiView, 8, 754, 70, 26);
+        Put(p, _aiRegen, 84, 754, 110, 26);
+        Put(p, _aiOpen, 200, 754, 120, 26);
+        Put(p, _aiStyleNote, 8, 786, 620, 34);
 
-        Put(p, _aiToday, 8, 796, 620, 20);
-        Put(p, _aiManual, 8, 820, 620, 20);
+        Put(p, _aiToday, 8, 828, 620, 20);
+        Put(p, _aiManual, 8, 852, 620, 20);
         _tabs.TabPages.Add(p);
 
         foreach (var e in AiDraftingSettings.Efforts) _aiEffort.Items.Add(e);
@@ -160,11 +166,21 @@ internal sealed partial class SettingsForm
             if (_binding) return;
             _editor.TrySetDouble("AiDrafting.MinConfidence", _aiMinConf.Text, v => AiDraft.MinConfidence = v);
         };
+        _aiMeeting.CheckedChanged += (_, _) =>
+        {
+            _aiMeetingCount.Enabled = _aiMeeting.Checked;
+            if (!_binding) AiDraft.MeetingTimes = _aiMeeting.Checked;
+        };
+        _aiMeetingCount.TextChanged += (_, _) =>
+        {
+            if (_binding) return;
+            _editor.TrySetInt("AiDrafting.MeetingTimeOptions", _aiMeetingCount.Text, v => AiDraft.MeetingTimeOptions = v);
+        };
         _aiDirect.CheckedChanged += (_, _) => { if (!_binding) AiDraft.RequireDirectRecipient = _aiDirect.Checked; };
         _aiWeekly.CheckedChanged += (_, _) => { if (!_binding) AiDraft.AutoRegenerateStyle = _aiWeekly.Checked; };
         _aiExclude.TextChanged += (_, _) => { if (!_binding) AiDraft.ExcludeSenders = AiSettingsLines.Parse(_aiExclude.Text); };
         _aiInclude.TextChanged += (_, _) => { if (!_binding) AiDraft.IncludeOnlySenders = AiSettingsLines.Parse(_aiInclude.Text); };
-        foreach (var t in new[] { _aiModel, _aiCliPath, _aiCap, _aiMinConf, _aiMaxAge, _aiExclude, _aiInclude })
+        foreach (var t in new[] { _aiModel, _aiCliPath, _aiCap, _aiMinConf, _aiMaxAge, _aiMeetingCount, _aiExclude, _aiInclude })
             t.Validated += (_, _) => RefreshErrors();
         _aiMailboxes.ItemCheck += (_, e) =>
         {
@@ -234,6 +250,9 @@ internal sealed partial class SettingsForm
             _aiMinConf.Text = d.MinConfidence.ToString("0.##", CultureInfo.InvariantCulture);
             _aiMaxAge.Text = d.MaxAgeDays.ToString(CultureInfo.InvariantCulture);
             _aiDirect.Checked = d.RequireDirectRecipient;
+            _aiMeeting.Checked = d.MeetingTimes;
+            _aiMeetingCount.Enabled = d.MeetingTimes;
+            _aiMeetingCount.Text = d.MeetingTimeOptions.ToString(CultureInfo.InvariantCulture);
             _aiWeekly.Checked = d.AutoRegenerateStyle;
             _aiExclude.Text = AiSettingsLines.Join(d.ExcludeSenders);
             _aiInclude.Text = AiSettingsLines.Join(d.IncludeOnlySenders);
@@ -636,6 +655,8 @@ internal sealed partial class SettingsForm
             AiTabField.MinConfidence => _aiMinConf,
             AiTabField.MaxAgeDays => _aiMaxAge,
             AiTabField.RequireDirectRecipient => _aiDirect,
+            AiTabField.MeetingTimes => _aiMeeting,
+            AiTabField.MeetingTimeOptions => _aiMeetingCount,
             AiTabField.ExcludeSenders => _aiExclude,
             AiTabField.IncludeOnlySenders => _aiInclude,
             AiTabField.AutoRegenerateStyle => _aiWeekly,
@@ -646,6 +667,6 @@ internal sealed partial class SettingsForm
     private Control[] AiErrorControls() =>
     [
         _aiEnabled, _aiUseCli, _aiCliPath, _aiModel, _aiEffort, _aiCap, _aiMinConf, _aiMaxAge, _aiDirect,
-        _aiExclude, _aiInclude, _aiWeekly,
+        _aiMeeting, _aiMeetingCount, _aiExclude, _aiInclude, _aiWeekly,
     ];
 }

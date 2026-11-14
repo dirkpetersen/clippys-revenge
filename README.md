@@ -39,7 +39,7 @@ User documentation: <https://dirkpetersen.github.io/clippys-revenge/>.
 
 ## AI drafts (optional)
 
-Turn on [AI drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/) and Clippy writes reply drafts to new mail in your own style, using your signed-in Claude Code or an Anthropic API key. Off by default, asks for consent, saves drafts only (never sends), and the model gets no tools.
+Turn on [AI drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/) and Clippy writes reply drafts to new mail in your own style, using your signed-in Claude Code or an Anthropic API key. Off by default, asks for consent, saves drafts only (never sends), and the model gets no tools. When an email asks for a meeting, the draft offers free times that Clippy picks from your calendar.
 
 ## Updates
 
@@ -147,9 +147,11 @@ a configured shared mailbox's address; search tools also accept `all`).
 | `create_draft` | Saves a new draft (never sends), with signature and attachments |
 | `reply_draft` | Saves a reply or reply-all draft (never sends) |
 | `list_events` | Calendar events in a date range |
-| `find_free_times` | Free/busy based meeting slot suggestions for you and others |
+| `find_free_times` | Free/busy based meeting slot suggestions for you and others, ranked by your calendar, with ready-to-paste options (optionally with CET) |
 | `send_meeting_invite` | Creates a meeting. The only sending tool; see below |
 | `index_status` | Index size, sync state and last sync time per mailbox |
+| `email_stats` | Counts mail grouped by sender, domain, recipient, folder, month, week, weekday or hour (counts and names only) |
+| `query_index` | One read-only SELECT over the views `mail`, `mail_fts` and `mail_attachments`, with full-text search and snippets |
 
 ## Security model
 

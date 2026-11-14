@@ -29,6 +29,32 @@ Yes, if you turn on [AI drafts](ai-drafts.md). Clippy then asks Claude to draft
 replies to new mail in your style and saves them in Drafts. It never sends them. It
 is off by default and asks for your consent first.
 
+## Will the AI draft offer meeting times?
+
+Yes, when an email asks for a meeting and **Offer meeting times when an email asks
+for a meeting** is on (the default). Clippy picks the times from your calendar itself,
+the model never sees them, and each option is its own line that you can delete. For
+senders in Europe it adds the time in CET. See [Meeting times](ai-drafts.md#meeting-times).
+
+## Why does a meeting time say CET in summer?
+
+The label is always "CET" for Central European time, also while Europe is on summer
+time. The time itself uses the real offset (+02:00 in summer), so the number is right.
+
+## Why did a draft come out without a CET time for a sender in Europe?
+
+Clippy guesses where the sender is from the `Date` header and the address ending, and
+can miss, for example for a `.com` address in winter UK time. See
+[Senders in Europe](ai-drafts.md#meeting-times). You can add or delete the CET part
+by hand.
+
+## An email got no draft and the Activity window says "low confidence". What now?
+
+Claude wasn't sure enough that a reply was needed, below your **Minimum confidence**.
+Such an email is decided once and not retried. To get a draft anyway, select the email
+in Outlook and use **Draft a reply to the selected email** in the tray menu. See
+[Emails Clippy decides not to draft](ai-drafts.md#emails-clippy-decides-not-to-draft).
+
 ## Does AI drafting send my mail to Anthropic?
 
 Yes, while it is on: the email being answered, thread excerpts, attachment names and
@@ -64,6 +90,21 @@ treat that as you would any use of an AI assistant with your mail. The optional
 
 No. There is no Graph API, Entra app registration or OAuth. If Outlook can open
 the mail, Clippy can use it.
+
+## Can Claude answer "who emails me the most?" or "how much mail do I get per month?"
+
+Yes, in one call. Ask in plain language, for example "top 10 people who emailed me in
+the last year, with counts" or "mail per month since January". Claude uses
+[`email_stats`](tools.md#email_stats), which counts mail in the local index by
+sender, sender domain, recipient, folder, month, week, weekday or hour. It returns
+counts and names, never mail text, and works while Outlook is closed.
+
+## Can Claude run its own searches with SQL?
+
+Yes, with [`query_index`](tools.md#query_index): one read-only `SELECT` over three
+views of the index, including full-text search with snippets. Nothing can be changed
+and nothing outside those views can be read. See
+[Security](security.md#statistics-and-sql-queries).
 
 ## Does Outlook have to be running?
 

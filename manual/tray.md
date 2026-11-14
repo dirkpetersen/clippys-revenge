@@ -90,7 +90,7 @@ Turns on and tunes [AI drafts](ai-drafts.md): the switch **Draft replies to new
 email automatically**, **Use** (Claude Code or an Anthropic API key, with **Check**
 and **Save key** / **Remove key**), Claude Code path, Model, Effort, Daily limit,
 Minimum confidence, **Ignore mail older than** (days), **Only when I'm in To or CC**,
-**Never draft for** and **Only draft for** (one address or domain per line), the
+**Offer meeting times when an email asks for a meeting** with **Number of times to offer**\n(1 to 10), **Never draft for** and **Only draft for** (one address or domain per line), the
 mailboxes, and the writing style (**View**, **Regenerate**, **Open in editor**,
 **Update weekly**). A link at the bottom leads to the manual page that explains what
 is sent to Claude.

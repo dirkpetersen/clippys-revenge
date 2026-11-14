@@ -3,6 +3,33 @@
 The full list of releases, with downloads, is on
 [GitHub](https://github.com/dirkpetersen/clippys-revenge/releases).
 
+## v0.0.7
+
+2026-11-14
+
+- Meeting times: `find_free_times` now ranks its suggestions by your calendar (times
+  next to your meetings first, then next to tentative ones) and returns `offers` of
+  exactly the meeting length plus a ready-to-paste `offer_text`, one option per line.
+  New `offer_cet` option adds the time in CET and puts European office hours first,
+  with the others under "Outside European office hours:".
+- AI drafts offer meeting times: when an email asks for a meeting, the draft gets
+  options from your calendar, computed by Clippy, not by the model. Two new settings,
+  **Offer meeting times when an email asks for a meeting** and **Number of times to
+  offer**. See [Meeting times](ai-drafts.md#meeting-times).
+- The writing-style skill has a new section, "Offering meeting times", so Claude Code
+  offers times the same way. Unedited skills get it automatically at the next start.
+- New tool `email_stats`: counts mail by sender, domain, recipient, folder, month,
+  week, weekday or hour in one call. Counts and names only.
+- New tool `query_index`: one read-only `SELECT` over the views `mail`, `mail_fts` and
+  `mail_attachments`, with full-text search and snippets. See
+  [Tools reference](tools.md#email_stats) and
+  [Security](security.md#statistics-and-sql-queries).
+- AI drafts: an email Claude isn't confident enough about now shows a line in the
+  Activity window with how to draft it anyway, and the pass summary counts
+  "low confidence" separately.
+- Privacy fix: the log no longer contains the text of tool error messages, which could
+  quote search text or SQL back. Only the kind of error is logged.
+
 ## v0.0.6
 
 2026-11-13

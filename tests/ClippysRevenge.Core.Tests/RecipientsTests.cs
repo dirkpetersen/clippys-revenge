@@ -102,4 +102,27 @@ public class RecipientsTests
         var first = Recipients.Parse(raw);
         Assert.Equal(first, Recipients.Parse(Recipients.Format(first)));
     }
+
+    [Theory]
+    [InlineData("Example, Alice <alice@example.edu>", "Example, Alice", "alice@example.edu")]
+    [InlineData("\"Q\" <q@x.org>", "Q", "q@x.org")]
+    [InlineData("<q@x.org>", "", "q@x.org")]
+    [InlineData(" q@x.org ", "", "q@x.org")]
+    public void TryParseEntry_Valid(string entry, string name, string email)
+    {
+        Assert.True(Recipients.TryParseEntry(entry, out var r));
+        Assert.Equal(new Recipient(name, email), r);
+    }
+
+    [Theory]
+    [InlineData("not-an-address")]
+    [InlineData("Bob <bob>")]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData(null)]
+    public void TryParseEntry_Invalid(string? entry)
+    {
+        Assert.False(Recipients.TryParseEntry(entry, out var r));
+        Assert.Null(r);
+    }
 }

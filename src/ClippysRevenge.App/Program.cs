@@ -12,6 +12,7 @@ internal static class Program
     private static int Main(string[] args)
     {
         var startedUtc = DateTimeOffset.UtcNow;
+        SqliteHeapLimit.Ensure();   // before any index opens (process-wide 1 GiB SQLite heap cap)
         ApplicationConfiguration.Initialize();
 
         using var instance = SingleInstance.TryAcquire();
@@ -154,6 +155,7 @@ internal static class Program
         StyleSkill? styleSkill = null;
         try
         {
+            EmailIndex.Logger = loggerFactory.CreateLogger<EmailIndex>();
             indexes = new MailboxIndexes(localDir, settings.SharedMailboxes.Where(m => m?.Enabled == true).Select(m => m.Smtp));
             mail = new OutlookMail(stores, indexes, settings);
             var mailSource = new OutlookMailSource(worker, stores, mail);
@@ -167,6 +169,8 @@ internal static class Program
             logger.LogError(ex, "The email index could not be opened.");
             indexErrorScope = hub.Begin(ActivityState.Error, "index can't be opened");
         }
+
+        var freeBusy = new OutlookFreeBusySource(worker);
 
         // AI drafting (SPEC 19). Needs the index, so there is no worker when the index failed to open.
         // A failure here is not an index failure: AI stays off and the rest of the app runs.
@@ -199,7 +203,7 @@ internal static class Program
                 styleGuide,
                 () => signatures.Default(SignatureKind.Reply), hub, balloons,
                 () => worker.State == OutlookConnectionState.Available, () => syncRef.IsPaused, TimeZoneInfo.Local,
-                Logger: loggerFactory.CreateLogger<DraftWorker>()));
+                Logger: loggerFactory.CreateLogger<DraftWorker>(), FreeBusy: freeBusy));
             var draftsRef = drafts;
             sync.CycleCompleted += _ => draftsRef.Wake();
             }
@@ -210,6 +214,11 @@ internal static class Program
                 aiMailbox = null;
                 draftModel = null;
                 styleSkill = null;
+            }
+            if (styleSkill is not null)
+            {
+                var skillAtStart = styleSkill;
+                _ = Task.Run(skillAtStart.RefreshMeetingSection);   // SPEC 21.7: off the UI thread, no consent needed, never throws
             }
         }
 
@@ -362,8 +371,8 @@ internal static class Program
             ConfigureServices = s =>
             {
                 s.AddSingleton(settings).AddSingleton(balloons).AddSingleton(worker).AddSingleton(stores).AddSingleton(invites)
-                    .AddSingleton<IFreeBusySource>(new OutlookFreeBusySource(worker))
-                    .AddSingleton(sp => new FreeTimeFinder(sp.GetRequiredService<IFreeBusySource>(), TimeProvider.System, TimeZoneInfo.Local));
+                    .AddSingleton<IFreeBusySource>(freeBusy)
+                    .AddSingleton(sp => new FreeTimeFinder(sp.GetRequiredService<IFreeBusySource>(), TimeProvider.System, TimeZoneInfo.Local, logger: loggerFactory.CreateLogger<FreeTimeFinder>()));
                 s.AddSingleton(signatures)
                     .AddSingleton<IDraftWriter>(new OutlookDraftWriter(worker, stores, loggerFactory.CreateLogger<OutlookDraftWriter>()))
                     .AddSingleton<CreateDraftTool>();

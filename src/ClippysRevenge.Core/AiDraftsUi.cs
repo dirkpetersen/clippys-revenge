@@ -73,6 +73,7 @@ public enum AiTabField
 {
     None, Enabled, Backend, ClaudeCliPath, Model, Effort, DailyCap, MinConfidence, MaxAgeDays,
     RequireDirectRecipient, ExcludeSenders, IncludeOnlySenders, AutoRegenerateStyle,
+    MeetingTimes, MeetingTimeOptions,
 }
 
 public static class AiTabFields
@@ -96,6 +97,8 @@ public static class AiTabTexts
 {
     public const string TabTitle = "AI drafts";
     public const string EnableText = "Draft replies to new email automatically";
+    public const string MeetingTimesText = "Offer meeting times when an email asks for a meeting";
+    public const string MeetingCountLabel = "Number of times to offer";
     public const string UseLabel = "Use:";
     public const string UseClaudeCode = "Claude Code on this PC (your Claude subscription)";
     public const string UseApiKey = "Anthropic API key";

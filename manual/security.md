@@ -115,6 +115,31 @@ Claude's answers.
     have tools) can load it. Review it with **View** in Settings, edit it, or delete
     it any time. See [Your writing style](ai-drafts.md#your-writing-style).
 
+## Statistics and SQL queries
+
+[`email_stats`](tools.md#email_stats) and [`query_index`](tools.md#query_index) let
+Claude count and query the local index. They expose **the same data** that
+`search_emails` and `get_message` already return, and nothing else: no sync state,
+settings, AI decisions or internal ids, and no attachment content (only file names
+are indexed). `email_stats` returns counts and names, never mail text.
+
+`query_index` is read-only through several independent layers, so that a mistaken or
+malicious query can't change anything:
+
+- The connection to the index file is opened **read-only**, with writing switched
+  off.
+- Only three views (`mail`, `mail_fts`, `mail_attachments`) can be read. Every table,
+  column and function access is checked, and anything else is refused, such as other
+  tables, `PRAGMA`, `ATTACH`, loading extensions and every write.
+- One `SELECT` per call, no `?` parameters, a 10 second limit, at most 1000 rows, and
+  long text is cut at 2,000 characters.
+- The views are created for that one call and leave the index file unchanged.
+
+It can't touch your mailbox in Outlook at all: it only reads Clippy's own index.
+
+The text of a query (SQL), the values it returns and SQLite's error messages are
+**never written to the log**. See [Logs](#logs).
+
 ## Prompt injection
 
 Email is untrusted text, and Claude reads it. Clippy limits what a malicious email
@@ -126,7 +151,7 @@ before you send them, and read the invite dialog before you click **Send**.
 
 Logs are in `%LOCALAPPDATA%\ClippysRevenge\logs` and kept for 7 days. They contain
 tool names, counts and errors. The token, the saved API key and any `sk-ant-…` or `Bearer …` text are masked, and mail bodies and search
-text are not logged. Activity events show subjects and counts only.
+text are not logged. Activity events show subjects and counts only. The SQL of a `query_index` call and the text of a tool's error message (which can quote a search or a SQL error back to Claude) are not logged either, only the kind of error. Tool calls appear as the tool name, with counts and timings.
 
 ## Unsigned executable
 
