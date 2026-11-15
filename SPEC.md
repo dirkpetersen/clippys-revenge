@@ -154,19 +154,23 @@ src/ClippysRevenge.Core/        net10.0: no Windows, no COM, testable on Linux/W
                             suffix) (§22.6)
     MeetingInvite.cs        MeetingRequest validation, IMeetingCalendar, InviteTexts, MeetingDraftResult
     MeetingInvites.cs       create_meeting_draft orchestration (§22.1) behind IMeetingCalendar
-    AiSettings.cs           AiDraftingSettings model, defaults, validation; SenderPattern, the sender entry
-                            parser and matcher used by validation and DraftRules (§19.2)
+    AiSettings.cs           AiDraftingSettings model, defaults, validation, legacy-model migration; SenderPattern,
+                            the sender entry parser and matcher used by validation and DraftRules; ModelAliases
+                            (§19.2, §19.3)
     DraftMarker.cs          ClippyDraft marker values + MAPI property names (§19.4)
     DraftModel.cs           IDraftModel, request/result types, reply + style JSON schemas, DraftReply.Parse,
                             DraftModelSwitch (backend choice per call) (§19.3, §19.7)
     ClaudeCli.cs            Claude Code CLI locator, status probe, argument builder, runner, output parser,
                             ClaudeCliModel (IDraftModel) (§19.3)
     AnthropicApiModel.cs    API-key backend (IDraftModel over the Anthropic SDK), AnthropicWireSchema (§19.3)
+    AnthropicModelResolver.cs  alias -> newest model id via GET /v1/models: ModelListEntry, ModelListOutcome,
+                            ModelLookupKinds, ModelResolution, cache/hold/single flight (§19.3, M16.1)
     MailText.cs             own-text extraction (quotes, header blocks, signatures), redaction, header parsing (§19.6)
     DraftHtml.cs            allow-list HTML sanitizer for model output, [[placeholder]] highlight, HTML -> plain
                             text for signature matching (§19.8)
     StyleSkill.cs           StyleCorpus (Sent-mail sampling), StylePrompt, StyleSkillText, StyleSkillFiles
-                            (SKILL.md + state.json, edit detection), StyleSkill service (§19.6)
+                            (SKILL.md + state.json, edit detection), StyleSource/StylePromptText, StyleTexts,
+                            StyleSkill service (§19.6)
     StyleGuideSource.cs     IStyleGuideSource adapter over StyleSkill for DraftWorker (§19.6, §19.7)
     DraftRules.cs           candidate rules (§19.7)
     DraftPrompt.cs          drafting system prompt + thread rendering; IStyleGuideSource, NoStyleGuide (§19.7)
@@ -2965,11 +2969,20 @@ sends.
 alias `opus` ("latest Opus") instead of a pinned version, so drafts and
 style generation move to a new Opus without a Clippy update. It passes
 `IsValidModelName` (and so `ClaudeCliArgs.IsValidModel`) unchanged.
-Migration: `FillDefaults` (after loading `settings.json`) turns a stored
-`Model` exactly equal to `claude-opus-5-5` (the old default, ordinal)
-into `opus`; any other value is kept as the user chose it. (A user who
-had typed `claude-opus-5-5` on purpose is migrated too; accepted, since
-the two can't be told apart.) The `Model` validation message becomes
+Migration: when `settings.json` is loaded, `SettingsStore.ReadSettings`
+calls `AiDraftingSettings.MigrateLegacyModel()` right after
+`Settings.FromJson` and before `Validate()`; it turns a stored `Model`
+exactly equal to `claude-opus-5-5` (`LegacyDefaultModel`, the old
+default, ordinal) into `opus`; any other value (`Claude-Opus-5-5`,
+`claude-opus-5`, a custom id) is kept as the user chose it. It is not in
+`FillDefaults`, because `Settings.Clone()` is `FromJson(ToJson())` and
+the Settings editor clones on every Apply, so a migration there would
+silently rewrite a `claude-opus-5-5` the user had just typed. The
+migrated value isn't written back at load time; the next normal Save
+writes `opus`. No log, warning or event. (A user who had typed
+`claude-opus-5-5` on purpose before M16.1 is migrated once too;
+accepted, since the two can't be told apart.) The `Model` validation
+message becomes (`AiDraftingSettings.ModelMessage`)
 `Must be a model name like opus or claude-opus-5-5: up to 64 letters, digits, '.', '_', '-', '[' or ']', starting with a letter.`
 `Effort` stays `medium` and is passed to both backends on every call
 (CLI `--effort <Effort>`, API `output_config.effort`), for drafting and
@@ -3178,7 +3191,9 @@ storage per call and never logged.
 
 API backend details (M11.5):
 - *SDK and client.* NuGet `Anthropic` 13.3.0 (§2). The SDK sends the key
-  as `Authorization: Bearer <key>`; `x-api-key` is not sent (§5.1
+  as `Authorization: Bearer <key>` and the `anthropic-version` header
+  itself; `x-api-key` is not sent, and Clippy adds no auth header of its
+  own (this holds for the M16.1 model list call too) (§5.1
   redaction masks `Bearer <anything>`). The base URL is fixed to
   `https://api.anthropic.com` (`ANTHROPIC_BASE_URL` is ignored), SDK
   retries are off (`MaxRetries = 0`; backoff is `DraftWorker`'s, §19.7),
@@ -3210,7 +3225,8 @@ API backend details (M11.5):
 - *Check mapping.* 2xx → ready; 401/403 → rejected; 400/404 → model not
   available; anything else (429, 5xx, network, the 15 s bound) →
   `✗ api.anthropic.com didn't answer.` Not cached: each Check is one
-  GET.
+  GET. (For an alias model, see "Model aliases" below: one fresh listing
+  instead.)
 
 **Model aliases (M16.1, user request 2026-11-15).** `opus`, `sonnet` and
 `haiku` (exactly, lower-case; `ModelAliases.IsAlias`) mean "the newest
@@ -3221,29 +3237,57 @@ rule lives in the backends only:
   resolves it to its newest model of that family. No other change.
 - *API backend (`AnthropicModelResolver`, Core, used by
   `AnthropicApiModel` for `RunAsync` and `CheckAsync`).* The Messages API
-  needs a concrete id. A non-alias model is used as typed. For an alias,
-  Clippy lists the models with the user's saved key (`GET /v1/models`
-  through the SDK's `Models.List`, all pages, at most 10 pages, within
-  the 15 s check bound) and picks, among models whose `id` starts with
-  `claude-<alias>-` (ordinal, lower-case), the one with the latest
-  `created_at`; ties go to the ordinal-greatest `id`. The result is
-  cached per alias for 24 hours (in memory; dropped on Save key, Remove
-  key and Settings → Check).
+  needs a concrete id. A non-alias model is used as typed (no lookup).
+  For an alias, Clippy lists the models with the user's saved key only
+  (`GET /v1/models?limit=100` through the SDK's `Models.List`, following
+  `after_id` pages, at most 10 pages, all within the one 15 s check
+  bound; no `lifecycle` filter is sent, so the list is active +
+  deprecated models). Entries are read from the raw JSON (`id`,
+  `created_at`, `line`, `lifecycle`; an entry without a string `id` or an
+  RFC 3339 `created_at` is skipped). Candidates are entries whose `line`
+  equals the alias (ordinal), whose `lifecycle` isn't `retired` (missing
+  counts as not retired) and whose `id` passes `IsValidModelName`. The
+  `id` prefix is **not** used (Anthropic's models overview: "Read `line`
+  instead of inferring it from the model's `id`"). Among candidates the
+  one with the latest `created_at` wins; ties go to the ordinal-greatest
+  `id`. If more than 10 pages exist, the choice is made among what was
+  read. Lookups are single-flight per resolver. A successful lookup is
+  cached per alias for 24 hours (in memory only, never persisted) and
+  logs Information `AI drafts: "<alias>" is <id>.` The cache, the
+  10-minute holds and the open warning episodes are all dropped by
+  `AnthropicApiModel.InvalidateModelCache()`, which `Program` calls on
+  Save key, Remove key and Settings → Check; a lookup in flight during
+  the drop returns its result but stores nothing.
 - *Failure.* HTTP 401/403 on the list → `RunAsync` gives `NotSignedIn`
-  and `CheckAsync` the "rejected" text, as today. Any other failure (no
-  answer, 5xx, 429, bad JSON, no model of that family) → the built-in
-  fallback id `ModelAliases.Fallback(alias)` (`opus` →
-  `claude-opus-5-5`; the `sonnet` and `haiku` ids are pinned in the
-  M16.1 brief from Anthropic's models overview), one Warning log per
-  episode (`AI drafts: couldn't look up the newest "<alias>" model (<kind>); using <id>.`,
+  and `CheckAsync` the "rejected" text, as today; no hold, no warning,
+  the cache is untouched. Any other failure → the built-in fallback id
+  `ModelAliases.Fallback(alias)` (`opus` → `claude-opus-5-5`, `sonnet` →
+  `claude-sonnet-5-5`, `haiku` → `claude-haiku-5-5`; from Anthropic's
+  models overview, checked 2026-11-15), one Warning log per episode
+  (`AI drafts: couldn't look up the newest "<alias>" model (<kind>); using <id>.`,
   no key, no body), and the lookup is retried after 10 minutes, not
-  before. A 404/400 on the Messages call with the fallback id is the
-  normal `Failed(Http, code)`.
-- *Check text.* For an alias the ready text is
-  `✓ API key works (<alias> → <id>)`; when only the fallback could be
-  used, `✗ api.anthropic.com didn't answer.` (the call would still try
-  the fallback). No tokens are used.
-- Logs may contain the resolved model id (it isn't user data).
+  before. `<kind>` is one of `no answer` (network error or any other
+  exception), `timed out` (the 15 s bound), `HTTP <code>`, `unreadable
+  answer` (JSON the SDK can't read) or `no model of that family` (listed
+  fine, no candidate) (`ModelLookupKinds`). An episode opens with the
+  first failure Warning and closes with a successful lookup or
+  `InvalidateModelCache()`; repeated failures in one episode (including
+  retries after each hold) log nothing more. A 404/400 on the Messages
+  call with the fallback id is the normal `Failed(Http, code)`.
+  Cancellation of the caller's token stores nothing and sets no hold.
+- *Check text.* `CheckAsync` for an alias always does one fresh listing
+  (it ignores the cache and the 10-minute hold, refreshes the cache on
+  success, and drops the cached id on failure so `RunAsync` doesn't keep
+  using an id the Check couldn't confirm) and makes no
+  `GET /v1/models/<id>` call; `RunAsync` uses the cache. The ready text is
+  `✓ API key works (<alias> → <id>)` (`AnthropicApiStatusTexts.ReadyAlias`);
+  when only the fallback could be used, `✗ api.anthropic.com didn't answer.`
+  (the call would still try the fallback); 401/403 → the "rejected"
+  text; no key → `✗ No API key saved.` with no request. No tokens are
+  used. A non-alias model keeps the one `GET /v1/models/<model>`.
+- Logs may contain the alias, the resolved model id (it isn't user
+  data), the failure kind and the HTTP status; never the key or a
+  response body.
 
 ### 19.4 Draft marker
 
@@ -3507,7 +3551,12 @@ above; the fallback is no longer silent.
   - to `UserFile` after one of the two above: `Ai` event (log
     Information) `Writing style: using your SKILL.md again.` The first
     read after start-up that finds `UserFile` reports nothing.
-  (`StyleSkillTexts.SourceNone`, `SourceAppCopy`, `SourceBack`.) The
+  (`StyleTexts.SourceNone`, `SourceAppCopy`, `SourceBack`, in the
+  existing `StyleTexts` class in `StyleSkill.cs`; no separate
+  `StyleSkillTexts` class.) The event is `ActivityKind.Ai` with no
+  duration or mailbox; the log message is the constant text (no
+  placeholders). Only `ReadForPrompt` reports, `BeforePassAsync`
+  doesn't; hub or logger exceptions are swallowed. The
   texts hold no path, user name or file content. "Regenerate it from AI
   drafts" means Settings → AI drafts → Regenerate.
 
@@ -3526,7 +3575,8 @@ public interface IStyleGuideSource
 `StyleGuideSource` (`StyleGuideSource.cs`): `BeforePassAsync` resolves
 the owner and calls `StyleSkill.RunIfDueAsync(owner, ct)`, swallowing
 everything except cancellation of `ct`; `ReadForPrompt` is
-`StyleSkill.ReadBodyForPrompt()`. Shared-mailbox drafts use the same
+`StyleSkill.ReadForPrompt().Body` (since M16.1, reporting a source change
+as above; before, `StyleSkill.ReadBodyForPrompt()`). Shared-mailbox drafts use the same
 skill (§18, open question 7).
 
 ### 19.7 Drafting pipeline (`DraftRules`, `DraftPrompt`, `DraftWorker`; Core)
@@ -5717,7 +5767,9 @@ Core (Linux and Windows):
   consent, summary texts for each end.
 - M16.1: `opus` default, the `claude-opus-5-5` migration (and nothing
   else migrated), validation message, `AnthropicModelResolver` selection
-  (family prefix, latest `created_at`, tie on id, paging), cache and
+  (`line` match, retired skipped, no id-prefix inference, latest
+  `created_at`, tie on id, paging and the 10-page cap), Check's fresh
+  lookup, single flight, invalidation, cache and
   10-minute retry, 401 → `NotSignedIn`, fallback, check texts; style
   source reporting (each transition once, no report for repeated reads,
   no report for the first `UserFile`, texts).
