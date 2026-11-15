@@ -83,6 +83,7 @@ public sealed class SettingsStore
         try
         {
             var s = Settings.FromJson(File.ReadAllText(SettingsPath, Encoding.UTF8));
+            s.AiDrafting.MigrateLegacyModel();
             var errors = s.Validate();
             if (errors.Count == 0) return s;
             problem = "invalid for " + string.Join(", ", errors.Select(e => e.Field));

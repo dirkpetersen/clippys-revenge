@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 
@@ -8,7 +9,11 @@ public enum AiBackend { ClaudeCode, ApiKey }
 /// <summary>SPEC 19.2. Mutable settings data; deep-copied with Settings.Clone/CopyFrom.</summary>
 public sealed partial class AiDraftingSettings
 {
-    public const string DefaultModel = "claude-opus-5-5";
+    public const string DefaultModel = "opus";
+    /// <summary>The pre-M16.1 default; MigrateLegacyModel turns exactly this into DefaultModel.</summary>
+    public const string LegacyDefaultModel = "claude-opus-5-5";
+    public const string ModelMessage =
+        "Must be a model name like opus or claude-opus-5-5: up to 64 letters, digits, '.', '_', '-', '[' or ']', starting with a letter.";
     public const string DefaultEffort = "medium";
     public static IReadOnlyList<string> Efforts { get; } = ["low", "medium", "high", "xhigh", "max"];
     public const int MaxModelLength = 64;
@@ -93,7 +98,7 @@ public sealed partial class AiDraftingSettings
         if (Enabled && ConsentedAtUtc is null) Add("Enabled", ConsentRequiredMessage);
         if (!Enum.IsDefined(Backend)) Add("Backend", "Must be ClaudeCode or ApiKey.");
         if (!IsValidModelName(Model))
-            Add("Model", "Must be a model name like claude-opus-5-5: up to 64 letters, digits, '.', '_', '-', '[' or ']', starting with a letter.");
+            Add("Model", ModelMessage);
         if (Effort is null || !Efforts.Contains(Effort, StringComparer.Ordinal))
             Add("Effort", "Must be low, medium, high, xhigh or max.");
         if (DailyCap < MinDailyCap || DailyCap > MaxDailyCap) Add("DailyCap", "Must be between 1 and 500.");
@@ -144,6 +149,15 @@ public sealed partial class AiDraftingSettings
         }
     }
 
+    /// <summary>SPEC 19.2 migration. Model == LegacyDefaultModel (ordinal) becomes DefaultModel; returns true then.
+    /// Any other value (incl. null, "Claude-Opus-5-5", " claude-opus-5-5") is left alone; returns false. Never throws.</summary>
+    internal bool MigrateLegacyModel()
+    {
+        if (!string.Equals(Model, LegacyDefaultModel, StringComparison.Ordinal)) return false;
+        Model = DefaultModel;
+        return true;
+    }
+
     /// <summary>After deserialization: null Model/Effort become defaults, null lists become [], null ClaudeCliPath becomes "". Null list entries stay (Validate reports them).</summary>
     internal void FillDefaults()
     {
@@ -153,6 +167,27 @@ public sealed partial class AiDraftingSettings
         IncludeOnlySenders ??= [];
         ClaudeCliPath ??= "";
     }
+}
+
+/// <summary>SPEC 19.3 "Model aliases". The newest model of a line. Pure.</summary>
+public static class ModelAliases
+{
+    public const string Opus = "opus", Sonnet = "sonnet", Haiku = "haiku";
+    public static IReadOnlyList<string> All { get; } = [Opus, Sonnet, Haiku];
+
+    /// <summary>Exactly "opus", "sonnet" or "haiku" (ordinal, lower-case, no trimming). False for null.</summary>
+    public static bool IsAlias([NotNullWhen(true)] string? model) =>
+        model is Opus or Sonnet or Haiku;
+
+    /// <summary>The built-in id used when the lookup fails.</summary>
+    /// <exception cref="ArgumentException">alias isn't one of All.</exception>
+    public static string Fallback(string alias) => alias switch
+    {
+        Opus => "claude-opus-5-5",
+        Sonnet => "claude-sonnet-5-5",
+        Haiku => "claude-haiku-5-5",
+        _ => throw new ArgumentException("Not a model alias.", nameof(alias)),
+    };
 }
 
 /// <summary>One ExcludeSenders / IncludeOnlySenders entry: an address, or a domain that also matches its subdomains (SPEC 19.2, 19.7).</summary>

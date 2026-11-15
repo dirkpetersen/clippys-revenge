@@ -32,7 +32,7 @@ public class AiSettingsTests
         Assert.Null(a.ConsentedAtUtc);
         Assert.Null(a.EnabledAtUtc);
         Assert.Equal(AiBackend.ClaudeCode, a.Backend);
-        Assert.Equal("claude-opus-5-5", a.Model);
+        Assert.Equal("opus", a.Model);
         Assert.Equal("medium", a.Effort);
         Assert.Equal(30, a.DailyCap);
         Assert.Equal(0.6, a.MinConfidence);
@@ -103,6 +103,9 @@ public class AiSettingsTests
 
     [Theory]
     [InlineData("claude-opus-5-5", true)]
+    [InlineData("opus", true)]
+    [InlineData("sonnet", true)]
+    [InlineData("haiku", true)]
     [InlineData("claude-sonnet-4-6[1m]", true)]
     [InlineData("a", true)]
     [InlineData("A.b_c-d", true)]
@@ -117,7 +120,7 @@ public class AiSettingsTests
     [InlineData("claude\"x", false)]
     public void Model(string? v, bool ok) =>
         AssertValid(ok, "AiDrafting.Model",
-            "Must be a model name like claude-opus-5-5: up to 64 letters, digits, '.', '_', '-', '[' or ']', starting with a letter.",
+            AiDraftingSettings.ModelMessage,
             a => a.Model = v!);
 
     [Fact]
@@ -417,6 +420,40 @@ public class AiSettingsTests
         var s = Settings.FromJson(
             "{\"AiDrafting\":{\"Model\":null,\"Effort\":null,\"ExcludeSenders\":null,\"IncludeOnlySenders\":null,\"ClaudeCliPath\":null}}");
         Assert.Equal(new Settings().ToJson(), s.ToJson());
+    }
+
+    [Fact]
+    public void MigrateLegacyModel_TurnsOnlyTheOldDefaultIntoOpus()
+    {
+        var a = new AiDraftingSettings { Model = "claude-opus-5-5" };
+        Assert.True(a.MigrateLegacyModel());
+        Assert.Equal("opus", a.Model);
+    }
+
+    [Theory]
+    [InlineData("claude-opus-5")]
+    [InlineData("claude-sonnet-5-5")]
+    [InlineData("Claude-Opus-5-5")]
+    [InlineData(" claude-opus-5-5")]
+    [InlineData("claude-opus-5-5-x")]
+    [InlineData("sonnet")]
+    [InlineData("opus")]
+    [InlineData("my-model")]
+    [InlineData(null)]
+    public void MigrateLegacyModel_LeavesEverythingElse(string? model)
+    {
+        var a = new AiDraftingSettings { Model = model! };
+        Assert.False(a.MigrateLegacyModel());
+        Assert.Equal(model, a.Model);
+    }
+
+    [Fact]
+    public void FromJsonAndClone_DoNotMigrate()
+    {
+        var s = Settings.FromJson("{\"AiDrafting\":{\"Model\":\"claude-opus-5-5\"}}");
+        Assert.Equal("claude-opus-5-5", s.AiDrafting.Model);
+        Assert.Equal("claude-opus-5-5", s.Clone().AiDrafting.Model);
+        Assert.Equal("opus", Settings.FromJson("{\"AiDrafting\":{\"Model\":null}}").AiDrafting.Model);
     }
 
     [Fact]

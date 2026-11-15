@@ -25,6 +25,18 @@ public sealed class AiDraftsUiTests : IDisposable
         return a;
     }
 
+    [Theory]
+    [InlineData("opus", "latest Opus")]
+    [InlineData("sonnet", "latest Sonnet")]
+    [InlineData("haiku", "latest Haiku")]
+    [InlineData(" opus ", "latest Opus")]
+    [InlineData("Opus", "")]
+    [InlineData("claude-opus-5-5", "")]
+    [InlineData("", "")]
+    [InlineData(null, "")]
+    public void ModelHint_names_the_alias(string? model, string expected) =>
+        Assert.Equal(expected, AiTabTexts.ModelHint(model));
+
     // ---- T1 texts ----
 
     [Fact]

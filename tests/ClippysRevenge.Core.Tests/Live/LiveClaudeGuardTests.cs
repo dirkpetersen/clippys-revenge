@@ -51,7 +51,7 @@ public sealed class LiveClaudeGuardTests
         Assert.Equal(120, s.TimeoutSeconds);
         Assert.Equal(AiBackend.ClaudeCode, s.Backend);
         Assert.Empty(s.Validate());
-        Assert.Equal("claude-opus-5-5", new AiDraftingSettings().Model);
+        Assert.Equal("opus", new AiDraftingSettings().Model);
     }
 
     // ---- 4-8 html checks

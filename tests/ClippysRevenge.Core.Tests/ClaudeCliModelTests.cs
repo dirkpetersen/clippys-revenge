@@ -27,6 +27,7 @@ public class ClaudeCliModelTests
         public CliRunResult Prompt = Ex(Envelope);
         public int PromptCalls;
         public bool? SafeMode;
+        public ModelRequest? LastRequest;
 
         public Task<CliRunResult> RunAsync(ClaudeCliCommand command, IReadOnlyList<string> args, string? stdin,
             TimeSpan timeout, CancellationToken ct)
@@ -37,7 +38,7 @@ public class ClaudeCliModelTests
 
         public Task<CliRunResult> RunPromptAsync(ClaudeCliCommand command, ModelRequest request, bool safeMode, CancellationToken ct)
         {
-            lock (_lock) { PromptCalls++; SafeMode = safeMode; }
+            lock (_lock) { PromptCalls++; SafeMode = safeMode; LastRequest = request; }
             return Task.FromResult(Prompt);
         }
     }
@@ -211,6 +212,14 @@ public class ClaudeCliModelTests
         var r = await Model().RunAsync(Req(), CancellationToken.None);
         Assert.IsType<ModelResult.Ok>(r);
         Assert.True(_runner.SafeMode);
+    }
+
+    [Fact]
+    public async Task Run_Alias_ReachesTheRunnerUnchanged()
+    {
+        var r = await Model().RunAsync(Req(model: "opus"), CancellationToken.None);
+        Assert.IsType<ModelResult.Ok>(r);
+        Assert.Equal("opus", _runner.LastRequest!.Model);
     }
 
     [Fact]

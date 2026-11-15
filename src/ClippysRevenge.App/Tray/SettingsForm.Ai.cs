@@ -33,6 +33,7 @@ internal sealed partial class SettingsForm
     private readonly TextBox _aiCliPath = new();
     private readonly Button _aiCliBrowse = new() { Text = "Browse…" };
     private readonly TextBox _aiModel = new();
+    private readonly Label _aiModelHint = new() { ForeColor = SystemColors.GrayText, AutoSize = false };
     private readonly ComboBox _aiEffort = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox _aiCap = new(), _aiMinConf = new(), _aiMaxAge = new();
     private readonly CheckBox _aiMeeting = new() { Text = AiTabTexts.MeetingTimesText };
@@ -85,7 +86,8 @@ internal sealed partial class SettingsForm
         Put(p, _aiCliBrowse, 516, 261, 80, 26);
 
         Lbl(p, "Model", 8, 298, 120);
-        Put(p, _aiModel, 140, 298, 200, 24);
+        Put(p, _aiModel, 140, 298, 120, 24);
+        Put(p, _aiModelHint, 266, 302, 90, 20);
         Lbl(p, "Effort", 360, 298, 60);
         Put(p, _aiEffort, 424, 298, 100, 24);
 
@@ -141,6 +143,7 @@ internal sealed partial class SettingsForm
         };
         _aiModel.TextChanged += (_, _) =>
         {
+            _aiModelHint.Text = AiTabTexts.ModelHint(_aiModel.Text);
             if (_binding) return;
             AiDraft.Model = _aiModel.Text;
             RefreshAiCheckNote();
@@ -245,6 +248,7 @@ internal sealed partial class SettingsForm
             _aiUseKey.Checked = d.Backend == AiBackend.ApiKey;
             _aiCliPath.Text = d.ClaudeCliPath;
             _aiModel.Text = d.Model;
+            _aiModelHint.Text = AiTabTexts.ModelHint(d.Model);
             _aiEffort.SelectedIndex = AiDraftingSettings.Efforts.ToList().IndexOf(d.Effort);
             _aiCap.Text = d.DailyCap.ToString(CultureInfo.InvariantCulture);
             _aiMinConf.Text = d.MinConfidence.ToString("0.##", CultureInfo.InvariantCulture);

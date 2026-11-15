@@ -150,7 +150,7 @@ internal static class Program
         DraftWorker? drafts = null;
         IDraftModel? draftModel = null;
         OutlookAiMailbox? aiMailbox = null;
-        IDraftModel? apiModel = null;
+        AnthropicApiModel? apiModel = null;
         ClaudeCliModel? cliModel = null;
         StyleSkill? styleSkill = null;
         try
@@ -198,7 +198,8 @@ internal static class Program
                 () => StyleCorpus.SignatureTexts(kind => signatures.Default(kind)), hub,
                 logger: loggerFactory.CreateLogger<StyleSkill>());
             var styleGuide = new StyleGuideSource(styleSkill,
-                ct => AiOwner.ResolveAsync(aiMailboxRef, indexesRef, WorkPriority.Background, ct));
+                ct => AiOwner.ResolveAsync(aiMailboxRef, indexesRef, WorkPriority.Background, ct),
+                hub, loggerFactory.CreateLogger<StyleGuideSource>());
             drafts = new DraftWorker(new DraftWorkerServices(() => settings, indexes, aiMailbox, replyWriter, draftModel,
                 styleGuide,
                 () => signatures.Default(SignatureKind.Reply), hub, balloons,
@@ -240,13 +241,14 @@ internal static class Program
         // AI drafts UI (SPEC 19.10). The key is saved and removed through the one SettingsStore above.
         var aiToggler = new AiDraftingToggler(settings, store.Save, () => drafts?.NotifySettingsChanged());
         AiStatusChecker? aiChecker = draftModel is null ? null
-            : new AiStatusChecker(draftModel, () => cliModel?.InvalidateStatus(), s => drafts?.ReportStatus(s),
+            : new AiStatusChecker(draftModel, () => { cliModel?.InvalidateStatus(); apiModel?.InvalidateModelCache(); }, s => drafts?.ReportStatus(s),
                 loggerFactory.CreateLogger<AiStatusChecker>());
         AiTrayServices? aiTray = drafts is null || aiMailbox is null || aiChecker is null ? null
             : new AiTrayServices(drafts.DraftSelectedAsync, aiMailbox.ShowDraftsAsync, aiToggler, aiChecker);
         var aiMailboxForUi = aiMailbox;
         var indexesForUi = indexes;
-        var aiSettings = new AiSettingsServices(aiToggler, () => store.LoadApiKey() is { } k && SettingsStore.IsValidApiKeyFormat(k), store.SaveApiKey,
+        var aiSettings = new AiSettingsServices(aiToggler, () => store.LoadApiKey() is { } k && SettingsStore.IsValidApiKeyFormat(k),
+            k => { try { store.SaveApiKey(k); } finally { apiModel?.InvalidateModelCache(); } },
             TrayApp.ShellOpen, aiChecker, styleSkill,
             aiMailboxForUi is null || indexesForUi is null ? null
                 : ct => AiOwner.ResolveAsync(aiMailboxForUi, indexesForUi, WorkPriority.Interactive, ct),
