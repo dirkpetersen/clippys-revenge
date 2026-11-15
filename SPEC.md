@@ -107,8 +107,11 @@ src/ClippysRevenge.Core/        net10.0: no Windows, no COM, testable on Linux/W
     SettingsStore.cs        load/save settings.json + token.bin behind ISecretProtector (App supplies DPAPI)
     EmailIndex.cs           SQLite schema, upsert, search, purge, status (one mailbox)
     EmailIndex.Ai.cs        partial EmailIndex: thread metadata, Thread/RepliedTo/SentForStyle/DraftCandidates, ai_decisions (§9.2)
+    EmailIndex.Revisit.cs   partial EmailIndex: ai_drafts / ai_revisits API (RecordAiDraft, DueRevisits, ThreadInbox, …) (§23.3, M16.2)
     IndexModels.cs          IndexedEmail, AttachmentInfo, EmailDetail, SyncState, IndexStatus records; MailThreadMeta,
-                            ThreadMessage, SentMail, DraftCandidate, AiDecision, AiOutcome, AiOutcomes (M11.2)
+                            ThreadMessage, SentMail, DraftCandidate, AiDecision, AiOutcome, AiOutcomes (M11.2);
+                            AiDraftRecord, AiDraftThread, DueRevisit, AiDraftState, AiRevisitOutcome (§23.3, M16.2)
+    DraftFingerprint.cs     DraftFingerprintInput, DraftFingerprint.Compute / IsValid (§23.4, M16.2)
     EmailSearch.cs          SearchFilter, EmailSummary, SearchDates (date_from/date_to parsing)
     MailboxIndexes.cs       one EmailIndex per mailbox; id lookup across them
     FtsQuery.cs             safe FTS5 MATCH builder
@@ -134,7 +137,8 @@ src/ClippysRevenge.Core/        net10.0: no Windows, no COM, testable on Linux/W
     MailTable.cs            DASL date filters, Table columns/rows, tie-safe paging, Outlook dates
     MailFolders.cs          indexed-folder paths (Inbox/Sent Items canonical), ResolvedFolder
     MailItemRead.cs         inline rule, SMTP choice, To/CC format, GetItem chain, ItemNotFoundException
-    SyncModels.cs           IMailSource (the COM side of sync), plans, results, FolderPaths, SyncLabels
+    SyncModels.cs           IMailSource (the COM side of sync), plans, results, FolderPaths (incl. IsUnderInbox, §23.2),
+                            SyncLabels
     SyncEngine.cs           one sync cycle for one mailbox (§10)
     SyncService.cs          background indexing loop (BackgroundService), all mailboxes
     AttachmentSelection.cs  get_attachment / save_attachments selection rules
@@ -180,6 +184,13 @@ src/ClippysRevenge.Core/        net10.0: no Windows, no COM, testable on Linux/W
     DraftPrompt.cs          drafting system prompt + thread rendering; IStyleGuideSource, NoStyleGuide (§19.7)
     DraftWorker.cs          drafting loop (BackgroundService): rules, cap, backoff, decisions, manual path;
                             IAiMailbox (the COM seam), DraftTexts (§19.7)
+    DraftWorker.Revisit.cs  partial DraftWorker: the revisit step for tracked AI drafts (§23.6, M16.5)
+    DraftWorker.Rescan.cs   partial DraftWorker: Rescan emails from the last 24 hours (§23.8)
+    DraftRevisit.cs         RevisitReply, DraftRevisit.Parse and constants (MaxDraftAgeDays, MaxRevisitsPerMailbox,
+                            MaxAttempts, ThreadFetch), IsOwnAddress, PickReplyTarget, PromptThread (§23.6, §23.7)
+    AiDraftGuard.cs         AiDraftInfo, ObsoleteDraftStatus, ObsoleteDraftMove, AiDraftGuard.Evaluate (§23.5)
+    RevisitTexts.cs         RevisitTexts (revisit Draft/Ai event texts), RescanTexts (+ RescanStop, RescanCounts)
+                            (§23.8, §23.9)
     AiUsage.cs              TokenUsage recording: UsageRecordingModel, AiUsage (today's totals), AiUsageTexts,
                             TokenCount (§19.13, M19.1)
     AttachmentText.cs       attachment text extraction: AttachmentText, PdfText (PdfPig), OoxmlText (zip limits),
@@ -206,6 +217,8 @@ src/ClippysRevenge.App/         net10.0-windows (WinExe): COM, tray, host
     OutlookWorker.cs        ComWorker<Outlook.Application> on an STA thread + the GetActiveObject attacher
     OutlookStores.cs        list mounted Exchange mailboxes, resolve their SMTP
     OutlookMail.cs          COM reads/writes (items, attachments, drafts)
+    OutlookMail.ObsoleteDraft.cs  partial: ReadDraftFingerprint, ReadAiDraft, the guarded MoveObsoleteAiDraft (the
+                            only Move into Deleted Items) (§23.4, §23.5, §23.10)
     OutlookMail.Attachments.cs  partial: SaveAttachment; from M19 also ReadAttachmentForAi (SaveAsFile into
                             ai-files, OpenSharedItem for attached items; §26.9)
     OutlookAttachmentSource.cs  IAttachmentSource on OutlookWorker + OneDriveRegistry (§26.8, M19)
@@ -2827,6 +2840,26 @@ two-generation cache and tooltip-only suffix. The badge sits
 **top-right** on every state (decided 2026-11-14 by the spec owner so
 it doesn't hide the `OutlookUnavailable` `!`; the user may veto).
 
+Decided (2026-11-15, shared files in AI drafts, M19; §26.1, §26.3,
+§26.7, §26.11):
+- **Host rule (the user's decision, 2026-11-15):** "open links and cloud
+  attachments only from Microsoft's infrastructure, no external links".
+  Only links and cloud attachments whose host, after Safe Links
+  unwrapping, is `*.sharepoint.com` (incl. `*-my.sharepoint.com`),
+  `onedrive.live.com`, `d.docs.live.net` or `1drv.ms` are considered
+  (exact rule in §26.3). Any other link is never touched and gets no
+  draft note; a cloud attachment on another host is listed in the prompt
+  as skipped (`not a OneDrive or SharePoint link`), no note. The
+  sovereign-cloud SharePoint hosts were dropped (spec owner, reversible).
+- **Sender rule (standing default, pending the user's veto):** links and
+  cloud attachments are mapped only when the carrying message is from
+  the user, the mailbox or an address in the user's own SMTP domain or a
+  subdomain; otherwise `from outside your organization` (with the
+  §26.7 note). The user was told this default stays unless they say
+  otherwise. Both rules apply together.
+- Normal file attachments (by value) and attached emails are always
+  read, regardless of sender.
+
 Open:
 
 1. **Read state and `LastModificationTime`**: if marking a message read
@@ -3361,7 +3394,8 @@ rule lives in the backends only:
   `OutlookMail.ObsoleteDraft.cs`, §23.5, §23.10). `File`/`Directory` calls on Clippy's own files (the
   CLI's system-prompt files, the skill's temp files) are not Outlook
   calls and are allowed (§19.12).
-- Model output is untrusted: only `needs_reply`, `confidence`,
+- Model output is untrusted: only `needs_reply` (for a revisit, §23.7,
+  `action` in its place), `confidence`,
   `reply_all`, `body_html` and the `meeting` hints (a boolean, a
   duration, two dates and a short heading, §21.6) are used, after
   validation (§19.7) and sanitizing (§19.8). The model never computes or
@@ -4146,7 +4180,8 @@ Core (Linux and Windows):
     file over `SKILL.md` / `state.json`
     (`File.Move(tmp, path, overwrite: true)`) and deletes a leftover temp
     file. This is the same exception the existing
-    `NeverDeletesOutlookItems` and `OnlyMoveIsNewReplyDraftIntoDrafts`
+    `NeverDeletesOutlookItems` and `OnlyTwoOutlookMoves` (named
+    `OnlyMoveIsNewReplyDraftIntoDrafts` before M16.4; §23.10)
     scans make (they match the hit text against `(File|Directory)\s*\.`).
   The failure message lists `file: line N: match`. A planted-violation
   test checks the matcher (`item.Send()`, `item.Delete()`, bare
@@ -5542,6 +5577,10 @@ covers (own; shared with `AiDrafts = true`), created within the last
   whose sender is the user's or the mailbox's own address. Then Clippy
   leaves the draft alone for good: state `replied`, no model call, no
   COM write. This also covers the user sending the AI draft itself.
+  (M16.5: the Sent Items check is only the topic half of `RepliedTo`,
+  with `after = created`; the "newer Inbox row from the user or mailbox"
+  check looks only at Inbox-or-under rows in `(checked, upTo]`, compared
+  with `DraftRevisit.IsOwnAddress`.)
 - `upTo` is the newest newer message's `event_time` (automatic pass) or
   the rescanned email's time (§23.8).
 - At most **10** revisits per mailbox per pass (`MaxRevisitsPerMailbox`),
@@ -5580,8 +5619,17 @@ CREATE INDEX ix_ai_revisits_decided ON ai_revisits(decided);
 - `PurgeDecisions(now)` also deletes `ai_drafts` rows with `updated` and
   `ai_revisits` rows with `decided` older than 30 days. Rebuild deletes
   both with the file (drafts then stay untracked: safe).
-- States other than `open` are final. `query_index` can't read either
-  table (§9.1, denied automatically).
+- States other than `open` are final, enforced in SQL:
+  `SetAiDraftState` changes only rows in state `open` and returns whether
+  it changed one; `checked` never moves backwards (`MAX(checked, new)`).
+  `RecordAiDraft` overwrites a row with the same `draft_entry_id` and
+  validates the fingerprint (`DraftFingerprint.IsValid`; the
+  `ArgumentException` message starts `AI draft: `). `query_index` can't
+  read either table (§9.1, denied automatically).
+- **Purge** (M16.2): `PurgeDecisions(now)` returns the total rows deleted
+  from `ai_decisions`, `ai_drafts` and `ai_revisits`. `PurgeOlderThan`
+  (which already purges `ai_decisions`) purges the two new tables with
+  the same 30-day cutoff; its return value stays the email count.
 - `EmailIndex` API (partial `EmailIndex.Revisit.cs`, exact signatures in
   the M16.2 brief): `RecordAiDraft`, `GetAiDraft(draftEntryId)`,
   `OpenAiDraftForThread(topic, before)`, `DueRevisits(createdSince, max)`
@@ -5589,7 +5637,19 @@ CREATE INDEX ix_ai_revisits_decided ON ai_revisits(decided);
   afterExclusive, upToInclusive, max ≤ 100)` (Inbox-or-under rows as
   `DraftCandidate`), `SetAiDraftState(draftEntryId, state, checked?,
   attempts, now)`, `AddRevisit(draftEntryId, decided, outcome,
-  modelCalls)`.
+  modelCalls)`. Return types `AiDraftRecord`, `AiDraftThread`,
+  `DueRevisit`; enums `AiDraftState` and `AiRevisitOutcome` with
+  `ToDb`/`FromDb` (an unknown stored state reads as `left`, which is
+  final).
+- `DueRevisits(createdSince, max)` (exact semantics, M16.2): among open
+  drafts with `created >= createdSince`, per topic (`COLLATE NOCASE`)
+  only the newest one (`created`, tie broken by `draft_entry_id`) is
+  considered; it is returned when an Inbox-or-under row of that topic has
+  `event_time > checked`. `UpTo` is the newest such row's time; results
+  are ordered `UpTo DESC`; `max ≤ 100`.
+- `OpenAiDraftForThread(topic, before)`: the newest (`created`) open
+  draft of the topic whose source row's `event_time` is strictly earlier
+  than `before`; no age limit.
 
 ### 23.4 Unedited test (`DraftFingerprint`, Core)
 
@@ -5607,14 +5667,25 @@ time adds nothing a content hash doesn't already prove.
   `html` (`HTMLBody`), `categories`, `importance` (the integer),
   `attachments` (file names joined with `\n`, in position order). Null
   is `""`. No trimming or other normalization: any change counts.
+  Input record: `DraftFingerprintInput(Subject, To, Cc, Bcc, HtmlBody,
+  Categories, Importance, AttachmentNames)`; `importance` is written as
+  the invariant decimal integer; a null attachment list and an empty one
+  hash the same. `DraftFingerprint.IsValid(string?)` checks the 64
+  lower-case hex form. Test vectors: the M16.2 brief.
 - Read on the COM side from the saved item: `Subject`, `To`, `CC`,
   `BCC`, `HTMLBody`, `Categories`, `(int)Importance`, `Attachments`
   file names (`OutlookMail.ReadDraftFingerprint`, the one place, used
-  both at creation and at every check).
-- At creation, `CreateReplyDraft` reads it right after `reply.Save()` and
-  returns it (`CreatedReply.Fingerprint`, `RepliedDraft.Fingerprint`,
-  null when the marker wasn't set or the read failed; a failed read
-  never fails the draft).
+  both at creation and at every check). An attachment whose `FileName`
+  is null or empty counts as `?` (else one unnamed attachment would hash
+  like "no attachments"). No `ComSafe` wrapping: any COM read failure
+  throws.
+- At creation, `CreateReplyDraft` reads it right after `reply.Save()`
+  whenever a marker was set (any marker) and returns it
+  (`CreatedReply.Fingerprint`, `RepliedDraft.Fingerprint`; null when the
+  marker wasn't set or the read failed: `TryReadDraftFingerprint` turns
+  any failure into null except a COM error meaning Outlook is gone
+  (`ComErrors.IsOutlookGone`), which passes through; any other failed
+  read never fails the draft).
 
 ### 23.5 The guard (`AiDraftGuard`, Core) and the COM methods (App)
 
@@ -5632,12 +5703,22 @@ time adds nothing a content hash doesn't already prove.
 | `Movable` | otherwise |
 
 `AiDraftInfo(bool InDrafts, bool Sent, string? Marker, string? MessageClass, bool Open, string Fingerprint, string Subject, string PlainBody)`
-(PlainBody = `Body`, cut to 20,000 characters).
+(PlainBody = `Body`, cut to 20,000 characters, `AiDraftInfo.MaxPlainBodyChars`).
+
+`ObsoleteDraftStatus` = `Gone, NotInDrafts, Sent, NotMarked, Open,
+Changed, Movable, Moved, NoDeletedItems`; `Evaluate` never returns the
+last two (only the move does). The `IPM.Note` check is
+case-insensitive (as §19.7 `not_note`); a null `MessageClass` is
+`NotMarked`; an empty `expectedFingerprint` is `Changed`.
 
 `IAiMailbox` gains (implemented by `OutlookAiMailbox`, which only
-delegates to `OutlookMail`):
+delegates to `OutlookMail`; between M16.3 and M16.4 both members were
+faulted tasks with `NotSupportedException`, and nothing called them
+before M16.5):
 - `ReadAiDraftAsync(mailbox, draftEntryId, priority, ct)` →
-  `AiDraftInfo?` (null when gone). Read-only.
+  `AiDraftInfo?`. Read-only. Null **only** when the item isn't found
+  (`ItemNotFound`) or isn't a `MailItem`; any other COM error throws
+  (the worker tries again next pass and doesn't mark the draft `gone`).
 - `MoveObsoleteAiDraftAsync(mailbox, draftEntryId, expectedFingerprint, priority, ct)`
   → `ObsoleteDraftMove(ObsoleteDraftStatus Status, string Subject)`.
   One COM work item: open the item, read `AiDraftInfo`, run
@@ -5645,14 +5726,20 @@ delegates to `OutlookMail`):
   `item.Move(deletedItems)` with `deletedItems` =
   `store.GetDefaultFolder(olFolderDeletedItems)` of the draft's own store
   (a shared mailbox's own Deleted Items). Status `Moved` on success.
-  When that folder can't be opened → `NoDeletedItems`, nothing moved.
+  When that folder can't be opened (`GetDefaultFolder` fails with a COM
+  error or access denied) → `NoDeletedItems`, nothing moved. An item
+  that can't be opened → `(Gone, "")`. A failing `Move` throws.
   Never sets a property, never saves, never deletes.
   `OutlookUnavailableException` passes through; other COM errors throw.
 - Both live in `src/ClippysRevenge.App/OutlookMail.ObsoleteDraft.cs`
   (with `ReadDraftFingerprint`). `Open`: every `app.Inspectors` item's
   `CurrentItem` and every `app.Explorers` item's `ActiveInlineResponse`
   whose `EntryID` equals the draft's (OrdinalIgnoreCase); every COM
-  object released in the loop.
+  object released in the loop. An item whose `EntryID` can't be read is
+  not a match; a failure enumerating Inspectors or Explorers counts as
+  `Open`. `InDrafts` compares the parent folder's `EntryID` with the
+  default Drafts of the parent's store (case-insensitive); any failure →
+  `false`.
 
 ### 23.6 The revisit (`DraftWorker.Revisit.cs`, `DraftRevisit.cs`; Core)
 
@@ -5666,13 +5753,17 @@ backoff, failure backoff and `NotSignedIn` hold with drafting (§19.7).
 2. *Read* the draft (`ReadAiDraftAsync`, `Background`; rescan:
    `Interactive`) and evaluate the guard with the stored fingerprint:
    `Gone`, `NotInDrafts`, `Sent` → `gone`; `NotMarked`, `Changed` →
-   `edited`; `Open` → no change, try again next pass. Only `Movable`
-   goes on. Edited drafts get no note or category; Clippy simply never
-   touches them again.
-3. *Reply target*: the newest `ThreadInbox` row with `event_time <= upTo`
-   whose sender isn't the user or the mailbox and that the index rules
-   `no_reply`, `auto_subject`, `excluded` and `not_included` don't skip;
-   else the draft's source email.
+   `edited`; `Open` → no change, try again next pass. A read that throws
+   (other than `OutlookUnavailableException`) is also "no change, try
+   again next pass". Only `Movable` goes on. Edited drafts get no note
+   or category; Clippy simply never touches them again.
+3. *Reply target*: the newest `ThreadInbox` row in `(source time, upTo]`
+   whose sender isn't the user or the mailbox (`DraftRevisit.IsOwnAddress`)
+   and that the index rules `no_reply`, `auto_subject`, `excluded` and
+   `not_included` don't skip (`EvaluateIndex` returns null or
+   `not_direct`; `DraftRevisit.PickReplyTarget`); else the draft's
+   source email. A target whose index row has vanished falls back to the
+   source; no source row either → no change.
 4. *Daily limit and backoff* as §19.7 steps 3–4 (the pass ends).
 5. *Model call* (§23.7). `RateLimited`, `NotSignedIn`, own-shutdown
    `Cancelled` as §19.7 (no row). Any other failure → `ai_revisits` row
@@ -5696,6 +5787,16 @@ backoff, failure backoff and `NotSignedIn` hold with drafting (§19.7).
      when moved, else `left`. A failure creating the new draft is a
      failed attempt as in §19.7 step 8 and leaves the old draft as it
      is (`open`).
+     Details (M16.5): meeting-time headers come from `GetFactsAsync` on
+     the target (a failure → no headers, as the manual path). In the
+     re-read, `Open` or a read that throws stops with row `replace`,
+     nothing created and `checked` unchanged. Outlook gone or
+     cancellation after the model call and before the new draft is
+     saved → row `failed` with an attempt, no backoff. Creating the new
+     draft: `ItemNotFound` → row `failed` with an attempt, no event;
+     other errors → the same plus the `SaveFailed` event, and the pass
+     goes on. After the move: Outlook unavailable or cancellation → old
+     state `left`, then the pass ends.
    - `remove` → `MoveObsoleteAiDraftAsync` (it re-checks everything
      itself). `Moved` → `removed`; `Open` → no change; `Changed`,
      `NotMarked` → `edited`; `Gone`, `NotInDrafts`, `Sent` → `gone`;
@@ -5706,9 +5807,17 @@ backoff, failure backoff and `NotSignedIn` hold with drafting (§19.7).
    `revisited` (except the reply target of a `replace`, which is
    `drafted`), so the candidate loop doesn't draft them separately.
 
+**Low confidence** applies to `replace` and `remove` only (a `keep` is a
+keep at any confidence) and emits no `Ai` low-confidence event.
+
 **Counting.** Each revisit model call is one `ai_revisits` row. A
 `replace` counts in the pass as `updated` (not as `drafted`), a `remove`
-as `moved`, a `keep`/low-confidence as `kept`.
+as `moved`, a `keep`/low-confidence as `kept`. `revisited` rows don't
+count as `skipped` in the pass summary; a failed revisit counts as
+`failed`; the summary is recorded when any row was written or any
+revisit call was made. API (M16.5): `DraftPassResult` gains `Updated`,
+`Moved`, `Kept` (optional, default 0); `DraftTexts.Summary(...,
+updated = 0, moved = 0, kept = 0)`; `DraftRuleIds.Revisited`.
 
 ### 23.7 Model contract (`DraftModel.RevisitSchema`, `DraftRevisit`, `DraftPrompt`)
 
@@ -5727,7 +5836,12 @@ as `moved`, a `keep`/low-confidence as `kept`.
 `DraftRevisit.Parse(JsonElement)` → `RevisitReply(RevisitAction Action, double Confidence, bool? ReplyAll, string? BodyHtml, MeetingAsk? Meeting)`
 or null (invalid). Rules as `DraftReply.Parse`; `action` must be exactly
 one of the three strings; `replace` needs a non-blank `body_html` of at
-most 50,000 characters; `reason` is dropped unread and never logged.
+most 50,000 characters (`body_html` over 50,000 characters is invalid for
+every action); `reason` is dropped unread and never logged. For `keep`
+and `remove`, `reply_all`, `body_html` and `meeting` are validated and
+then dropped (null in `RevisitReply`). `DraftRevisit` also holds
+`MaxDraftAgeDays = 14`, `MaxRevisitsPerMailbox = 10`, `MaxAttempts = 3`
+and `ThreadFetch = 50`.
 The API wire schema keeps `enum` (structured outputs accept it).
 
 **System prompt** (`DraftPrompt.RevisitSystemPrompt(name, smtp, style, meetingTimes)`,
@@ -5741,8 +5855,10 @@ needs to reply but the draft is outdated (write a new reply to
 when `{name}` no longer needs to reply (answered by someone else,
 withdrawn, settled, or the newer messages make the draft wrong and
 nothing is asked of `{name}`); `confidence` = how sure you are of the
-action. The §19.7 `MeetingNote` is appended while `MeetingTimes` is on,
-then `<writing_style>`.
+action. It also says `If you are unsure whether the draft is outdated, choose keep.`
+(fail-safe: the draft stays). The §19.7 `MeetingNote` is appended while
+`MeetingTimes` is on, then `<writing_style>`. Signature:
+`RevisitSystemPrompt(userName, userSmtp, styleGuide, meetingTimes = false)`.
 
 **User prompt** (`DraftPrompt.RevisitUserPrompt`): the §19.7 `<context>`;
 `<thread>` = up to 8 newest thread messages at or before `upTo`, the
@@ -5757,6 +5873,14 @@ reply target excluded, oldest first, own text only; then
 
 Same escaping and cuts as §19.7. `MaxOutputTokens` 8,000, the drafting
 timeout, model and effort.
+
+`RevisitUserPrompt(RevisitPromptInput(Prompt, CurrentDraftBody, DraftCreated))`
+is `UserPrompt` with the `<current_draft>` block inserted before
+`<email_to_answer>`; `DraftPrompt.MaxCurrentDraftChars = 4000`. The
+revisit `<thread>` (M16.5, `DraftRevisit.PromptThread`) is built from
+`EmailIndex.Thread(topic, upTo, 50, reply target excluded)` minus the
+old draft's own row and rows whose folder's first segment is `Drafts`
+or `Deleted Items`; then the newest 8.
 
 ### 23.8 Rescan emails from the last 24 hours (`DraftWorker.Rescan.cs`)
 
@@ -5826,6 +5950,10 @@ the user can watch it.
   `Claude isn't signed in`, `Outlook isn't running`,
   `3 Claude calls failed in a row`. Parts that are 0 are left out except
   emails and drafts; the duration is invariant `0.#` seconds, as §19.7.
+  In the stopped prefix, `of <n> emails` is pluralized by `n`
+  (`after 0 of 1 email`). Texts live in `RescanTexts` with `RescanStop`
+  and `RescanCounts`; the `LimitUsedUp`/`NotReady` texts reuse the §19.7
+  manual-path texts.
   The usual per-draft `Draft` events and low-confidence events appear as
   in a pass.
 - Log (Information):
@@ -5839,7 +5967,12 @@ like other `Draft` events; `RevisitTexts`):
   `AI reply draft updated (the thread moved on): <subject>. The old draft is in Deleted Items.`
 - replace, old not moved (`Open`, `Changed`, `NotMarked`):
   `AI reply draft updated (the thread moved on): <subject>. The old draft is still in Drafts because it was changed or is open.`
-- replace, old already gone: `AI reply draft updated (the thread moved on): <subject>.`
+- replace, old already gone (`Gone`, `NotInDrafts`, `Sent`), or old not
+  moved because of `NoDeletedItems` or a COM error (the `Ai` move-failure
+  event below says it's still in Drafts):
+  `AI reply draft updated (the thread moved on): <subject>.`
+  `RevisitTexts.ForReplace` holds this mapping; subjects use the 80-char
+  rule of `DraftTexts.DraftCreated`.
 - remove: `Outdated AI reply draft moved to Deleted Items (no reply needed any more): <subject>`
 
 `Ai` event when a move fails (`NoDeletedItems` or a COM error):
@@ -5874,7 +6007,14 @@ In the App project (comments and strings stripped):
   comes before the `.Move(`, and the `.Move(` sits inside the block of an
   `if` that compares with `ObsoleteDraftStatus.Movable`; no `.Save(`,
   `.Send(`, `.Display(`, `.Copy(`, `.Close(`, `Delete(`, no property
-  assignment (`\b\w+\s*\.\s*\w+\s*=(?![=>])`).
+  assignment (`\b\w+\s*\.\s*\w+\s*=(?![=>])`). The guard call is
+  `var status = AiDraftGuard.Evaluate(` with no other assignment to
+  `status`, and both the guard and the `.Move(` are inside
+  `MoveObsoleteAiDraft`.
+- `DraftFingerprint.Compute(` appears in the App project only in
+  `OutlookMail.ObsoleteDraft.cs`.
+- The existing scan `OnlyMoveIsNewReplyDraftIntoDrafts` is renamed
+  `OnlyTwoOutlookMoves` (M16.4).
 - `olFolderDeletedItems` appears only in `OutlookCalendar.DraftInvites.cs`
   (the read-only §22.3 check) and `OutlookMail.ObsoleteDraft.cs`.
 - Unchanged: no `Delete`/`PermanentDelete`/`EmptyDeletedItems` calls on
@@ -6415,10 +6555,17 @@ its reply target, §23.6). Sources:
   from the index (`EmailIndex.ThreadAttachments`, §26.8); the content
   comes from Outlook.
 - **Links** in the anchor's and those thread messages' bodies (index
-  plain-text body; manual path: the COM-read body) that point to
-  OneDrive or SharePoint (§26.3), at most **10** per message.
+  plain-text body; manual path: the COM-read body) whose host is one of
+  Microsoft's OneDrive/SharePoint hosts (§26.3, after Safe Links
+  unwrapping), at most **10** per message. Links to any other host are
+  ignored completely: never opened, mapped or fetched, not listed in the
+  prompt, no note.
 - **Cloud attachments** (Outlook "Share link" attachments): treated as
-  links (§26.3); never downloaded through Outlook.
+  links (§26.3, same host rule); never downloaded through Outlook.
+- Links and cloud attachments are considered only when the message that
+  carries them is from the user or the user's own domain (the sender
+  rule, §26.3). Normal file attachments (by value) and attached emails
+  are always read, whoever sent them.
 
 Kinds (`AttachmentKind`): `File` (a by-value attachment), `Email` (an
 attached Outlook item, `olEmbeddeditem`), `Cloud` (a cloud attachment)
@@ -6501,13 +6648,43 @@ community references:
 
 **Finding links** (`OneDriveLinks.Find(string? body)`, Core, pure):
 `https://` URLs in the text (ending at whitespace, `<`, `>` or `"`;
-trailing `.,;:!?)]` trimmed), at most 10 per body, deduped by normalized
-URL. A Microsoft Safe Links wrapper (host ending in
-`.safelinks.protection.outlook.com`) is unwrapped once: its `url` query
-parameter, percent-decoded. A URL is kept when its host is the host of a
-synced scope or ends in `.sharepoint.com`, `.sharepoint.us`,
-`.sharepoint.de` or `.sharepoint.cn`, or is `d.docs.live.net`,
-`onedrive.live.com` or `1drv.ms` (case-insensitive). The name of a link
+trailing `.,;:!?)]` trimmed), at most 10 per body (counted after the host
+filter), deduped by normalized URL. A Microsoft Safe Links wrapper (host
+ending in `.safelinks.protection.outlook.com`) is unwrapped **first**,
+once: its `url` query parameter, percent-decoded; the **inner** URL's
+host is the one that counts (a wrapper whose inner URL is missing or not
+an absolute `https` URL is dropped; a wrapper inside a wrapper is not
+unwrapped again and so is dropped).
+
+**Host rule** (the user's decision of 2026-11-15, §18: "open links and
+cloud attachments only from Microsoft's infrastructure, no external
+links"; `OneDriveLinks.IsMicrosoftFileHost(Uri)`, Core, pure). A URL is
+kept only when its scheme is `https`, it has no user info, its port is
+the default (443), and its host (`Uri.IdnHost`, lower-case, one trailing
+`.` removed) is exactly one of:
+- ends in `.sharepoint.com` with at least one label before it (covers
+  `<tenant>.sharepoint.com` and `<tenant>-my.sharepoint.com`; bare
+  `sharepoint.com` does not qualify),
+- `onedrive.live.com`,
+- `d.docs.live.net`,
+- `1drv.ms`.
+
+No other host qualifies: not the sovereign-cloud SharePoint hosts
+(`.sharepoint.us`, `.sharepoint.de`, `.sharepoint.cn`; dropped
+2026-11-15, can be added back if a user needs them), not
+`*.sharepoint-df.com` or `*.office.com`/`*.live.com` hosts, and not a
+host just because a synced scope uses it. A synced scope (§26.3 "Sync
+data") whose prefix host fails this rule is ignored too, so a mapping
+can only ever land under a Microsoft root. `onedrive.live.com` and
+`1drv.ms` URLs always end as unmappable (step 2 below) and
+`d.docs.live.net` maps only through the consumer scope; they are on the
+list so that the model is told such a shared file wasn't read.
+Every URL on any other host is **never touched**: Clippy doesn't map,
+open or fetch it, doesn't list it in `<attachments>`, adds no draft note
+and logs nothing about it (it was never fetched before either, §26.3).
+The model still sees the link in the email text itself, as before.
+The same unwrap and host rule apply to the URL of a cloud attachment
+(below). The name of a link
 is the last path segment, percent-decoded, when the URL is direct
 (below); otherwise the text right before the URL when Outlook's
 plain-text form `Text <https://…>` is used (trimmed, at most 120
@@ -6553,6 +6730,12 @@ is 7, or `Attachment.Type` is `olByReference` (4), the attachment is
 `Cloud` and its URL is the first of those two properties that is an
 absolute `https` URL (none → skipped, `not synced to this PC`). Its name
 is `Attachment.DisplayName`. `SaveAsFile` is **never** called on it.
+A cloud attachment whose URL (after Safe Links unwrapping) fails the
+host rule above (e.g. a Dropbox or Google Drive share) is never mapped
+or opened; because its name is already in the email's attachment list,
+it appears in `<attachments>` as `skipped` with reason
+`not a OneDrive or SharePoint link` so the model knows it wasn't read,
+and it gets **no** draft note (§26.7).
 Which `Attachment.Type` Outlook reports for a cloud attachment, and
 whether it appears in `Attachments` at all, is a live-test question
 (M19.8); the rule above is safe either way.
@@ -6570,9 +6753,10 @@ against the per-file and per-draft time limits (§26.5).
 `FileOptions.SequentialScan`; the bytes (at most `MaxFileBytes`) are
 read into memory and the file is closed at once. No copy is made.
 
-**Who can make Clippy open a synced file** (pending user confirmation,
-see the M19 report; this is the safer default): links and cloud
-attachments are mapped only when the message that carries them was sent
+**Who can make Clippy open a synced file** (the sender rule; the
+standing default, kept unless the user vetoes it, §18): it applies
+after the host rule, which it doesn't replace (both must pass). Links
+and cloud attachments are mapped only when the message that carries them was sent
 by the user (own SMTP or the mailbox's address) or by an address whose
 domain equals the user's own SMTP domain or is a subdomain of it
 (the §19.6 "internal" rule). Otherwise the item is skipped with reason
@@ -6739,7 +6923,9 @@ items only (tier 3 problems are only in the prompt). Texts
 | over budget or too many files | `Couldn't read <name> (too much attachment text for one draft).` |
 | truncated (by page/row/char limits or the budget) | `Read only the start of <name> (it's long).` |
 
-Images and the un-noted formats get no note. At most **5** notes, in
+Images and the un-noted formats get no note. Links and cloud
+attachments on a non-Microsoft host (§26.3 host rule) get no note
+either. At most **5** notes, in
 tier order; more add one line `Clippy: <n> more files couldn't be read fully.`
 The notes come right after the reason line (§25.4) and before the body,
 in all four paths, whether `ReasonLine` is on or not, and only when the
@@ -6888,6 +7074,12 @@ of §26.3, read-only, no other key.
   `Draft`).
 - PathPolicy on every path: the temp file (root `ai-files`) and every
   mapped synced file (root = its `MountPoint`).
+- Shared files (§26.3, the user's 2026-11-15 decision): only links and
+  cloud attachments on the pinned Microsoft OneDrive/SharePoint hosts
+  (after Safe Links unwrapping) are ever considered, and only from the
+  user or the user's own domain (sender rule, standing default). Every
+  other link is never touched. Clippy still makes no network request for
+  any link; it reads only the local synced copy.
 
 ### 26.12 Tests
 
@@ -6909,6 +7101,20 @@ create them in-test):
   `vbaProject.bin` never opened.
 - `OneDriveLinks.Find`: plain-text `Text <url>`, trailing punctuation,
   Safe Links unwrap, host filter, 10-per-body cap, dedupe.
+- Host rule (`IsMicrosoftFileHost`): accepted `contoso.sharepoint.com`,
+  `contoso-my.sharepoint.com`, `CONTOSO.SharePoint.com.` (case, trailing
+  dot), `onedrive.live.com`, `d.docs.live.net`, `1drv.ms`; refused
+  `sharepoint.com`, `contoso.sharepoint.com.evil.example`,
+  `evilsharepoint.com`, `contoso.sharepoint.us`, `contoso.sharepoint.cn`,
+  `www.dropbox.com`, `drive.google.com`, an `http://` SharePoint URL,
+  `https://user@contoso.sharepoint.com/…`, `https://contoso.sharepoint.com:8443/…`,
+  an IP literal. A Safe Links wrapper around a SharePoint URL is kept
+  (inner host counts); a Safe Links wrapper around a Dropbox URL is
+  dropped; a double wrapper is dropped. A body with only external links
+  gives no item, no `<attachments>` block and no note. A cloud
+  attachment with a Dropbox URL → `skipped`, reason
+  `not a OneDrive or SharePoint link`, no note. A synced scope whose
+  prefix host is not on the list is ignored by `OneDriveMap.Map`.
 - `OneDriveMap.Map` with fake roots: direct team-site path with `%20`,
   `/:x:/r/` form, `/:w:/s/` and `/:f:/g/` tokens (unmappable),
   `_layouts/15/Doc.aspx`, `1drv.ms`, `onedrive.live.com`, personal
@@ -6920,7 +7126,10 @@ create them in-test):
 - Plan: tiers, mention detection (with and without extension, the
   4-character minimum, token boundaries, subject and own text only),
   dedupe by name+size and by mapped path, the 20-item cap, the sender
-  rule for links (own, internal subdomain, external).
+  rule for links (own, internal subdomain, external), host rule and
+  sender rule together (an internal sender's Dropbox link is ignored; an
+  external sender's SharePoint link is `from outside your organization`;
+  an external sender's file attachment is read).
 - `AttachmentBudget.Allocate`: all fit; water-fill in a tier; the
   2,000 floor and tier order; later tiers starved; exact cut lengths.
 - Collect with a fake `IAttachmentSource` and `ManualTimeProvider`: the
