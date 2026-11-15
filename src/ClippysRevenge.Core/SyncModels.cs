@@ -74,6 +74,14 @@ public static class FolderPaths
         return MailFolderPath.Parse(path).Canonical;
     }
 
+    /// <summary>True when the first segment of the canonical path is "Inbox" (ordinal), i.e. Inbox or a subfolder.</summary>
+    public static bool IsUnderInbox(string canonicalPath)
+    {
+        ArgumentNullException.ThrowIfNull(canonicalPath);
+        var first = canonicalPath.Split('\\', 2)[0];
+        return first.Equals(Inbox, StringComparison.Ordinal);
+    }
+
     /// <summary>True when the first segment of the canonical path is "Sent Items".</summary>
     public static bool IsUnderSentItems(string canonicalPath)
     {

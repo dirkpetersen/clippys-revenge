@@ -149,3 +149,69 @@ public sealed record AiDecision(
     double? Confidence = null,
     string? DraftEntryId = null,
     DateTimeOffset? DraftCreated = null);
+
+/// <summary>ai_drafts.state (SPEC 23.3). Only Open is not final.</summary>
+public enum AiDraftState { Open, Replaced, Removed, Edited, Replied, Gone, Left }
+
+public static class AiDraftStates
+{
+    /// <summary>"open", "replaced", "removed", "edited", "replied", "gone", "left".</summary>
+    /// <exception cref="ArgumentOutOfRangeException">Undefined value.</exception>
+    public static string ToDb(AiDraftState state) => state switch
+    {
+        AiDraftState.Open => "open",
+        AiDraftState.Replaced => "replaced",
+        AiDraftState.Removed => "removed",
+        AiDraftState.Edited => "edited",
+        AiDraftState.Replied => "replied",
+        AiDraftState.Gone => "gone",
+        AiDraftState.Left => "left",
+        _ => throw new ArgumentOutOfRangeException(nameof(state)),
+    };
+
+    /// <summary>Exact (ordinal) inverse of ToDb. Anything else, null included, gives Left
+    /// (final, so an unreadable row is never revisited or moved).</summary>
+    public static AiDraftState FromDb(string? value) => value switch
+    {
+        "open" => AiDraftState.Open,
+        "replaced" => AiDraftState.Replaced,
+        "removed" => AiDraftState.Removed,
+        "edited" => AiDraftState.Edited,
+        "replied" => AiDraftState.Replied,
+        "gone" => AiDraftState.Gone,
+        _ => AiDraftState.Left,
+    };
+}
+
+/// <summary>ai_revisits.outcome (SPEC 23.3).</summary>
+public enum AiRevisitOutcome { Keep, Replace, Remove, LowConfidence, Failed }
+
+public static class AiRevisitOutcomes
+{
+    /// <summary>"keep", "replace", "remove", "low_confidence", "failed".</summary>
+    /// <exception cref="ArgumentOutOfRangeException">Undefined value.</exception>
+    public static string ToDb(AiRevisitOutcome outcome) => outcome switch
+    {
+        AiRevisitOutcome.Keep => "keep",
+        AiRevisitOutcome.Replace => "replace",
+        AiRevisitOutcome.Remove => "remove",
+        AiRevisitOutcome.LowConfidence => "low_confidence",
+        AiRevisitOutcome.Failed => "failed",
+        _ => throw new ArgumentOutOfRangeException(nameof(outcome)),
+    };
+}
+
+/// <summary>One ai_drafts row. Ids, a hash, times and counts only. Times are UTC whole seconds.</summary>
+/// <param name="Checked">event_time of the newest thread message already considered.</param>
+public sealed record AiDraftRecord(string DraftEntryId, string SourceEntryId, DateTimeOffset Created,
+    string Fingerprint, DateTimeOffset Checked, AiDraftState State, int Attempts, DateTimeOffset Updated);
+
+/// <summary>A tracked draft joined with its source email's index row (emails.entry_id = source_entry_id).</summary>
+/// <param name="ConversationTopic">The source row's conversation_topic (never null or blank here).</param>
+/// <param name="SourceImid">The source row's internet_message_id (may be null).</param>
+/// <param name="SourceTime">The source row's event_time.</param>
+public sealed record AiDraftThread(AiDraftRecord Draft, string ConversationTopic, string? SourceImid,
+    DateTimeOffset SourceTime);
+
+/// <param name="UpTo">The newest event_time of the thread's Inbox-or-under rows that is later than Draft.Checked.</param>
+public sealed record DueRevisit(AiDraftThread Thread, DateTimeOffset UpTo);

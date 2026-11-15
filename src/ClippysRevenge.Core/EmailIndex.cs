@@ -16,7 +16,7 @@ internal sealed record FilterSql(string From, string Where, DynamicParameters Pa
 /// <summary>SQLite + FTS5 index for one mailbox (SPEC §9).</summary>
 public sealed partial class EmailIndex
 {
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
     public const string ThreadMetaCompleteKey = "thread_meta_complete";
     public static readonly TimeSpan DecisionRetention = TimeSpan.FromDays(30);
     public const int MaxDecisionAttempts = 3;
@@ -106,8 +106,32 @@ public sealed partial class EmailIndex
         conn.Execute(Step2Ddl, transaction: tx);
     }
 
+    // Clippy's own AI drafts and revisit calls (SPEC 9.1, 23.3). Ids, a hash, times and counts only.
+    private const string Step3Ddl = """
+        CREATE TABLE IF NOT EXISTS ai_drafts (
+          draft_entry_id TEXT PRIMARY KEY,
+          source_entry_id TEXT NOT NULL,
+          created INTEGER NOT NULL,
+          fingerprint TEXT NOT NULL,
+          checked INTEGER NOT NULL,
+          state TEXT NOT NULL,
+          attempts INTEGER NOT NULL DEFAULT 0,
+          updated INTEGER NOT NULL);
+        CREATE INDEX IF NOT EXISTS ix_ai_drafts_state ON ai_drafts(state, created);
+        CREATE TABLE IF NOT EXISTS ai_revisits (
+          id INTEGER PRIMARY KEY,
+          draft_entry_id TEXT NOT NULL,
+          decided INTEGER NOT NULL,
+          outcome TEXT NOT NULL,
+          model_calls INTEGER NOT NULL);
+        CREATE INDEX IF NOT EXISTS ix_ai_revisits_decided ON ai_revisits(decided);
+        """;
+
+    private static void Step3(SqliteConnection conn, SqliteTransaction tx) =>
+        conn.Execute(Step3Ddl, transaction: tx);
+
     // Step n upgrades n-1 -> n.
-    private static readonly Action<SqliteConnection, SqliteTransaction>[] Migrations = [Step1, Step2];
+    private static readonly Action<SqliteConnection, SqliteTransaction>[] Migrations = [Step1, Step2, Step3];
 
     private const string UpsertSql = """
         INSERT INTO emails (entry_id, store_id, internet_message_id, folder, subject, sender_name, sender_email,
@@ -406,6 +430,10 @@ public sealed partial class EmailIndex
             before = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM emails", transaction: tx);
             removed = conn.Execute("DELETE FROM emails WHERE event_time < @c", new { c = cutoff.ToUnixTimeSeconds() }, tx);
             conn.Execute("DELETE FROM ai_decisions WHERE decided < @t",
+                new { t = (DateTimeOffset.UtcNow - DecisionRetention).ToUnixTimeSeconds() }, tx);
+            conn.Execute("DELETE FROM ai_drafts WHERE updated < @t",
+                new { t = (DateTimeOffset.UtcNow - DecisionRetention).ToUnixTimeSeconds() }, tx);
+            conn.Execute("DELETE FROM ai_revisits WHERE decided < @t",
                 new { t = (DateTimeOffset.UtcNow - DecisionRetention).ToUnixTimeSeconds() }, tx);
             tx.Commit();
         }

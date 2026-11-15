@@ -10,12 +10,18 @@ public sealed partial class EmailIndex
 
     private static readonly Regex RuleId = new("^[a-z_]+\\z", RegexOptions.CultureInvariant);
 
-    /// <summary>Deletes ai_decisions rows with decided older than now minus <see cref="DecisionRetention"/>. Returns the count. No VACUUM.</summary>
+    /// <summary>Deletes ai_decisions rows with decided, ai_drafts rows with updated, and ai_revisits rows with decided
+    /// older than now minus <see cref="DecisionRetention"/>, in one transaction. Returns the total rows deleted. No VACUUM.</summary>
     public int PurgeDecisions(DateTimeOffset now)
     {
+        var p = new { t = (now - DecisionRetention).ToUnixTimeSeconds() };
         using var conn = OpenConnection();
-        return conn.Execute("DELETE FROM ai_decisions WHERE decided < @t",
-            new { t = (now - DecisionRetention).ToUnixTimeSeconds() });
+        using var tx = conn.BeginTransaction();
+        var n = conn.Execute("DELETE FROM ai_decisions WHERE decided < @t", p, tx)
+              + conn.Execute("DELETE FROM ai_drafts WHERE updated < @t", p, tx)
+              + conn.Execute("DELETE FROM ai_revisits WHERE decided < @t", p, tx);
+        tx.Commit();
+        return n;
     }
 
     /// <summary>
@@ -205,12 +211,13 @@ public sealed partial class EmailIndex
             });
     }
 
-    /// <summary>COALESCE(SUM(model_calls), 0) over rows with decided &gt;= sinceUtc.</summary>
+    /// <summary>SUM(ai_decisions.model_calls WHERE decided &gt;= t) + SUM(ai_revisits.model_calls WHERE decided &gt;= t).</summary>
     public int ModelCallsSince(DateTimeOffset sinceUtc)
     {
         using var conn = OpenConnection();
         return (int)conn.ExecuteScalar<long>(
-            "SELECT COALESCE(SUM(model_calls), 0) FROM ai_decisions WHERE decided >= @s",
+            "SELECT (SELECT COALESCE(SUM(model_calls), 0) FROM ai_decisions WHERE decided >= @s) + " +
+            "(SELECT COALESCE(SUM(model_calls), 0) FROM ai_revisits WHERE decided >= @s)",
             new { s = sinceUtc.ToUnixTimeSeconds() });
     }
 

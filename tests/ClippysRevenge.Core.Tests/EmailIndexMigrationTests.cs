@@ -1,4 +1,4 @@
-﻿using ClippysRevenge.Core;
+using ClippysRevenge.Core;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Xunit;
@@ -65,13 +65,24 @@ public class EmailIndexMigrationTests : IDisposable
             Assert.Equal(1, c.ExecuteScalar<long>("SELECT COUNT(*) FROM pragma_table_info('emails') WHERE name = @col", new { col }));
     }
 
+    private static void AssertV3Objects(string path)
+    {
+        using var c = Raw(path);
+        var names = c.Query<(string type, string name)>("SELECT type, name FROM sqlite_master").ToList();
+        foreach (var t in new[] { "ai_drafts", "ai_revisits" })
+            Assert.Contains(("table", t), names);
+        foreach (var i in new[] { "ix_ai_drafts_state", "ix_ai_revisits_decided" })
+            Assert.Contains(("index", i), names);
+    }
+
     [Fact]
-    public void V1_file_migrates_to_version_2()
+    public void V1_file_migrates_to_version_3()
     {
         var path = NewV1();
         _ = new EmailIndex(path);
-        Assert.Equal("2", Meta(path, "schema_version"));
+        Assert.Equal("3", Meta(path, "schema_version"));
         AssertV2Objects(path);
+        AssertV3Objects(path);
     }
 
     [Fact]
@@ -139,8 +150,9 @@ public class EmailIndexMigrationTests : IDisposable
             c.Execute("CREATE INDEX ix_emails_irt ON emails(in_reply_to)");
         }
         _ = new EmailIndex(path);
-        Assert.Equal("2", Meta(path, "schema_version"));
+        Assert.Equal("3", Meta(path, "schema_version"));
         AssertV2Objects(path);
+        AssertV3Objects(path);
     }
 
     [Fact]
@@ -150,10 +162,11 @@ public class EmailIndexMigrationTests : IDisposable
         _ = new EmailIndex(path);
         var before = Snapshot(path);
         for (var i = 0; i < 3; i++) _ = new EmailIndex(path);
-        Assert.Equal("2", Meta(path, "schema_version"));
+        Assert.Equal("3", Meta(path, "schema_version"));
         Assert.Equal(before, Snapshot(path));
         Assert.Null(Meta(path, "thread_meta_complete"));
         AssertV2Objects(path);
+        AssertV3Objects(path);
     }
 
     [Fact]
@@ -170,8 +183,9 @@ public class EmailIndexMigrationTests : IDisposable
         Assert.Equal(before, Snapshot(path));
 
         _ = new EmailIndex(path);
-        Assert.Equal("2", Meta(path, "schema_version"));
+        Assert.Equal("3", Meta(path, "schema_version"));
         AssertV2Objects(path);
+        AssertV3Objects(path);
         Assert.Equal(before, Snapshot(path));
     }
 
@@ -180,8 +194,9 @@ public class EmailIndexMigrationTests : IDisposable
     {
         var path = NewV1();
         await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(() => new EmailIndex(path))));
-        Assert.Equal("2", Meta(path, "schema_version"));
+        Assert.Equal("3", Meta(path, "schema_version"));
         AssertV2Objects(path);
+        AssertV3Objects(path);
     }
 
     [Fact]
@@ -189,7 +204,7 @@ public class EmailIndexMigrationTests : IDisposable
     {
         var path = Path.Combine(_dir, "new.db");
         var ix = new EmailIndex(path);
-        Assert.Equal("2", Meta(path, "schema_version"));
+        Assert.Equal("3", Meta(path, "schema_version"));
         AssertV2Objects(path);
         Assert.Equal("1", ix.GetMeta("thread_meta_complete"));
     }
@@ -198,11 +213,11 @@ public class EmailIndexMigrationTests : IDisposable
     public void Newer_schema_is_refused_and_file_unchanged()
     {
         var path = NewV1();
-        using (var c = Raw(path)) c.Execute("UPDATE meta SET value = '3' WHERE key = 'schema_version'");
+        using (var c = Raw(path)) c.Execute("UPDATE meta SET value = '4' WHERE key = 'schema_version'");
         var before = Snapshot(path);
         var ex = Assert.Throws<InvalidOperationException>(() => new EmailIndex(path));
-        Assert.Contains("supports up to 2", ex.Message);
-        Assert.Equal("3", Meta(path, "schema_version"));
+        Assert.Contains("supports up to 3", ex.Message);
+        Assert.Equal("4", Meta(path, "schema_version"));
         Assert.Equal(0, Count(path, "SELECT COUNT(*) FROM pragma_table_info('emails') WHERE name = 'in_reply_to'"));
         Assert.Equal(before, Snapshot(path));
     }
@@ -218,5 +233,103 @@ public class EmailIndexMigrationTests : IDisposable
         Assert.Empty(ix.ListEntries("Inbox"));
         using var c = Raw(path);
         c.Execute("INSERT INTO emails_fts(emails_fts, rank) VALUES('integrity-check', 1)");
+    }
+
+    private string V2Path => Path.Combine(_dir, "v2.db");
+
+    private string NewV2()
+    {
+        SchemaV2.Create(V2Path);
+        return V2Path;
+    }
+
+    private static string FullSnapshot(string path)
+    {
+        using var c = Raw(path);
+        var dec = c.Query<(string, string?, string?, long, string, string?, long, long, double?, string?, long?)>(
+            "SELECT * FROM ai_decisions ORDER BY source_entry_id");
+        var meta = c.Query<(string, string?)>("SELECT key, value FROM meta WHERE key <> 'schema_version' ORDER BY key");
+        var topics = c.Query<(string, string?)>("SELECT entry_id, conversation_topic FROM emails ORDER BY entry_id");
+        return Snapshot(path) + "##" + string.Join("|", dec) + "##" + string.Join("|", meta) + "##" + string.Join("|", topics);
+    }
+
+    [Fact]
+    public void V2_file_migrates_to_version_3_and_keeps_rows()
+    {
+        var path = NewV2();
+        var before = FullSnapshot(path);
+        var ix = new EmailIndex(path);
+        Assert.Equal("3", Meta(path, "schema_version"));
+        Assert.Equal(before, FullSnapshot(path));
+        Assert.Equal("1", Meta(path, "thread_meta_complete"));
+        AssertV3Objects(path);
+        Assert.Equal(0, Count(path, "SELECT COUNT(*) FROM ai_drafts"));
+        Assert.Equal(0, Count(path, "SELECT COUNT(*) FROM ai_revisits"));
+        var d = ix.GetDecision("A1")!;
+        Assert.Equal(AiOutcome.Drafted, d.Outcome);
+        Assert.Equal("D1", d.DraftEntryId);
+    }
+
+    [Fact]
+    public void Failure_in_step_3_rolls_back_to_version_2()
+    {
+        var path = NewV2();
+        var before = FullSnapshot(path);
+        Assert.Throws<InvalidOperationException>(() =>
+            new EmailIndex(path, n => { if (n == 3) throw new InvalidOperationException("boom"); }));
+        SqliteConnection.ClearAllPools();
+        Assert.Equal("2", Meta(path, "schema_version"));
+        Assert.Equal(0, Count(path, "SELECT COUNT(*) FROM sqlite_master WHERE name = 'ai_drafts'"));
+        Assert.Equal(before, FullSnapshot(path));
+        _ = new EmailIndex(path);
+        Assert.Equal("3", Meta(path, "schema_version"));
+        AssertV3Objects(path);
+    }
+
+    [Fact]
+    public void V1_file_goes_to_3_in_one_transaction()
+    {
+        var path = NewV1();
+        Assert.Throws<InvalidOperationException>(() =>
+            new EmailIndex(path, n => { if (n == 3) throw new InvalidOperationException("boom"); }));
+        SqliteConnection.ClearAllPools();
+        Assert.Equal("1", Meta(path, "schema_version"));
+        Assert.Equal(0, Count(path, "SELECT COUNT(*) FROM sqlite_master WHERE name IN ('ai_decisions', 'ai_drafts', 'ai_revisits')"));
+    }
+
+    [Fact]
+    public void Reopening_v3_changes_nothing()
+    {
+        var path = NewV2();
+        var ix = new EmailIndex(path);
+        var fp = new string('a', 64);
+        ix.RecordAiDraft("D", "A1", DateTimeOffset.FromUnixTimeSeconds(1_763_000_700), fp,
+            DateTimeOffset.FromUnixTimeSeconds(1_763_000_000), DateTimeOffset.FromUnixTimeSeconds(1_763_000_800));
+        var before = FullSnapshot(path);
+        for (var i = 0; i < 3; i++) _ = new EmailIndex(path);
+        Assert.Equal("3", Meta(path, "schema_version"));
+        Assert.Equal(before, FullSnapshot(path));
+        Assert.Equal(1, Count(path, "SELECT COUNT(*) FROM ai_drafts"));
+    }
+
+    [Fact]
+    public void Partly_created_v3_tables_are_finished()
+    {
+        var path = NewV2();
+        using (var c = Raw(path))
+            c.Execute("""
+                CREATE TABLE ai_drafts (
+                  draft_entry_id TEXT PRIMARY KEY,
+                  source_entry_id TEXT NOT NULL,
+                  created INTEGER NOT NULL,
+                  fingerprint TEXT NOT NULL,
+                  checked INTEGER NOT NULL,
+                  state TEXT NOT NULL,
+                  attempts INTEGER NOT NULL DEFAULT 0,
+                  updated INTEGER NOT NULL)
+                """);
+        _ = new EmailIndex(path);
+        Assert.Equal("3", Meta(path, "schema_version"));
+        AssertV3Objects(path);
     }
 }

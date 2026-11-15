@@ -371,6 +371,6 @@ public class IndexQueryTests : IndexQueryFixture
             using var rd = cmd.ExecuteReader();
             Assert.False(rd.Read());
         }
-        Assert.Equal("2", fresh.GetMeta("schema_version"));
+        Assert.Equal("3", fresh.GetMeta("schema_version"));
     }
 }
