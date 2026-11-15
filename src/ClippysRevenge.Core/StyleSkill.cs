@@ -623,6 +623,13 @@ public sealed record StyleStatus(StyleStatusKind Kind, DateTimeOffset? Generated
     };
 }
 
+/// <summary>Which file the drafting prompt's style text came from (SPEC 19.6).</summary>
+public enum StyleSource { UserFile, AppCopy, None }
+
+/// <summary>Body is what the drafting prompt gets (never null; the "No style guide yet" line for None
+/// and for an empty body). Source is the file it came from.</summary>
+public sealed record StylePromptText(string Body, StyleSource Source);
+
 public sealed class StyleSkillFiles
 {
     private sealed class StateDto
@@ -768,17 +775,21 @@ public sealed class StyleSkillFiles
     }
 
     /// <summary>For the drafting prompt (SPEC 19.6 "Use in drafting"). Never null, never throws.</summary>
-    public string ReadBodyForPrompt()
+    public string ReadBodyForPrompt() => ReadForPrompt().Body;
+
+    /// <summary>SPEC 19.6 "Visible style source": the prompt body and the file it came from. Never null, never throws.</summary>
+    public StylePromptText ReadForPrompt()
     {
-        foreach (var p in new[] { Paths.UserSkillFile, Paths.AppCopyFile })
+        var sources = new[] { (Paths.UserSkillFile, StyleSource.UserFile), (Paths.AppCopyFile, StyleSource.AppCopy) };
+        foreach (var (path, source) in sources)
         {
-            var text = ReadUsable(p);
+            var text = ReadUsable(path);
             if (text is null) continue;
             // The drafting model has its own meeting rules and no tools (SPEC 21.6), so the section stays out.
             var body = StyleSkillText.RemoveMeetingSections(StyleSkillText.StripHeader(text));
-            return body.Length == 0 ? StyleSkillText.NoStyleGuideLine : body;
+            return new StylePromptText(body.Length == 0 ? StyleSkillText.NoStyleGuideLine : body, source);
         }
-        return StyleSkillText.NoStyleGuideLine;
+        return new StylePromptText(StyleSkillText.NoStyleGuideLine, StyleSource.None);
     }
 
     /// <summary>SPEC 21.7 "Existing skills". No model call. zone gives the comment's local date.</summary>
@@ -858,6 +869,11 @@ public static class StyleTexts
     public const string IndexFailed = "couldn't read the index";
     public const string CorpusFailed = "couldn't prepare your sent emails";
     public const string MeetingSectionEvent = "writing style: added how to offer meeting times";
+    public const string SourceNone =
+        "Writing style: SKILL.md not found or unreadable — drafts use no style guide. Regenerate it from AI drafts.";
+    public const string SourceAppCopy =
+        "Writing style: your SKILL.md is missing or unreadable, so drafts use Clippy's saved copy. Regenerate it from AI drafts, or fix the file.";
+    public const string SourceBack = "Writing style: using your SKILL.md again.";
 
     public static string CallFailed(ModelFailure kind) => "a Claude call failed (" + kind + ")";
 
@@ -910,6 +926,9 @@ public sealed class StyleSkill
 
     /// <summary>THE READER FOR M11.7. Never null, never throws, never blocks on a run.</summary>
     public string ReadBodyForPrompt() => Files.ReadBodyForPrompt();
+
+    /// <summary>Body and source of the style text for the drafting prompt. Never null, never throws, never blocks on a run.</summary>
+    public StylePromptText ReadForPrompt() => Files.ReadForPrompt();
 
     public StyleStatus GetStatus() => Files.GetStatus();
 

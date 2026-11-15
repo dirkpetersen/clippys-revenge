@@ -124,6 +124,45 @@ public class StyleSkillFilesTests : IDisposable
         Assert.Equal("APP BODY", _files.ReadBodyForPrompt());
     }
 
+    [Fact]
+    public void ReadForPrompt_reports_the_source()
+    {
+        void Check(string body, StyleSource source)
+        {
+            var p = _files.ReadForPrompt();
+            Assert.Equal(body, p.Body);
+            Assert.Equal(source, p.Source);
+            Assert.Equal(p.Body, _files.ReadBodyForPrompt());
+        }
+
+        Check(StyleSkillText.NoStyleGuideLine, StyleSource.None);
+        Write("APP BODY");
+        Check("APP BODY", StyleSource.UserFile);
+        File.WriteAllText(_paths.UserSkillFile, "---\nx: y\n---\nMY EDIT");
+        Check("MY EDIT", StyleSource.UserFile);
+        File.Delete(_paths.UserSkillFile);
+        Check("APP BODY", StyleSource.AppCopy);
+        UserFileOfBytes(65_537);
+        Check("APP BODY", StyleSource.AppCopy);
+        File.WriteAllText(_paths.UserSkillFile, "---\nname: x\n---\n");
+        Check(StyleSkillText.NoStyleGuideLine, StyleSource.UserFile);
+        File.Delete(_paths.UserSkillFile);
+        File.Delete(_paths.AppCopyFile);
+        Check(StyleSkillText.NoStyleGuideLine, StyleSource.None);
+    }
+
+    [Fact]
+    [Trait("os", "windows")]
+    public void ReadForPrompt_locked_user_file_uses_the_app_copy()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        Write("APP BODY");
+        using var held = new FileStream(_paths.UserSkillFile, FileMode.Open, FileAccess.Read, FileShare.None);
+        var p = _files.ReadForPrompt();
+        Assert.Equal(StyleSource.AppCopy, p.Source);
+        Assert.Equal("APP BODY", p.Body);
+    }
+
     private void UserFileOfBytes(int total)
     {
         const string head = "---\nx: y\n---\n";

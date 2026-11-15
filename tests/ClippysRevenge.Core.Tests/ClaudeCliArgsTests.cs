@@ -27,6 +27,14 @@ public class ClaudeCliArgsTests
         Assert.Equal(Expected(false), ClaudeCliArgs.Build("claude-opus-5-5", "medium", Pretty(), Sp, false));
 
     [Fact]
+    public void Build_Alias_PassesUnchanged()
+    {
+        var expected = Expected(false);
+        expected[2] = "opus";
+        Assert.Equal(expected, ClaudeCliArgs.Build("opus", "medium", Pretty(), Sp, false));
+    }
+
+    [Fact]
     public void Build_SafeMode() =>
         Assert.Equal(Expected(true), ClaudeCliArgs.Build("claude-opus-5-5", "medium", Pretty(), Sp, true));
 
