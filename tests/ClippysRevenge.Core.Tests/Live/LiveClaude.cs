@@ -117,6 +117,13 @@ internal sealed class FixedSelectionMailbox(IAiMailbox inner, SelectedEmail sele
         inner.ReadEmailAsync(entryId, ct);
 
     public Task<bool> ShowDraftsAsync(CancellationToken ct) => Task.FromResult(false);
+
+    public Task<AiDraftInfo?> ReadAiDraftAsync(string mailbox, string draftEntryId, WorkPriority priority, CancellationToken ct) =>
+        inner.ReadAiDraftAsync(mailbox, draftEntryId, priority, ct);
+
+    public Task<ObsoleteDraftMove> MoveObsoleteAiDraftAsync(string mailbox, string draftEntryId, string expectedFingerprint,
+        WorkPriority priority, CancellationToken ct) =>
+        inner.MoveObsoleteAiDraftAsync(mailbox, draftEntryId, expectedFingerprint, priority, ct);
 }
 
 /// <summary>Wraps the real model. Checks every request before the CLI runs, so a live test can't send more than planned.</summary>

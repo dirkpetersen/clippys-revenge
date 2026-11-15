@@ -13,7 +13,7 @@ public sealed record ReplyPlan(
     WorkPriority Priority = WorkPriority.Interactive);    // Background for AI drafts (SPEC 19.9)
 
 /// <summary>Mailbox is the normalized key the draft ended up in ("" = own).</summary>
-public sealed record RepliedDraft(string EntryId, string Subject, string Mailbox);
+public sealed record RepliedDraft(string EntryId, string Subject, string Mailbox, string? Fingerprint = null);
 
 public interface IReplyDraftWriter
 {

@@ -65,6 +65,14 @@ internal sealed class OutlookAiMailbox(OutlookWorker worker, OutlookMail mail, O
         }
     }
 
+    // M16.4 replaces both with delegates to OutlookMail.ObsoleteDraft.cs. Until then nothing calls them; they fail closed.
+    public Task<AiDraftInfo?> ReadAiDraftAsync(string mailbox, string draftEntryId, WorkPriority priority, CancellationToken ct) =>
+        Task.FromException<AiDraftInfo?>(new NotSupportedException("Reading AI drafts isn't available in this build."));
+
+    public Task<ObsoleteDraftMove> MoveObsoleteAiDraftAsync(string mailbox, string draftEntryId, string expectedFingerprint,
+        WorkPriority priority, CancellationToken ct) =>
+        Task.FromException<ObsoleteDraftMove>(new NotSupportedException("Moving AI drafts isn't available in this build."));
+
     // ---- worker-thread bodies ----
 
     internal CandidateFacts? GetFacts(Outlook.Application app, string mailbox, string entryId)
