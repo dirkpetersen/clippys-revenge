@@ -61,9 +61,10 @@ internal sealed partial class OutlookMail
 
             reply.Save();
             saved = true;
+            var fingerprint = markerSet ? TryReadDraftFingerprint(reply) : null;
             try
             {
-                return new CreatedReply(reply.EntryID, reply.Subject ?? "", target, markerSet);
+                return new CreatedReply(reply.EntryID, reply.Subject ?? "", target, markerSet, fingerprint);
             }
             catch (COMException ex) when (!ComErrors.IsOutlookGone(ex))
             {
@@ -87,4 +88,5 @@ internal sealed partial class OutlookMail
     }
 }
 
-internal sealed record CreatedReply(string EntryId, string Subject, string Mailbox, bool MarkerSet);
+/// <param name="Fingerprint">SPEC 23.4: read right after Save(); null when the marker wasn't set or the read failed.</param>
+internal sealed record CreatedReply(string EntryId, string Subject, string Mailbox, bool MarkerSet, string? Fingerprint = null);

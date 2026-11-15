@@ -7,7 +7,7 @@ namespace ClippysRevenge.App;
 
 /// <summary>
 /// The COM side of AI drafting (SPEC 19.9). Every call runs on the Outlook worker; every COM object is released.
-/// Reads only, plus showing the Drafts folder in the active window. Logs hold method names and outcomes, never mail data.
+/// Reads only, plus showing the Drafts folder and moving an outdated AI draft of Clippy's own into Deleted Items (SPEC 23.5). Logs hold method names and outcomes, never mail data.
 /// </summary>
 internal sealed class OutlookAiMailbox(OutlookWorker worker, OutlookMail mail, OutlookStores stores, ILogger? log = null)
     : IAiMailbox
@@ -65,13 +65,28 @@ internal sealed class OutlookAiMailbox(OutlookWorker worker, OutlookMail mail, O
         }
     }
 
-    // M16.4 replaces both with delegates to OutlookMail.ObsoleteDraft.cs. Until then nothing calls them; they fail closed.
-    public Task<AiDraftInfo?> ReadAiDraftAsync(string mailbox, string draftEntryId, WorkPriority priority, CancellationToken ct) =>
-        Task.FromException<AiDraftInfo?>(new NotSupportedException("Reading AI drafts isn't available in this build."));
+    public async Task<AiDraftInfo?> ReadAiDraftAsync(string mailbox, string draftEntryId, WorkPriority priority, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(mailbox);
+        ArgumentException.ThrowIfNullOrEmpty(draftEntryId);
+        await stores.EnsureResolvedAsync(priority, ct).ConfigureAwait(false);
+        var info = await worker.RunAsync(app => mail.ReadAiDraft(app, mailbox, draftEntryId), priority, ct).ConfigureAwait(false);
+        log?.LogDebug("AI mailbox: ReadAiDraft {Outcome}", info is null ? "gone" : "ok");
+        return info;
+    }
 
-    public Task<ObsoleteDraftMove> MoveObsoleteAiDraftAsync(string mailbox, string draftEntryId, string expectedFingerprint,
-        WorkPriority priority, CancellationToken ct) =>
-        Task.FromException<ObsoleteDraftMove>(new NotSupportedException("Moving AI drafts isn't available in this build."));
+    public async Task<ObsoleteDraftMove> MoveObsoleteAiDraftAsync(string mailbox, string draftEntryId, string expectedFingerprint,
+        WorkPriority priority, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(mailbox);
+        ArgumentException.ThrowIfNullOrEmpty(draftEntryId);
+        ArgumentNullException.ThrowIfNull(expectedFingerprint);
+        await stores.EnsureResolvedAsync(priority, ct).ConfigureAwait(false);
+        var r = await worker.RunAsync(app => mail.MoveObsoleteAiDraft(app, mailbox, draftEntryId, expectedFingerprint), priority, ct)
+            .ConfigureAwait(false);
+        log?.LogDebug("AI mailbox: MoveObsoleteAiDraft {Status}", r.Status);
+        return r;
+    }
 
     // ---- worker-thread bodies ----
 
