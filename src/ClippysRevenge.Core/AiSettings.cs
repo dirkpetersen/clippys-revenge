@@ -50,6 +50,9 @@ public sealed partial class AiDraftingSettings
     /// <summary>1-10 options per draft, both lists together (SPEC 19.2, 21.4).</summary>
     public int MeetingTimeOptions { get; set; } = DefaultMeetingTimeOptions;
 
+    /// <summary>Revisit Clippy's own unsent AI drafts when the thread moves on (SPEC 19.2, 23).</summary>
+    public bool ReviseDrafts { get; set; } = true;
+
     [JsonIgnore] public bool HasConsent => ConsentedAtUtc is not null;
 
     [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9._\[\]-]*\z")]

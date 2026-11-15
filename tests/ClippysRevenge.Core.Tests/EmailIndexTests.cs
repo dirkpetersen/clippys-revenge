@@ -68,7 +68,7 @@ public class EmailIndexTests : IDisposable
         NewIndex();
         using var c = Raw();
         var names = c.Query<(string type, string name)>("SELECT type, name FROM sqlite_master").ToList();
-        foreach (var t in new[] { "emails", "emails_fts", "attachments", "sync_state", "meta", "ai_decisions" })
+        foreach (var t in new[] { "emails", "emails_fts", "attachments", "sync_state", "meta", "ai_decisions", "ai_drafts", "ai_revisits" })
             Assert.Contains(("table", t), names);
         foreach (var i in new[] { "ix_emails_time", "ix_emails_folder_time", "ix_emails_imid", "ix_emails_sender", "ix_att_name",
                      "ix_emails_irt", "ix_emails_topic", "ix_ai_decided", "ix_ai_imid" })
@@ -78,11 +78,11 @@ public class EmailIndexTests : IDisposable
     }
 
     [Fact]
-    public void Ctor_NewFile_WritesSchemaVersion2()
+    public void Ctor_NewFile_WritesSchemaVersion3()
     {
         NewIndex();
-        Assert.Equal("2", Scalar<string>("SELECT value FROM meta WHERE key='schema_version'"));
-        Assert.Equal(2, EmailIndex.SchemaVersion);
+        Assert.Equal("3", Scalar<string>("SELECT value FROM meta WHERE key='schema_version'"));
+        Assert.Equal(3, EmailIndex.SchemaVersion);
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class EmailIndexTests : IDisposable
         var ix2 = NewIndex();
         Assert.Equal(a.RowId, ix2.Get("A")!.RowId);
         Assert.Equal(b.RowId, ix2.Get("B")!.RowId);
-        Assert.Equal("2", Scalar<string>("SELECT value FROM meta WHERE key='schema_version'"));
+        Assert.Equal("3", Scalar<string>("SELECT value FROM meta WHERE key='schema_version'"));
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public class EmailIndexTests : IDisposable
         SqliteConnection.ClearAllPools();
         var ex = Assert.Throws<InvalidOperationException>(() => new EmailIndex(DbFile));
         Assert.Contains("schema version 99", ex.Message);
-        Assert.Contains("supports up to 2", ex.Message);
+        Assert.Contains("supports up to 3", ex.Message);
     }
 
     [Fact]

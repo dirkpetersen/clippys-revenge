@@ -69,4 +69,19 @@ public class SyncModelsTests
         Assert.Equal(["Inbox", "Sent Items"], plans[2].Folders);
         Assert.Equal(12, plans[2].RetentionMonths);
     }
+
+    [Theory]
+    [InlineData("Inbox", true)]
+    [InlineData("Inbox\\Trips", true)]
+    [InlineData("Inbox\\a\\b", true)]
+    [InlineData("inbox", false)]
+    [InlineData("InboxOld", false)]
+    [InlineData("Sent Items", false)]
+    [InlineData("Archive\\Inbox", false)]
+    public void IsUnderInbox(string path, bool expected) =>
+        Assert.Equal(expected, FolderPaths.IsUnderInbox(path));
+
+    [Fact]
+    public void IsUnderInbox_null_throws() =>
+        Assert.Throws<ArgumentNullException>(() => FolderPaths.IsUnderInbox(null!));
 }

@@ -503,4 +503,28 @@ public class AiSettingsTests
         s.DisableSharedMailbox("a@x.org");
         Assert.True(s.AddOrEnableSharedMailbox("a@x.org", null).AiDrafts);
     }
+
+    [Fact]
+    public void ReviseDrafts_defaults_to_true()
+    {
+        Assert.True(new AiDraftingSettings().ReviseDrafts);
+        Assert.Empty(Errors(a => a.ReviseDrafts = false));
+        Assert.Empty(Errors(a => a.ReviseDrafts = true));
+    }
+
+    [Fact]
+    public void ReviseDrafts_json_round_trip()
+    {
+        Assert.True(Settings.FromJson("{\"AiDrafting\":{\"DailyCap\":7}}").AiDrafting.ReviseDrafts);
+        Assert.False(Settings.FromJson("{\"AiDrafting\":{\"ReviseDrafts\":false}}").AiDrafting.ReviseDrafts);
+        Assert.Contains("\"ReviseDrafts\": true", S().ToJson());
+    }
+
+    [Fact]
+    public void ReviseDrafts_survives_clone()
+    {
+        var s = S();
+        s.AiDrafting.ReviseDrafts = false;
+        Assert.False(s.Clone().AiDrafting.ReviseDrafts);
+    }
 }

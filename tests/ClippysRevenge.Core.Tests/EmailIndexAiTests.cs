@@ -427,4 +427,60 @@ public class EmailIndexAiTests : IDisposable
              "attempts", "confidence", "draft_entry_id", "draft_created"],
             c.Query<string>("SELECT name FROM pragma_table_info('ai_decisions') ORDER BY cid").ToArray());
     }
+
+    private static readonly string Fp = new('a', 64);
+
+    [Fact]
+    public void ModelCallsSince_sums_both_tables()
+    {
+        _ix.UpsertDecision(new AiDecision("a", null, null, Now.AddHours(-2), AiOutcome.Drafted, ModelCalls: 2));
+        _ix.UpsertDecision(new AiDecision("b", null, null, Now.AddDays(-1), AiOutcome.Drafted, ModelCalls: 3));
+        _ix.AddRevisit("D", Now.AddHours(-1), AiRevisitOutcome.Keep, 1);
+        _ix.AddRevisit("D", Now.AddDays(-1), AiRevisitOutcome.Keep, 4);
+        _ix.AddRevisit("D", Now, AiRevisitOutcome.Failed, 0);
+        Assert.Equal(3, _ix.ModelCallsSince(Now.AddHours(-3)));
+        Assert.Equal(10, _ix.ModelCallsSince(Now.AddDays(-2)));
+    }
+
+    [Fact]
+    public void ModelCallsSince_counts_revisits_alone_and_empty_tables_are_zero()
+    {
+        Assert.Equal(0, _ix.ModelCallsSince(Now.AddDays(-2)));
+        _ix.AddRevisit("D", Now.AddHours(-1), AiRevisitOutcome.Replace, 2);
+        Assert.Equal(2, _ix.ModelCallsSince(Now.AddDays(-2)));
+    }
+
+    [Fact]
+    public void PurgeDecisions_purges_all_three_tables()
+    {
+        _ix.UpsertDecision(new AiDecision("a", null, null, Now.AddDays(-31), AiOutcome.Drafted));
+        _ix.UpsertDecision(new AiDecision("b", null, null, Now.AddDays(-30).AddSeconds(-1), AiOutcome.Drafted));
+        _ix.UpsertDecision(new AiDecision("c", null, null, Now.AddDays(-30), AiOutcome.Drafted));
+        _ix.RecordAiDraft("old", "S", Now.AddDays(-31), Fp, Now.AddDays(-31), Now.AddDays(-31));
+        _ix.RecordAiDraft("edge", "S", Now.AddDays(-30), Fp, Now.AddDays(-30), Now.AddDays(-30));
+        _ix.AddRevisit("x", Now.AddDays(-31), AiRevisitOutcome.Keep, 1);
+        _ix.AddRevisit("x", Now.AddDays(-30).AddSeconds(-1), AiRevisitOutcome.Keep, 1);
+        _ix.AddRevisit("x", Now.AddDays(-1), AiRevisitOutcome.Keep, 1);
+        Assert.Equal(2 + 1 + 2, _ix.PurgeDecisions(Now));
+        Assert.Null(_ix.GetAiDraft("old"));
+        Assert.NotNull(_ix.GetAiDraft("edge"));
+        Assert.NotNull(_ix.GetDecision("c"));
+        using var c = Raw();
+        Assert.Equal(1, c.ExecuteScalar<long>("SELECT COUNT(*) FROM ai_revisits"));
+    }
+
+    [Fact]
+    public void PurgeOlderThan_also_purges_old_drafts_and_revisits()
+    {
+        var utc = DateTimeOffset.UtcNow;
+        _ix.RecordAiDraft("old", "S", utc.AddDays(-40), Fp, utc.AddDays(-40), utc.AddDays(-40));
+        _ix.RecordAiDraft("new", "S", utc.AddDays(-1), Fp, utc.AddDays(-1), utc.AddDays(-1));
+        _ix.AddRevisit("old", utc.AddDays(-40), AiRevisitOutcome.Keep, 1);
+        _ix.AddRevisit("new", utc.AddDays(-1), AiRevisitOutcome.Keep, 1);
+        Assert.Equal(0, _ix.PurgeOlderThan(DateTimeOffset.FromUnixTimeSeconds(0)));
+        Assert.Null(_ix.GetAiDraft("old"));
+        Assert.NotNull(_ix.GetAiDraft("new"));
+        using var c = Raw();
+        Assert.Equal(1, c.ExecuteScalar<long>("SELECT COUNT(*) FROM ai_revisits"));
+    }
 }
