@@ -21,10 +21,21 @@ reference material only.
   §22).
 - **Never delete email.** The app never calls `Delete`, `PermanentDelete`
   or `EmptyDeletedItems` on Outlook items or folders, and never moves
-  existing mail. The one `.Move(` puts a reply draft Clippy just created
-  into Drafts. Removing rows from Clippy's own SQLite index is allowed:
-  that's a catalogue, not mail. A test scans the source for this. (Only the
-  live test suite deletes items, and only the ones it created in that run.)
+  existing mail, with two exceptions: the `.Move(` that puts a reply draft
+  Clippy just created into Drafts (`OutlookMail.Reply.cs`), and (from M16,
+  user-approved 2026-11-15) the one `.Move(` in
+  `OutlookMail.ObsoleteDraft.cs` that puts an outdated AI draft of
+  Clippy's own into that mailbox's Deleted Items. That move is allowed
+  only for a draft that carries `ClippyDraft = ai`, was created by
+  automatic drafting or a rescan and recorded with its fingerprint, is
+  unchanged since Clippy saved it (same fingerprint), is unsent, still in
+  Drafts and not open in an Inspector or inline reply, in a thread where a
+  newer message arrived and the user hasn't replied. The checks run in the
+  same COM call right before the move (SPEC §23.5). Nothing is ever
+  permanently deleted and Deleted Items is never emptied. Removing rows
+  from Clippy's own SQLite index is allowed: that's a catalogue, not mail.
+  A test scans the source for this (SPEC §23.10). (Only the live test
+  suite deletes items, and only the ones it created in that run.)
 - **Never launch Outlook.** Attach with `GetActiveObject` only. No
   `new Outlook.Application()`, `Activator.CreateInstance` or
   `CoCreateInstance`. The tray's **Start Outlook** item is the one exception
