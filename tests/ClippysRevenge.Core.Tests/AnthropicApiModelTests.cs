@@ -22,7 +22,7 @@ public class AnthropicApiModelTests
     private readonly FakeAnthropicHandler _fake = new();
     private readonly ManualTimeProvider _time = new();
     private readonly CapturingLogger _log = new();
-    private readonly AiDraftingSettings _settings = new();
+    private readonly AiDraftingSettings _settings = new() { Model = "claude-opus-5-5" };
     private Func<string?> _key = () => Key1;
     private int _keyCalls;
 

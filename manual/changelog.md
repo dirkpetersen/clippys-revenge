@@ -3,6 +3,18 @@
 The full list of releases, with downloads, is on
 [GitHub](https://github.com/dirkpetersen/clippys-revenge/releases).
 
+## v0.0.9
+
+2026-11-15
+
+- **AI drafts use the latest Opus.** The default model is now `opus`, which always means
+  the newest Opus model. If you never changed the model, Clippy switches you over. A model
+  you typed yourself stays as it is. Effort stays `medium`.
+- **With an API key**, Clippy looks up the newest model of that family once a day and falls
+  back to a known one if the lookup fails. **Check** shows which model `opus` means.
+- **Your writing-style skill is visible.** If Clippy can't read your `my-email-style` skill,
+  Activity and the log say so once, and again when it's back.
+
 ## v0.0.8
 
 2026-11-14

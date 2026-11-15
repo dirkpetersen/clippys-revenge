@@ -196,6 +196,21 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.DoesNotContain("InviteConfirmTimeoutSeconds", text);
     }
 
+    [Theory]
+    [InlineData("claude-opus-5-5", "opus")]
+    [InlineData("claude-sonnet-5-5", "claude-sonnet-5-5")]
+    [InlineData("sonnet", "sonnet")]
+    public void Load_MigratesTheLegacyDefaultModel(string stored, string expected)
+    {
+        var s = Store();
+        s.Load();
+        File.WriteAllText(s.SettingsPath, "{\"AiDrafting\":{\"Model\":\"" + stored + "\"}}");
+        var r = s.Load();
+        Assert.Equal(expected, r.Settings.AiDrafting.Model);
+        Assert.Empty(r.Warnings);
+        Assert.False(File.Exists(s.SettingsPath + ".bad"));
+    }
+
     [Fact]
     public void Save_Invalid_ThrowsWithoutWriting()
     {

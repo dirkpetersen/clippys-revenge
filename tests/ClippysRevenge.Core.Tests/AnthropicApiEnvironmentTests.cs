@@ -32,7 +32,7 @@ public sealed class AnthropicApiEnvironmentTests : IDisposable
     public async Task EnvironmentIsIgnored_WhenKeySaved()
     {
         var fake = new FakeAnthropicHandler();
-        using var m = new AnthropicApiModel(() => new AiDraftingSettings(), () => "test-api-key-0001", fake);
+        using var m = new AnthropicApiModel(() => new AiDraftingSettings { Model = "claude-opus-5-5" }, () => "test-api-key-0001", fake);
         Assert.IsType<ModelResult.Ok>(await m.RunAsync(Req(), TestContext.Current.CancellationToken));
         fake.Respond(200, """{"id":"claude-opus-5-5","type":"model"}""");
         Assert.True((await m.CheckAsync(TestContext.Current.CancellationToken)).Ready);
@@ -50,7 +50,7 @@ public sealed class AnthropicApiEnvironmentTests : IDisposable
     public async Task NoSavedKey_DoesNotFallBackToEnvironment()
     {
         var fake = new FakeAnthropicHandler();
-        using var m = new AnthropicApiModel(() => new AiDraftingSettings(), () => null, fake);
+        using var m = new AnthropicApiModel(() => new AiDraftingSettings { Model = "claude-opus-5-5" }, () => null, fake);
         Assert.IsType<ModelResult.NotSignedIn>(await m.RunAsync(Req(), TestContext.Current.CancellationToken));
         Assert.Equal(AnthropicApiStatusTexts.NoKey, (await m.CheckAsync(TestContext.Current.CancellationToken)).Text);
         Assert.Equal(0, fake.Calls);

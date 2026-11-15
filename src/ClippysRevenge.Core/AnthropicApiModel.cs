@@ -4,6 +4,7 @@ using System.Text.Json;
 using Anthropic;
 using Anthropic.Core;
 using Anthropic.Exceptions;
+using Anthropic.Models.Models;
 using Microsoft.Extensions.Logging;
 using Sdk = Anthropic.Models.Messages;
 
@@ -27,6 +28,7 @@ public sealed class AnthropicApiModel : IDraftModel, IDisposable
     private readonly bool _ownsHandler;
     private readonly TimeProvider _time;
     private readonly ILogger? _log;
+    private readonly AnthropicModelResolver _resolver;
     private int _disposed;
 
     /// <param name="settings">Read by CheckAsync for Model only. RunAsync uses request.Model/Effort.</param>
@@ -56,6 +58,55 @@ public sealed class AnthropicApiModel : IDraftModel, IDisposable
         }
         _time = time ?? TimeProvider.System;
         _log = logger;
+        _resolver = new AnthropicModelResolver(ListModelsAsync, _time, _log);
+    }
+
+    /// <summary>Settings Check, Save key, Remove key (SPEC 19.3). Drops cached ids, holds and warning episodes. Never throws.</summary>
+    public void InvalidateModelCache() => _resolver.Invalidate();
+
+    /// <summary>One listing attempt for the resolver (SPEC 19.3 "Model aliases"). Never throws except
+    /// OperationCanceledException for ct. Never reads exception messages or response bodies.</summary>
+    private async Task<ModelListOutcome> ListModelsAsync(string apiKey, CancellationToken ct)
+    {
+        using var client = NewClient(apiKey, new RetryAfterCapture(), CheckTimeout);
+        using var deadlineCts = new CancellationTokenSource(CheckTimeout, _time);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, deadlineCts.Token);
+        try
+        {
+            var entries = new List<ModelListEntry>();
+            var page = await client.Models.List(new ModelListParams { Limit = AnthropicModelResolver.PageSize }, linked.Token)
+                .ConfigureAwait(false);
+            for (int pages = 1; ; pages++)
+            {
+                foreach (var item in page.Items)
+                {
+                    if (ModelListEntry.TryParse(item.RawData, out var e)) entries.Add(e);
+                }
+                if (pages >= AnthropicModelResolver.MaxPages || !page.HasNext()) break;
+                page = await page.Next(linked.Token).ConfigureAwait(false);
+            }
+            return new ModelListOutcome.Listed(entries);
+        }
+        catch (AnthropicApiException e)
+        {
+            var code = (int)e.StatusCode;
+            return code is 401 or 403
+                ? new ModelListOutcome.Rejected(code)
+                : new ModelListOutcome.Failed(ModelLookupKinds.Http(code));
+        }
+        catch (OperationCanceledException)
+        {
+            if (ct.IsCancellationRequested) throw new OperationCanceledException(ct);
+            return new ModelListOutcome.Failed(ModelLookupKinds.TimedOut);
+        }
+        catch (Exception e) when (e is JsonException or AnthropicInvalidDataException)
+        {
+            return new ModelListOutcome.Failed(ModelLookupKinds.Unreadable);
+        }
+        catch (Exception)
+        {
+            return new ModelListOutcome.Failed(ModelLookupKinds.NoAnswer);
+        }
     }
 
     /// <summary>Disposes the owned SocketsHttpHandler, if any. Idempotent.</summary>
@@ -109,6 +160,20 @@ public sealed class AnthropicApiModel : IDraftModel, IDisposable
 
         var key = SafeLoadKey();
         if (key is null) return (new ModelStatus(false, AnthropicApiStatusTexts.NoKey), "NoKey", null);
+
+        if (ModelAliases.IsAlias(model))
+        {
+            // One fresh listing: verifies the key and refreshes the cache RunAsync uses (SPEC 19.3).
+            var r = await _resolver.ResolveAsync(model, key, fresh: true, ct).ConfigureAwait(false);
+            return r.Kind switch
+            {
+                ModelResolutionKind.Resolved =>
+                    (new ModelStatus(true, AnthropicApiStatusTexts.ReadyAlias(model, r.Model)), "Ready", 200),
+                ModelResolutionKind.Rejected =>
+                    (new ModelStatus(false, AnthropicApiStatusTexts.Rejected(r.HttpStatus ?? 401)), "Rejected", r.HttpStatus),
+                _ => (new ModelStatus(false, AnthropicApiStatusTexts.NoAnswer), "NoAnswer", null),
+            };
+        }
 
         var capture = new RetryAfterCapture();
         using var client = NewClient(key, capture, CheckTimeout);
@@ -182,9 +247,20 @@ public sealed class AnthropicApiModel : IDraftModel, IDisposable
         var key = SafeLoadKey();
         if (key is null) return (new ModelResult.NotSignedIn(), null);
 
+        ModelResolution resolved;
+        try
+        {
+            resolved = await _resolver.ResolveAsync(request.Model, key, fresh: false, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return (Bad(ModelFailure.Cancelled), null);
+        }
+        if (resolved.Kind == ModelResolutionKind.Rejected) return (new ModelResult.NotSignedIn(), resolved.HttpStatus);
+
         var p = new Sdk.MessageCreateParams
         {
-            Model = request.Model,
+            Model = resolved.Model,
             MaxTokens = request.MaxOutputTokens,
             Messages = [new Sdk.UserMessageParam(request.UserPrompt)],
             OutputConfig = new Sdk.OutputConfig
@@ -297,6 +373,7 @@ public static class AnthropicApiStatusTexts
     public const string NoKey = "\u2717 No API key saved.";
     public const string NoAnswer = "\u2717 api.anthropic.com didn't answer.";
     public static string Ready(string model) => $"\u2713 API key works ({model})";
+    public static string ReadyAlias(string alias, string id) => $"\u2713 API key works ({alias} \u2192 {id})";
     public static string Rejected(int httpStatus) => $"\u2717 The API key was rejected (HTTP {httpStatus}).";
     public static string ModelUnavailable(string model) => $"\u2717 The model \"{model}\" isn't available with this key.";
 }

@@ -95,6 +95,20 @@ public static class AiTabFields
 
 public static class AiTabTexts
 {
+    /// <summary>SPEC 19.10. model?.Trim(): "opus" -> "latest Opus", "sonnet" -> "latest Sonnet",
+    /// "haiku" -> "latest Haiku"; anything else, null included -> "".</summary>
+    public static string ModelHint(string? model)
+    {
+        var m = model?.Trim();
+        if (!ModelAliases.IsAlias(m)) return "";
+        return m switch
+        {
+            ModelAliases.Opus => "latest Opus",
+            ModelAliases.Sonnet => "latest Sonnet",
+            _ => "latest Haiku",
+        };
+    }
+
     public const string TabTitle = "AI drafts";
     public const string EnableText = "Draft replies to new email automatically";
     public const string MeetingTimesText = "Offer meeting times when an email asks for a meeting";
