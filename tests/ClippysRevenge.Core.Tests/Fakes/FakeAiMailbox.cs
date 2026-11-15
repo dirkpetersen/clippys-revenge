@@ -67,4 +67,78 @@ internal sealed class FakeAiMailbox : IAiMailbox
         lock (_lock) TotalCalls++;
         return Task.FromResult(ShowResult);
     }
+
+    private readonly List<(string Mailbox, string EntryId, WorkPriority Priority)> _draftReads = [];
+    private readonly List<(string Mailbox, string EntryId, string Fingerprint, WorkPriority Priority)> _moves = [];
+    private readonly HashSet<string> _movedIds = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _draftPerId = new(StringComparer.Ordinal);
+
+    /// <summary>(draftEntryId, 1-based read number for that id) to the info; null = gone. Default: always null.</summary>
+    public Func<string, int, AiDraftInfo?> DraftInfo { get; set; } = (_, _) => null;
+    public Exception? DraftReadThrow { get; set; }
+
+    /// <summary>Null = default: read DraftInfo (counts as a read of that id), Evaluate, Movable gives Moved and remembers the id.</summary>
+    public Func<string, string, ObsoleteDraftMove>? MoveBehavior { get; set; }
+    public Exception? MoveThrow { get; set; }
+
+    public IReadOnlyList<(string Mailbox, string EntryId, WorkPriority Priority)> DraftReads
+    {
+        get { lock (_lock) return _draftReads.ToArray(); }
+    }
+
+    public IReadOnlyList<(string Mailbox, string EntryId, string Fingerprint, WorkPriority Priority)> Moves
+    {
+        get { lock (_lock) return _moves.ToArray(); }
+    }
+
+    public IReadOnlyCollection<string> MovedIds
+    {
+        get { lock (_lock) return _movedIds.ToArray(); }
+    }
+
+    /// <summary>A Movable info: InDrafts, not sent, marker "ai", "IPM.Note", not open.</summary>
+    public static AiDraftInfo Draft(string fingerprint, string subject = "Re:: Budget", string body = "Old draft text.") =>
+        new(true, false, "ai", "IPM.Note", false, fingerprint, subject, body);
+
+    private AiDraftInfo? ReadInfo(string id)
+    {
+        int n;
+        lock (_lock) _draftPerId[id] = n = _draftPerId.GetValueOrDefault(id) + 1;
+        var info = DraftInfo(id, n);
+        bool moved;
+        lock (_lock) moved = _movedIds.Contains(id);
+        return moved && info is not null ? info with { InDrafts = false } : info;
+    }
+
+    public Task<AiDraftInfo?> ReadAiDraftAsync(string mailbox, string draftEntryId, WorkPriority priority, CancellationToken ct)
+    {
+        lock (_lock)
+        {
+            TotalCalls++;
+            _draftReads.Add((mailbox, draftEntryId, priority));
+        }
+        if (DraftReadThrow is not null) throw DraftReadThrow;
+        return Task.FromResult(ReadInfo(draftEntryId));
+    }
+
+    public Task<ObsoleteDraftMove> MoveObsoleteAiDraftAsync(string mailbox, string draftEntryId, string expectedFingerprint,
+        WorkPriority priority, CancellationToken ct)
+    {
+        lock (_lock)
+        {
+            TotalCalls++;
+            _moves.Add((mailbox, draftEntryId, expectedFingerprint, priority));
+        }
+        if (MoveThrow is not null) throw MoveThrow;
+        if (MoveBehavior is not null) return Task.FromResult(MoveBehavior(draftEntryId, expectedFingerprint));
+
+        var info = ReadInfo(draftEntryId);
+        var status = AiDraftGuard.Evaluate(info, expectedFingerprint);
+        if (status == ObsoleteDraftStatus.Movable)
+        {
+            lock (_lock) _movedIds.Add(draftEntryId);
+            return Task.FromResult(new ObsoleteDraftMove(ObsoleteDraftStatus.Moved, info!.Subject));
+        }
+        return Task.FromResult(new ObsoleteDraftMove(status, info?.Subject ?? ""));
+    }
 }

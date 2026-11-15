@@ -249,6 +249,8 @@ public sealed class AiDraftsUiTests : IDisposable
         public Task<SelectedEmail?> GetSelectedAsync(CancellationToken ct) => throw new NotSupportedException();
         public Task<LiveEmail?> ReadEmailAsync(string entryId, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> ShowDraftsAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<AiDraftInfo?> ReadAiDraftAsync(string mailbox, string draftEntryId, WorkPriority priority, CancellationToken ct) => throw new NotSupportedException();
+        public Task<ObsoleteDraftMove> MoveObsoleteAiDraftAsync(string mailbox, string draftEntryId, string expectedFingerprint, WorkPriority priority, CancellationToken ct) => throw new NotSupportedException();
     }
 
     private MailboxIndexes Indexes(string? smtpMeta)

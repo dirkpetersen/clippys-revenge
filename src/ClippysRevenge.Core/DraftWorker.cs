@@ -34,6 +34,18 @@ public interface IAiMailbox
     /// <summary>Interactive. Shows the own Drafts folder in the active Explorer. False when there is no Explorer or
     /// Outlook isn't running. Never throws for those.</summary>
     Task<bool> ShowDraftsAsync(CancellationToken ct);
+
+    /// <summary>Read-only (SPEC 23.5): opens the draft, reads AiDraftInfo. Null when it can't be opened (gone).</summary>
+    /// <exception cref="OutlookUnavailableException">Outlook is gone or not responding.</exception>
+    Task<AiDraftInfo?> ReadAiDraftAsync(string mailbox, string draftEntryId, WorkPriority priority, CancellationToken ct);
+
+    /// <summary>One work item (SPEC 23.5): open, read, AiDraftGuard.Evaluate, and only when Movable move it into its own
+    /// store's Deleted Items (Status Moved). Gone gives (Gone, ""). Folder missing gives NoDeletedItems, nothing moved.
+    /// Never sets a property, never saves, never deletes.</summary>
+    /// <exception cref="OutlookUnavailableException">Outlook is gone or not responding.</exception>
+    /// <exception cref="Exception">Any other COM error (the caller treats it as "left").</exception>
+    Task<ObsoleteDraftMove> MoveObsoleteAiDraftAsync(string mailbox, string draftEntryId, string expectedFingerprint,
+        WorkPriority priority, CancellationToken ct);
 }
 
 public sealed record DraftWorkerServices(
