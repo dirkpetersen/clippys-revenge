@@ -9,6 +9,7 @@
   nothing was sent. Results and leftovers are printed at the end.
   M16: one AI reply draft is moved to Deleted Items by Clippy's guarded move and then removed; one test waits two minutes.
   M17: one attachment download link is made on a private loopback port (not your running Clippy) and fetched once; its temp file is deleted.
+  M20: one saved AI reply draft is synced into a private temp index to check its ai marker and in-reply-to id; the draft is removed again.
 
   Exit codes: 0 ok; 1 test or build failures; 2 preconditions; 3 Outlook not responding;
   4 timeout; 5 only leftovers.
