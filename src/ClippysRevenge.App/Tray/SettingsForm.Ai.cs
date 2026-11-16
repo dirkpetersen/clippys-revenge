@@ -51,6 +51,7 @@ internal sealed partial class SettingsForm
     private readonly CheckedListBox _aiMailboxes = new() { CheckOnClick = true };
     private readonly Label _aiStyleStatus = new() { AutoEllipsis = true };
     private readonly CheckBox _aiWeekly = new() { Text = "Update weekly" };
+    private readonly CheckBox _aiLearnEdits = new() { Text = AiTabTexts.LearnFromEditsText };
     private readonly Button _aiView = new() { Text = "View" };
     private readonly Button _aiRegen = new() { Text = "Regenerate…" };
     private readonly Button _aiOpen = new() { Text = "Open in editor" };
@@ -131,6 +132,7 @@ internal sealed partial class SettingsForm
         Lbl(p, "Writing style", 8, 846, 100);
         Put(p, _aiStyleStatus, 110, 850, 520, 20);
         Put(p, _aiWeekly, 8, 874, 200, 24);
+        Put(p, _aiLearnEdits, 214, 874, 416, 24);
         Put(p, _aiView, 8, 904, 70, 26);
         Put(p, _aiRegen, 84, 904, 110, 26);
         Put(p, _aiOpen, 200, 904, 120, 26);
@@ -198,6 +200,7 @@ internal sealed partial class SettingsForm
         _aiReason.CheckedChanged += (_, _) => { if (!_binding) AiDraft.ReasonLine = _aiReason.Checked; };
         _aiAttachments.CheckedChanged += (_, _) => { if (!_binding) AiDraft.ReadAttachments = _aiAttachments.Checked; };
         _aiWeekly.CheckedChanged += (_, _) => { if (!_binding) AiDraft.AutoRegenerateStyle = _aiWeekly.Checked; };
+        _aiLearnEdits.CheckedChanged += (_, _) => { if (!_binding) AiDraft.LearnFromEdits = _aiLearnEdits.Checked; };
         _aiExclude.TextChanged += (_, _) => { if (!_binding) AiDraft.ExcludeSenders = AiSettingsLines.Parse(_aiExclude.Text); };
         _aiInclude.TextChanged += (_, _) => { if (!_binding) AiDraft.IncludeOnlySenders = AiSettingsLines.Parse(_aiInclude.Text); };
         foreach (var t in new[] { _aiModel, _aiCliPath, _aiCap, _aiMinConf, _aiMaxAge, _aiMeetingCount, _aiExclude, _aiInclude })
@@ -280,6 +283,7 @@ internal sealed partial class SettingsForm
             _aiMeetingCount.Enabled = d.MeetingTimes;
             _aiMeetingCount.Text = d.MeetingTimeOptions.ToString(CultureInfo.InvariantCulture);
             _aiWeekly.Checked = d.AutoRegenerateStyle;
+            _aiLearnEdits.Checked = d.LearnFromEdits;
             _aiExclude.Text = AiSettingsLines.Join(d.ExcludeSenders);
             _aiInclude.Text = AiSettingsLines.Join(d.IncludeOnlySenders);
             _aiOwnBox.Checked = d.Enabled;

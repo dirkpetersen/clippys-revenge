@@ -301,6 +301,8 @@ When an email asks for or suggests a meeting or a call and <name> wants to meet,
     {
         var d = TimeSpan.FromSeconds(95.2);
         Assert.Equal("writing style updated from 143 sent emails (" + ActivityView.FormatDuration(d) + ")", StyleTexts.UpdatedEvent(143, d));
+        Assert.Equal("writing style updated from 143 sent emails and 3 edited drafts (" + ActivityView.FormatDuration(d) + ")", StyleTexts.UpdatedEvent(143, 3, d));
+        Assert.Equal(StyleTexts.UpdatedEvent(143, d), StyleTexts.UpdatedEvent(143, 0, d));
         Assert.Equal("writing style not updated: only 7 sent emails (need 20)", StyleTexts.TooFewEvent(7));
         Assert.Equal("writing style not updated: a Claude call failed (Timeout)",
             StyleTexts.FailedEvent(StyleTexts.CallFailed(ModelFailure.Timeout)));

@@ -49,6 +49,59 @@ public class EmailIndexEditsTests : IDisposable
     private void Pending(string id, string imid, DateTimeOffset created, string text = "text") =>
         _ix.RecordAiDraftText(id, "", imid, created, text);
 
+    private void RawEdit(string id, DateTimeOffset sent, double sim, string? d, string? s)
+    {
+        using var c = Raw();
+        c.Execute(
+            "INSERT INTO ai_edits (sent_entry_id, sent, similarity, draft_chars, sent_chars, draft_text, sent_text) " +
+            "VALUES (@id, @sent, @sim, 1, 1, @d, @s)",
+            new { id, sent = sent.ToUnixTimeSeconds(), sim, d, s });
+    }
+
+    [Fact]
+    public void EditsForStyle_filters_orders_and_counts_unchanged()
+    {
+        RawEdit("A", T, 0.5, "da", "sa");
+        RawEdit("B", T.AddDays(-1), 0.6, "db", "sb");
+        RawEdit("C", T.AddDays(-95), 0.4, "dc", "sc");
+        RawEdit("U1", T.AddDays(-2), 1.0, null, null);
+        RawEdit("U2", T.AddDays(-100), 1.0, null, null);
+        RawEdit("X", T.AddDays(-3), 0.5, null, null);
+
+        var r = _ix.EditsForStyle(T.AddDays(-90));
+
+        Assert.Equal(["A", "B"], r.Pairs.Select(p => p.SentEntryId));
+        Assert.Equal(new AiEdit("A", T, 0.5, 1, 1, "da", "sa"), r.Pairs[0]);
+        Assert.Equal(new AiEdit("B", T.AddDays(-1), 0.6, 1, 1, "db", "sb"), r.Pairs[1]);
+        Assert.Equal(1, r.SentUnchanged);
+    }
+
+    [Fact]
+    public void EditsForStyle_empty_table()
+    {
+        var r = _ix.EditsForStyle(T.AddDays(-90));
+        Assert.Empty(r.Pairs);
+        Assert.Equal(0, r.SentUnchanged);
+    }
+
+    [Fact]
+    public void EditsForStyle_caps_at_twenty_newest_first()
+    {
+        for (int i = 0; i < 25; i++) RawEdit("E" + i, T.AddMinutes(-i), 0.5, "d" + i, "s" + i);
+        var r = _ix.EditsForStyle(T.AddDays(-90));
+        Assert.Equal(20, r.Pairs.Count);
+        Assert.Equal("E0", r.Pairs[0].SentEntryId);
+        Assert.Equal("E19", r.Pairs[19].SentEntryId);
+    }
+
+    [Fact]
+    public void EditsForStyle_unchanged_threshold_is_0_98()
+    {
+        RawEdit("U", T, 0.98, null, null);
+        RawEdit("N", T, 0.9799, null, null);
+        Assert.Equal(1, _ix.EditsForStyle(T.AddDays(-90)).SentUnchanged);
+    }
+
     [Fact]
     public void Record_and_get_round_trip_with_trimmed_imid()
     {

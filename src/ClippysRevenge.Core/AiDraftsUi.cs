@@ -9,13 +9,13 @@ namespace ClippysRevenge.Core;
 public static class AiConsent
 {
     public const string Title = "Turn on AI drafts?";
-    public const string Text = "Clippy will send new emails from your Inbox, earlier messages in the same thread, the text of their attachments and of shared files synced to this PC, up to 5 related earlier emails, and samples of your sent mail to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.";
+    public const string Text = "Clippy will send new emails from your Inbox, earlier messages in the same thread, the text of their attachments and of shared files synced to this PC, up to 5 related earlier emails, and samples of your sent mail and how you edited Clippy's drafts to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.";
     public const string TurnOnButton = "Turn on";
     public const string CancelButton = "Cancel";
 }
 
 /// <summary>One-time AI-drafts notices (SPEC 25.3; M19/M20 add members).</summary>
-public enum AiNotice { RelatedMail, Attachments }
+public enum AiNotice { RelatedMail, Attachments, Edits }
 
 public static class AiMenuTexts
 {
@@ -159,6 +159,7 @@ public static class AiTabTexts
     public const string ReviseDraftsText = "Update or remove my AI drafts when a thread moves on";
     public const string RelatedMailText = "Include related earlier emails";
     public const string ReadAttachmentsText = "Read attachments and synced shared files for drafts";
+    public const string LearnFromEditsText = "Learn from how I edit Clippy's drafts";
     public const string ReasonLineText = "Start each draft with a highlighted note on why it was drafted";
     public const string MeetingTimesText = "Offer meeting times when an email asks for a meeting";
     public const string MeetingCountLabel = "Number of times to offer";
@@ -373,6 +374,7 @@ public sealed class AiDraftingToggler
             ai.RecordConsent(_time.GetUtcNow());
             ai.RelatedMailNoticeShown = true;   // the consent text already names related mail
             ai.AttachmentsNoticeShown = true;   // and attachments
+            ai.EditsNoticeShown = true;         // and how you edited drafts
             return true;
         });
         if (did) _changed();
@@ -389,15 +391,21 @@ public sealed class AiDraftingToggler
         if (!Enum.IsDefined(notice)) throw new ArgumentOutOfRangeException(nameof(notice));
         Mutate(ai =>
         {
-            if (notice == AiNotice.Attachments)
+            switch (notice)
             {
-                if (ai.AttachmentsNoticeShown) return false;
-                ai.AttachmentsNoticeShown = true;
-                return true;
+                case AiNotice.Attachments:
+                    if (ai.AttachmentsNoticeShown) return false;
+                    ai.AttachmentsNoticeShown = true;
+                    return true;
+                case AiNotice.Edits:
+                    if (ai.EditsNoticeShown) return false;
+                    ai.EditsNoticeShown = true;
+                    return true;
+                default:
+                    if (ai.RelatedMailNoticeShown) return false;
+                    ai.RelatedMailNoticeShown = true;
+                    return true;
             }
-            if (ai.RelatedMailNoticeShown) return false;
-            ai.RelatedMailNoticeShown = true;
-            return true;
         });
     }
 

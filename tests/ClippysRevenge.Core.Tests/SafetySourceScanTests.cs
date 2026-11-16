@@ -1467,6 +1467,44 @@ public class SafetySourceScanTests
                 "EditLearning must not take a COM-side interface: " + p.ParameterType.Name);
     }
 
+    // ---- Learning from edits, style prompt (M20.2, SPEC 27.6) ----
+
+    [Fact]
+    public void SettingsForm_BindsLearnFromEdits()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/Tray/SettingsForm.Ai.cs");
+        Assert.Contains("AiTabTexts.LearnFromEditsText", f.Code);
+        Assert.Matches(@"AiDraft\s*\.\s*LearnFromEdits\s*=", f.Code);
+        Assert.Matches(@"\.Checked\s*=\s*d\s*\.\s*LearnFromEdits", f.Code);
+    }
+
+    private static readonly string[] StyleEditsBadTokens = ["DraftText", "SentText", "Pairs[", "EditsBlock", "UserPrompt"];
+
+    /// <summary>Log statements (up to their ");", string literals removed) that name an edit text or the prompt.</summary>
+    internal static List<string> StyleEditLogHits(string code, string rel)
+    {
+        var hits = new List<string>();
+        foreach (Match m in EditsLogStatement.Matches(code))
+        {
+            var end = code.IndexOf(");", m.Index, StringComparison.Ordinal);
+            var call = code[m.Index..(end < 0 ? code.Length : end)];
+            if (StyleEditsBadTokens.Any(t => call.Contains(t, StringComparison.Ordinal)))
+                hits.Add($"{rel}:{LineOf(code, m.Index)}: {call.Trim()}");
+        }
+        return hits;
+    }
+
+    [Fact]
+    public void StyleEdits_LogNoTexts()
+    {
+        const string rel = "src/ClippysRevenge.Core/StyleSkill.cs";
+        var f = Scan.Value.Files.Single(x => x.Rel == rel);
+        AssertNone(StyleEditLogHits(f.Code, rel), "Log statements in StyleSkill.cs must not take an edit text or the prompt.");
+        Assert.Single(StyleEditLogHits(Strip("_logger?.LogDebug(\"x {T}\", edits.Pairs[0].DraftText);", true, null), "x"));
+        Assert.Single(StyleEditLogHits(Strip("_logger?.LogDebug(\"x {T}\", StylePrompt.EditsBlock(e));", true, null), "x"));
+        Assert.Empty(StyleEditLogHits(Strip("_logger?.LogDebug(\"x {A}\", e.Pairs.Count);", true, null), "x"));
+    }
+
     [Fact]
     public void EditFiles_LogNoTexts()
     {

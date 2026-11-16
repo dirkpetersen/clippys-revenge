@@ -17,6 +17,9 @@ public sealed record SentAiReply(string EntryId, DateTimeOffset EventTime, strin
 public sealed record AiEdit(string SentEntryId, DateTimeOffset Sent, double Similarity, int DraftChars, int SentChars,
     string? DraftText, string? SentText);
 
+/// <summary>Input of the style prompt's my_edits block (SPEC 27.6). Pairs: rows with both texts, newest first.</summary>
+public sealed record AiEditsForStyle(IReadOnlyList<AiEdit> Pairs, int SentUnchanged);
+
 // Learning from edits (SPEC 9.1, 27.2-27.5). Index rows only: nothing here touches Outlook. The texts are the
 // user's own redacted mail; nothing in this file logs.
 public sealed partial class EmailIndex
@@ -199,6 +202,29 @@ public sealed partial class EmailIndex
             .Select(r => new AiEdit(r.SentEntryId, DateTimeOffset.FromUnixTimeSeconds(r.Sent), r.Similarity,
                 (int)r.DraftChars, (int)r.SentChars, r.DraftText, r.SentText))
             .ToList();
+    }
+
+    /// <summary>SPEC 27.6: Pairs = ai_edits rows with draft_text and sent_text not null and sent &gt;= since,
+    /// ORDER BY sent DESC, id DESC LIMIT MaxEditPairs. SentUnchanged = count(*) of rows with
+    /// similarity &gt;= EditDiff.UnchangedThreshold and sent &gt;= since.</summary>
+    public AiEditsForStyle EditsForStyle(DateTimeOffset since)
+    {
+        using var conn = OpenConnection();
+        var s = since.ToUnixTimeSeconds();
+        var pairs = conn.Query<EditRow>(
+            """
+            SELECT sent_entry_id AS SentEntryId, sent AS Sent, similarity AS Similarity, draft_chars AS DraftChars,
+                   sent_chars AS SentChars, draft_text AS DraftText, sent_text AS SentText
+            FROM ai_edits WHERE draft_text IS NOT NULL AND sent_text IS NOT NULL AND sent >= @since
+            ORDER BY sent DESC, id DESC LIMIT @keep
+            """, new { since = s, keep = MaxEditPairs })
+            .Select(r => new AiEdit(r.SentEntryId, DateTimeOffset.FromUnixTimeSeconds(r.Sent), r.Similarity,
+                (int)r.DraftChars, (int)r.SentChars, r.DraftText, r.SentText))
+            .ToList();
+        var unchanged = conn.ExecuteScalar<long>(
+            "SELECT count(*) FROM ai_edits WHERE similarity >= @t AND sent >= @since",
+            new { t = EditDiff.UnchangedThreshold, since = s });
+        return new AiEditsForStyle(pairs, (int)Math.Min(unchanged, int.MaxValue));
     }
 
     private static AiDraftText ToDraftText(DraftTextRow r) =>

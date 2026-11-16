@@ -72,6 +72,7 @@ internal sealed class DraftHarness : IDisposable
         Settings.AiDrafting.ReasonLine = false;
         Settings.AiDrafting.RelatedMailNoticeShown = true;
         Settings.AiDrafting.AttachmentsNoticeShown = true;
+        Settings.AiDrafting.EditsNoticeShown = true;
         Settings.SharedMailboxes.Add(new SharedMailbox { Smtp = Shared, Enabled = true, AiDrafts = false });
         if (withMarkNoticeShown) MarkNoticeShown = NoticeMarks.Add;
         Worker = new DraftWorker(new DraftWorkerServices(() => Settings, Indexes, Mailbox, Writer, Model, Style,

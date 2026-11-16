@@ -71,6 +71,9 @@ public static class EditTexts
     public static string Prepare(string? plain, IReadOnlyList<string>? signatureTexts) =>
         AttachmentBudget.Cut(MailText.Redact(StyleCorpus.OwnText(plain, signatureTexts)), EmailIndex.MaxEditTextChars);
 
+    /// <summary>The one-time notice for users who consented before M20 (SPEC 27.6).</summary>
+    public const string Notice = "AI drafts now learn from how you edit Clippy's drafts before sending. The next writing-style update sends up to 20 of your edited replies (addresses, links and phone numbers removed) to Claude. You can turn this off in Settings → AI drafts.";
+
     /// <summary>"AI drafts: noted how you edited 1 sent draft." / "… &lt;n&gt; sent drafts." (n with N0, invariant).</summary>
     public static string Noted(int n) =>
         "AI drafts: noted how you edited " + n.ToString("N0", CultureInfo.InvariantCulture) +

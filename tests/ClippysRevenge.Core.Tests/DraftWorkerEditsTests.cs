@@ -192,6 +192,125 @@ public class DraftWorkerEditsTests
         Assert.Equal(0, Rows(h));
     }
 
+    private static DraftHarness NoticeFx(bool withMark = true)
+    {
+        var h = new DraftHarness(withMark);
+        h.Ai.MeetingTimes = false;
+        h.Ai.EditsNoticeShown = false;
+        h.Seed("X1");
+        h.Model.Enqueue(OkReply(0.9, body: ModelBody));
+        return h;
+    }
+
+    private static int NoticeEvents(DraftHarness h) => h.Events(ActivityKind.Ai).Count(e => e.Summary == EditTexts.Notice);
+
+    private static int NoticeBalloons(DraftHarness h) => h.Shown.Count(b => b.Text == EditTexts.Notice && b.Kind == BalloonKind.Info);
+
+    [Fact]
+    public async Task Notice_shows_once_at_the_first_ai_draft()
+    {
+        using var h = NoticeFx();
+        await Pass(h);
+
+        Assert.Equal([AiNotice.Edits], h.NoticeMarks);
+        Assert.Equal(1, NoticeEvents(h));
+        Assert.Equal(1, NoticeBalloons(h));
+        Assert.Single(h.Writer.Plans);
+        Assert.Single(h.Events(ActivityKind.Draft));
+
+        h.Seed("X2", age: TimeSpan.FromMinutes(8));
+        h.Model.Enqueue(OkReply(0.9, body: ModelBody));
+        await Pass(h);
+
+        Assert.Equal(2, h.Writer.Plans.Count);
+        Assert.Equal([AiNotice.Edits], h.NoticeMarks);
+        Assert.Equal(1, NoticeEvents(h));
+        Assert.Equal(1, NoticeBalloons(h));
+    }
+
+    [Fact]
+    public async Task Notice_not_shown_when_off_already_shown_or_no_draft_saved()
+    {
+        using var off = NoticeFx();
+        off.Ai.LearnFromEdits = false;
+        using var shown = NoticeFx();
+        shown.Ai.EditsNoticeShown = true;
+        using var none = new DraftHarness();
+        none.Ai.MeetingTimes = false;
+        none.Ai.EditsNoticeShown = false;
+        none.Seed("X1");
+        none.Model.Enqueue(OkReply(0.9, needsReply: false));
+
+        foreach (var h in new[] { off, shown, none })
+        {
+            await Pass(h);
+            Assert.Empty(h.NoticeMarks);
+            Assert.Equal(0, NoticeEvents(h));
+            Assert.Equal(0, NoticeBalloons(h));
+        }
+    }
+
+    [Fact]
+    public async Task Notice_shows_on_a_manual_draft()
+    {
+        using var h = new DraftHarness();
+        h.Ai.Enabled = false;
+        h.Ai.EditsNoticeShown = false;
+        h.Mailbox.Selected = new SelectedEmail("E1", "S1");
+        h.Mailbox.Live = new LiveEmail("", new IndexedEmail
+        {
+            EntryId = "E1", Folder = "Inbox", Subject = "Budget", SenderEmail = "ann@contoso.example",
+            To = "Me <me@example.org>", ConversationTopic = "Budget", Body = "BODYTEXT-123",
+            InternetMessageId = "<E1@contoso.example>", EventTime = Now.AddMinutes(-5),
+        });
+        h.Model.Enqueue(OkReply(0.9, body: ModelBody));
+
+        await h.Worker.DraftSelectedAsync(Ct);
+
+        Assert.Equal([AiNotice.Edits], h.NoticeMarks);
+        Assert.Equal(1, NoticeEvents(h));
+        Assert.Equal(1, NoticeBalloons(h));
+    }
+
+    [Fact]
+    public async Task Notice_shows_when_the_draft_used_attachment_text()
+    {
+        using var h = AttFx(out _, "budget notes");
+        h.Ai.EditsNoticeShown = false;
+
+        await Pass(h);
+
+        Assert.Equal(0, Rows(h));
+        Assert.Equal([AiNotice.Edits], h.NoticeMarks);
+        Assert.Equal(1, NoticeEvents(h));
+        Assert.Equal(1, NoticeBalloons(h));
+    }
+
+    [Fact]
+    public async Task Notice_survives_a_failing_mark()
+    {
+        using var h = NoticeFx();
+        h.MarkNoticeShown = _ => throw new IOException("disk");
+
+        await Pass(h);
+
+        Assert.Single(h.Log.Lines, l => l == "AI drafts: couldn't save that the edits notice was shown (IOException).");
+        Assert.Equal(1, NoticeEvents(h));
+        Assert.Equal(1, NoticeBalloons(h));
+        Assert.Single(h.Writer.Plans);
+        Assert.Equal(1, Rows(h));
+    }
+
+    [Fact]
+    public async Task Notice_without_a_mark_callback_shows_once()
+    {
+        using var h = NoticeFx(withMark: false);
+        await Pass(h);
+        Assert.Equal(1, NoticeEvents(h));
+        Assert.Equal(1, NoticeBalloons(h));
+        Assert.Single(h.Writer.Plans);
+    }
+
     private static DraftHarness AttFx(out FakeAttachmentSource src, string text)
     {
         src = new FakeAttachmentSource();

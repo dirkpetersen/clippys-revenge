@@ -60,6 +60,7 @@ internal static class LiveClaude
             Effort = Effort,
             TimeoutSeconds = 120,
             ClaudeCliPath = "",
+            EditsNoticeShown = true,   // no extra edits notice event or balloon (M20.2)
         };
         s.RecordConsent(now);
         return s;

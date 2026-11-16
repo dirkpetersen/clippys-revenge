@@ -220,6 +220,34 @@ public sealed class AiDraftingTogglerTests : IDisposable
     }
 
     [Fact]
+    public void MarkNoticeShown_edits_sets_only_its_own_flag_and_saves_once()
+    {
+        _t.MarkNoticeShown(AiNotice.Edits);
+        Assert.True(_settings.AiDrafting.EditsNoticeShown);
+        Assert.False(_settings.AiDrafting.RelatedMailNoticeShown);
+        Assert.False(_settings.AiDrafting.AttachmentsNoticeShown);
+        Assert.True(Assert.Single(_saves).AiDrafting.EditsNoticeShown);
+        _t.MarkNoticeShown(AiNotice.Edits);
+        Assert.Single(_saves);
+        Assert.Equal(0, _changed);
+    }
+
+    [Fact]
+    public void RecordConsent_marks_the_edits_notice_shown_only_on_a_fresh_consent()
+    {
+        _t.RecordConsent();
+        Assert.True(_settings.AiDrafting.EditsNoticeShown);
+        Assert.True(_settings.AiDrafting.AttachmentsNoticeShown);
+        Assert.True(_settings.AiDrafting.RelatedMailNoticeShown);
+
+        _saves.Clear();
+        _settings.AiDrafting.EditsNoticeShown = false;
+        _t.RecordConsent();
+        Assert.False(_settings.AiDrafting.EditsNoticeShown);
+        Assert.Empty(_saves);
+    }
+
+    [Fact]
     public void MarkNoticeShown_related_mail_leaves_the_attachments_flag_alone()
     {
         _t.MarkNoticeShown(AiNotice.RelatedMail);

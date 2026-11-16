@@ -42,7 +42,7 @@ public sealed class AiDraftsUiTests : IDisposable
     [Fact]
     public void Consent_text_is_exact()
     {
-        Assert.Equal("Clippy will send new emails from your Inbox, earlier messages in the same thread, the text of their attachments and of shared files synced to this PC, up to 5 related earlier emails, and samples of your sent mail to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.", AiConsent.Text);
+        Assert.Equal("Clippy will send new emails from your Inbox, earlier messages in the same thread, the text of their attachments and of shared files synced to this PC, up to 5 related earlier emails, and samples of your sent mail and how you edited Clippy's drafts to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.", AiConsent.Text);
         Assert.Equal("Read attachments and synced shared files for drafts", AiTabTexts.ReadAttachmentsText);
         Assert.Equal("Turn on AI drafts?", AiConsent.Title);
         Assert.Equal("Turn on", AiConsent.TurnOnButton);
@@ -75,6 +75,8 @@ public sealed class AiDraftsUiTests : IDisposable
     public void StyleResult_texts()
     {
         Assert.Equal("Writing style updated from 150 sent emails.", AiTabTexts.StyleResult(new StyleRunResult.Updated(150, TimeSpan.FromSeconds(41))));
+        Assert.Equal("Writing style updated from 150 sent emails.", AiTabTexts.StyleResult(new StyleRunResult.Updated(150, TimeSpan.FromSeconds(41), 5)));
+        Assert.Equal("Learn from how I edit Clippy's drafts", AiTabTexts.LearnFromEditsText);
         Assert.Equal("Only 7 sent emails found. Clippy needs 20.", AiTabTexts.StyleResult(new StyleRunResult.TooFewEmails(7)));
         Assert.Equal("Writing style not updated: Claude isn't signed in.", AiTabTexts.StyleResult(new StyleRunResult.Failed("Claude isn't signed in")));
         Assert.Equal(AiDraftingSettings.ConsentRequiredMessage, AiTabTexts.StyleResult(new StyleRunResult.NoConsent()));
