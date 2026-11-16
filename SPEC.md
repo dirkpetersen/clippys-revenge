@@ -140,12 +140,14 @@ src/ClippysRevenge.Core/        net10.0: no Windows, no COM, testable on Linux/W
                             OutlookUnavailableException, OutlookAppPath
     MailTable.cs            DASL date filters, Table columns/rows, tie-safe paging, Outlook dates
     MailFolders.cs          indexed-folder paths (Inbox/Sent Items/Drafts/Deleted Items canonical), ResolvedFolder
-    MailItemRead.cs         inline rule, SMTP choice, To/CC format, GetItem chain, ItemNotFoundException
+    MailItemRead.cs         inline rule, SMTP choice, To/CC format, GetItem chain, ItemNotFoundException,
+                            attachment names (InlineAttachments.FileNameFor, §8)
     SyncModels.cs           IMailSource (the COM side of sync), plans, results, SentGroupResult (M16.11),
                             FolderPaths (incl. IsUnderInbox, §23.2), SyncLabels, SyncPlanner (incl. ProcessingOrder, §10)
     SyncEngine.cs           one sync cycle for one mailbox (§10)
     SyncService.cs          background indexing loop (BackgroundService), all mailboxes
-    AttachmentSelection.cs  get_attachment / save_attachments selection rules
+    AttachmentSelection.cs  get_attachment / save_attachments / attachment_link selection rules (SelectOne,
+                            MatchLive, the `.msg` name alias, §11.3)
     AttachmentExport.cs     save-dir policy, bulk save loop over IAttachmentSaver
     AttachmentLinks.cs      AttachmentLinks store (tokens, limits, single use, sweep, cleanup), ILinkFileSystem,
                             AttachmentLinkException (§24.3, M17)
@@ -226,8 +228,10 @@ src/ClippysRevenge.Core/        net10.0: no Windows, no COM, testable on Linux/W
                             (the §26.3 "Sync data" validation) (§26.3, M19)
     DraftAttachments.cs     AttachmentKind, AttachmentOrigin, AttachmentRequest, IAttachmentSource, AiAttachmentRead,
                             PromptAttachment, AttachmentNoteKind, AttachmentNote, AttachmentCounts, AttachmentSet,
-                            DraftAttachments (CollectAsync, NoteFor) (§26.1–§26.8, M19.4)
-    DraftAttachments.Plan.cs  PlannedAttachment, DraftAttachmentPlan (Build, MayOpenShared, IsMentioned) (§26.1, M19.4)
+                            DraftAttachments (CollectAsync, NoteFor), PdfAbandonGate (one abandoned PDF
+                            extraction at a time, §26.5) (§26.1–§26.8, M19.4)
+    DraftAttachments.Plan.cs  PlannedAttachment, DraftAttachmentPlan (Build, MayOpenShared, ConsumerMailDomains,
+                            IsMentioned) (§26.1, §26.3, M19.4)
     DraftAttachments.Budget.cs  BudgetItem, AttachmentBudget (Allocate, Cut) (§26.5, M19.4)
     DraftAttachments.Notes.cs  AttachmentNoteTexts, AttachmentNotes (the §26.7 draft notes) (M19.5); the
                             <attachments> block and AttachmentsNote live in DraftPrompt.cs (§26.6);
@@ -1068,6 +1072,17 @@ All calls run through `OutlookWorker`.
 - `IsInline(Attachment)`: true when the attachment type is `olOLE`, when
   `PR_ATTACHMENT_HIDDEN` is set, or when it is an image with
   `PR_ATTACH_CONTENT_ID` referenced in the HTML body.
+- **Attachment names** (`InlineAttachments.FileNameFor`, Core; used for
+  the index, `get_message` and every live attachment list): the trimmed
+  `FileName`, else the trimmed `DisplayName`, else `attachment-<position>`.
+  An attached Outlook item (`olEmbeddeditem`) without a `FileName` is
+  named `<cleaned subject>.msg` instead (M19): the `DisplayName` with
+  control characters and `\ / : * ? " < > |` replaced by spaces and
+  whitespace runs collapsed, cut to 100 characters, plus `.msg` (kept
+  as is when it already ends in `.msg`); an empty result gives
+  `(no name).msg`. Index rows written before this hold the bare name;
+  attachment selection accepts both (§11.3). The names of an attached
+  item's own attachments (§26.9) use the plain rule.
 - **Details (M5.3)**:
   - `OutlookMail` methods run on the worker thread and take the
     `Outlook.Application`; callers wrap them in `RunAsync`. Folders
@@ -1084,7 +1099,12 @@ All calls run through `OutlookWorker`.
     `GetDefaultFolder(olFolderInbox/olFolderSentMail/olFolderDrafts)` and
     `OutlookMail.TryDeletedItems` for Deleted Items, in `ResolveFolder`,
     `DeriveFolder` (folder of an item, matched by folder EntryID first)
-    and `OutlookStores.ListMailFolders`. So the index `folder` column
+    and `OutlookStores.ListMailFolders`. The Drafts lookup
+    (`GetDefaultFolder(olFolderDrafts)`) is guarded like
+    `TryDeletedItems` (M20 review): a store whose Drafts folder can't be
+    opened gives null, so that store simply has no canonical Drafts
+    mapping and `DeriveFolder`/`ListMailFolders` don't fail; asking
+    `ResolveFolder` for `Drafts` there gives `MailFolderNotFound`. So the index `folder` column
     reads `Drafts`/`Deleted Items` whatever Outlook calls them, and the
     Drafts/Deleted Items exclusions (revisit `<thread>` §23.7, related
     mail §25.3, thread attachments §26.1) also hold in a non-English
@@ -1685,7 +1705,13 @@ Fetches the attachment live through COM. `save_dir` must pass `PathPolicy`.
 
 Details (M7.2): `save_dir` defaults to `AttachmentDir`. Selection:
 `position` is the 1-based attachment index; `filename` matches the whole
-file name case-insensitively. If both are given they must agree. With
+file name case-insensitively. A `filename` without `.msg` also matches a
+live attachment named `<filename>.msg` (`AttachmentSelection.NameMatches`,
+M19: index rows from before §8's `.msg` naming of attached items hold
+the bare name); the ambiguity rules are unchanged. The same matching is
+used by `AttachmentSelection.MatchLive` (bulk `save_attachments`,
+`attachment_link`, AI attachment reads, §26.9). If both are given they
+must agree. With
 neither, the single non-inline attachment is used (or the only
 attachment); otherwise the error lists the attachments
 (`1 "report.pdf", 2 "image001.png" (inline)`) and asks for `filename` or
@@ -2981,6 +3007,22 @@ Decided (2026-11-16, the user; §25.1, §25.2, §16):
   **v0.1.1**, ships them together (M19.1's token tally included; it
   doesn't ship on its own).
 
+Decided (2026-11-16, the coordinator, M19 review; §26.1, §26.3,
+§26.12):
+- **Consumer mail providers.** When the user's own SMTP domain is a
+  consumer mail domain (exact rule and list in §26.3), it doesn't count
+  as "your organization": only the user's own address and the shared
+  mailbox's own address may make Clippy open a synced shared file.
+- **Inline-reply links ignored.** Links are taken only from each
+  message's own text, and lines of it starting with `>` are dropped
+  first (§26.1), so a link quoted from an earlier sender never counts as
+  the replier's.
+- **Synced-OneDrive live write is opt-in.** The live test that writes
+  files into the user's business OneDrive runs only with
+  `CLIPPY_LIVE_ONEDRIVE=1` (§26.12), creates them in its own run folder
+  and deletes only those files.
+- Accepted limits of the M19 review are listed in §26.13.
+
 Decided (2026-11-15, the coordinator, implemented in M18.3; §25.4,
 §25.3, §19.6, §27.3):
 - **A kept reason line in the user's own sent mail.** When the user
@@ -3572,8 +3614,11 @@ on the plain-text body:
     `Op … schreef … :` and `Il … ha scritto:` also count, and an
     attribution wrapped onto two lines is joined first. Header-block
     labels also include `Datum:`, `Van:`/`Verzonden:`/`Aan:`/`Onderwerp:`,
-    `Da:`/`Inviato:`/`Data:`/`A:`/`Oggetto:` and
-    `Enviado:`/`Fecha:`/`Para:`/`Asunto:`, optionally wrapped in `*…*`,
+    `Da:`/`Inviato:`/`Data:`/`A:`/`Oggetto:`,
+    `Enviado:`/`Fecha:`/`Para:`/`Asunto:`, and (M19 review) Swedish
+    `Från:`/`Skickat:`/`Till:`/`Ämne:`, Polish
+    `Od:`/`Wysłano:`/`Do:`/`Temat:` and Japanese
+    `差出人:`/`送信日時:`/`宛先:`/`件名:`, optionally wrapped in `*…*`,
     with optional whitespace before the colon. Marker lines may be
     indented. (More cutting only removes text, so it can't leak more.)
   - Known-signature matching: lines are compared trimmed, with whitespace
@@ -6228,7 +6273,9 @@ In the App project (comments and strings stripped):
   `OutlookStores.ListMailFolders` to resolve and canonicalize the
   localized Deleted Items folder (§8); those callers never move, save or
   delete anything there, and the one-`.Move(` and one-`olFolderDeletedItems`
-  counts are unchanged.
+  counts are unchanged. The Drafts lookup in those callers is guarded
+  the same way (null when the store's Drafts can't be opened, §8; M20
+  review); it is read-only too.
 - Unchanged: no `Delete`/`PermanentDelete`/`EmptyDeletedItems` calls on
   Outlook objects anywhere; the AI files (§19.12; `OutlookMail.*` is
   not one) contain no `.Move(` or `Delete(` except on `File`/`Directory`;
@@ -7104,7 +7151,13 @@ its reply target, §23.6). Sources:
 - **Links** in the anchor's and those thread messages' bodies (index
   plain-text body; manual path: the COM-read body) whose host is one of
   Microsoft's OneDrive/SharePoint hosts (§26.3, after Safe Links
-  unwrapping), at most **10** per message. Links to any other host are
+  unwrapping), at most **10** per message. Only each message's **own
+  text** is searched (`MailText.OwnText(body, SignatureText)`, §19.6;
+  M19 review): links in quoted or forwarded history and in the signature
+  belong to an earlier sender (or are boilerplate) and are ignored. Lines
+  of that own text whose start, after spaces, tabs and no-break spaces,
+  is `>` are dropped before the search too (inline replies keep quoted
+  lines that `OwnText` doesn't cut; decided 2026-11-16, §18). Links to any other host are
   ignored completely: never opened, mapped or fetched, not listed in the
   prompt, no note.
 - **Cloud attachments** (Outlook "Share link" attachments): treated as
@@ -7115,7 +7168,8 @@ its reply target, §23.6). Sources:
   are always read, whoever sent them.
 
 Kinds (`AttachmentKind`): `File` (a by-value attachment), `Email` (an
-attached Outlook item, `olEmbeddeditem`), `Cloud` (a cloud attachment)
+attached Outlook item, `olEmbeddeditem`; named `<cleaned subject>.msg`
+when it has no file name, §8), `Cloud` (a cloud attachment)
 and `Link` (a link in a body). In the prompt, `Cloud` and `Link` items
 are marked as links (§26.6), so the model says "the shared …", and the
 names in the existing `attachments="…"` attributes of `<thread>` and
@@ -7153,7 +7207,15 @@ order; the rest are listed as skipped (`too many files`) without
 reading. The 20 slots count only items that need a read (M19.4): items
 skipped before any read (images, unreadable formats except `.msg`,
 links from outside the organization, unmappable links) are listed but
-use no slot and need no COM call. `.msg` names are always read.
+use no slot and need no COM call. `.msg` names are always read. A name
+with **no extension** is also let through to the COM read (older index
+rows hold an attached item's bare display name, and the COM read knows
+the real type), except the fallback name `attachment-<n>` (§8; `n`
+digits only), which is skipped before any read as
+`Clippy can't read this kind of file`. A COM read that finds neither a
+file nor an attached item (`Failed("UnsupportedAttachmentType")`, §26.9)
+is skipped with the same reason `Clippy can't read this kind of file`
+(not `the file seems damaged`, and no Warning).
 
 ### 26.2 Earlier messages and missing sources
 
@@ -7355,7 +7417,26 @@ by the user (own SMTP or the mailbox's address) or by an address whose
 domain equals the user's own SMTP domain or is a subdomain of it
 (the §19.6 "internal" rule; a sender at a parent domain of the user's
 domain is outside, unlike `DontDraftRules.IsOwnDomain`, M19.4). Otherwise the item is skipped with reason
-`from outside your organization`. Reason: a stranger could otherwise
+`from outside your organization`.
+**Consumer mail providers** (M19 review; decided 2026-11-16, §18): when
+the user's own SMTP domain is a consumer mail domain, it is not "the
+user's organization", and only the user's own address and the shared
+mailbox's own address pass (`DraftAttachmentPlan.MayOpenShared`). A
+domain is a consumer domain (`IsConsumerDomain`; lower-case, trailing
+`.` removed) when it equals, or is a subdomain of, an entry of
+`DraftAttachmentPlan.ConsumerMailDomains`: `outlook.com`, `hotmail.com`,
+`live.com`, `msn.com`, `gmail.com`, `googlemail.com`, `yahoo.com`,
+`icloud.com`, `me.com`, `aol.com`, `proton.me`, `protonmail.com`,
+`web.de`, `hotmail.co.uk`, `hotmail.fr`, `hotmail.de`, `outlook.de`,
+`outlook.fr`, `live.co.uk`, `live.de`, `live.fr`, `yahoo.co.uk`,
+`yahoo.de`, `yahoo.fr`, `ymail.com`, `rocketmail.com`, `mail.com`,
+`t-online.de`, `qq.com`, `163.com`, `126.com`, `yandex.ru`,
+`yandex.com`, `mail.ru`, `comcast.net`, `verizon.net`, `att.net`,
+`fastmail.com`, `zoho.com`; or when it starts with `gmx.`; or when it
+has exactly the shape `<p>.<cc>`, `<p>.co.<cc>` or `<p>.com.<cc>` with
+`<p>` one of `hotmail`, `outlook`, `live`, `yahoo` and `<cc>` two ASCII
+letters (so `outlook.es` and `yahoo.com.br` are consumer, while
+`outlook.contoso.com` is not). Reason: a stranger could otherwise
 send a link to a file in the user's own OneDrive and get its content
 into a draft addressed back to them. Attached files (by value) carry
 only the sender's own content and are always read.
@@ -7482,7 +7563,14 @@ opened and again on the bytes; larger → `Skipped`,
   (`ran out of time for attachments`). Each extraction runs on the thread
   pool with a **10 s** limit (`PerFileTimeout`, `WaitAsync` plus
   cancellation; a runaway extractor is abandoned and bounded by the size
-  and zip limits) → `skipped`, `it took too long`. COM reads use the
+  and zip limits) → `skipped`, `it took too long`. PDF extraction can't
+  be cancelled and has no decompression cap, so at most **one** abandoned
+  (timed-out) PDF run may still be going in the process (M19 review;
+  `PdfAbandonGate`, `PdfAbandonGate.Shared` by default, injectable for
+  tests through the `DraftAttachments` constructor): while it runs,
+  every further PDF (by-value or synced, chosen by the `.pdf` format of
+  its name or path) is skipped as `it took too long` without being read
+  or extracted, and the gate opens again when the abandoned run ends. COM reads use the
   path's priority and the worker's usual timeout. Details (M19.4): for
   links the 10 s limit covers the synced-file read (Files-On-Demand
   hydration) and the extraction; for COM files it covers the
@@ -7808,7 +7896,8 @@ Details (M19.7):
   = 7 or `Type` = `olByReference` (4)), then `Size > maxBytes` →
   `TooLarge(size)`, then by type: `olByValue` (1) → `File`,
   `olEmbeddeditem` (5) → `Item`; any other type (`olOLE`) →
-  `Failed("UnsupportedAttachmentType")`, nothing saved. An unknown
+  `Failed("UnsupportedAttachmentType")`, nothing saved (Core lists it as
+  `Clippy can't read this kind of file`, §26.1). An unknown
   `Size` doesn't stop the save; the length check afterwards applies.
 - The cloud URL is the first of `PR_ATTACH_LONG_FILENAME_W`,
   `PR_ATTACH_LONG_PATHNAME_W` that is a string holding an absolute
@@ -8039,6 +8128,22 @@ present), and an `ai_calls` row is written for it. It has its own
 Claude-only test with its own temp index (so it runs without Outlook),
 and the attachment draft test also asserts its `ai_calls` row.
 
+### 26.13 Known limits (accepted, M19 review)
+
+- A by-value attachment named `*.msg` (a saved `.msg` file, not an
+  `olEmbeddeditem`) is read as a `File`; there is no `.msg` parser, so
+  it ends as `Clippy can't read .msg files`.
+- Cloud attachments whose index name looks like an image, has an
+  unreadable extension or is the `attachment-<n>` fallback are filtered
+  before the COM read (the plan doesn't know yet that they are cloud
+  attachments), so they are listed as images or unreadable files rather
+  than as links.
+- Link text chosen by an outside sender (the `Text <https://…>` name,
+  §26.3) can appear, escaped, in a yellow draft note (§26.7).
+- A forward without any forward header (no `From:`/date block, no
+  marker line) isn't detected as quoted history, so its links count as
+  the forwarder's own text (still subject to the sender rule).
+
 ## 27. Learning from edits and "Don't draft for this sender" (M20)
 
 Added in M20 at the user's request (2026-11-15, user-approved): Clippy
@@ -8083,7 +8188,8 @@ CREATE INDEX ix_ai_edits_sent ON ai_edits(sent);
 ```
 
 - `text` = `EditTexts.Prepare(DraftHtml.ToPlainText(html), null)`: the
-  model's sanitized body after meeting times, without the §25.4 reason
+  model's sanitized body after meeting times (so the recorded text
+  includes any offered meeting times, §21.6), without the §25.4 reason
   line, the §26.7 notes and the signature (M18.3: the worker's `html`
   value passed to `MakePlan`, never `ReplyPlan.HtmlFragment` and never
   `top`). **One text rule on both sides** (M20.1): `EditTexts.Prepare(plain, signatureTexts)`
@@ -8143,13 +8249,17 @@ cycle of the own mailbox, at most every 5 minutes, while
    (`EmailIndex.SentAiRepliesToMatch`) returns only sent rows that have
    at least one candidate (`EXISTS`), so rows without one are never
    rechecked in Core code and can't starve newer rows. At most **500**
-   sent rows per run, newest first (`event_time DESC, id DESC`);
+   sent rows per run, selected newest first (`event_time DESC, id DESC`);
    `in_reply_to` is used as indexed and compared with the trimmed
-   recorded imid, ordinal (case-sensitive).
+   recorded imid, ordinal (case-sensitive). Within one run the selected
+   rows are **processed oldest first per `in_reply_to`** (M20 review:
+   `event_time`, then `id`, ascending), so two AI-drafted replies to the
+   same email that were both sent before a run each match their own
+   draft.
 3. Otherwise the newest candidate (`created DESC, draft_entry_id DESC`)
-   is `matched`; older candidates of the same `source_imid` (`created <=`
-   the sent row's `event_time`) become `superseded` (a replaced draft
-   that wasn't sent). Both lose their text (`text = ''`) in the same
+   is `matched`; the other pending candidates of the same `source_imid`
+   created at or before the sent row's `event_time` (not its match)
+   become `superseded` (a replaced draft that wasn't sent). Both lose their text (`text = ''`) in the same
    transaction; pending rows created after the sent time stay pending.
 4. Compute §27.4 from the candidate's `text` and the sent row's body
    (first 20,000 characters) prepared with `EditTexts.Prepare(body,
