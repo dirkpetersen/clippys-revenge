@@ -187,7 +187,7 @@ public static class RelatedMail
     }
 
     private static bool IsSent(RelatedRow r) =>
-        string.Equals((r.Folder ?? "").Split('\\')[0], "Sent Items", StringComparison.OrdinalIgnoreCase);
+        string.Equals((r.Folder ?? "").Split('\\')[0].Trim(), "Sent Items", StringComparison.OrdinalIgnoreCase);
 
     // Keys carry a type prefix; the held set is Ordinal, so topic and subject keys are lower-cased (OrdinalIgnoreCase).
     private static List<string> Keys(RelatedRow r)

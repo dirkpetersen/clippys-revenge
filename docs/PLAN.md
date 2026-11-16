@@ -184,7 +184,7 @@ v0.0.1 release.
 - [ ] M17.6 End-to-end check by the user: set `CLIPPY_TOKEN` in WSL as the docs say; from WSL ask Claude Code to fetch the PDF attached to email X; it runs the `curl` command and the PDF appears in the working folder and opens; asking it to run the same command again gives a 404; `%LOCALAPPDATA%\ClippysRevenge\links\` is empty afterwards and the log has no `/files/` token. Record the result in the Log `{arch:skip}` (deps: M17.5 released)
 
 ## M18 Smarter AI drafts: facts file, related mail, reason line (SPEC §25, §6.2, §19.1, §19.2, §19.10, §23.7; user-approved 2026-11-15; not picked: structured alternatives, `[? …]` gap placeholders) — deps: M16 done (same prompt and worker code)
-- Review: [ ] pending
+- Review: [x] done (M18 review fixes)
 - Parallel tracks: none. M18.1 → M18.2 → M18.3 run one after another, because all three change `DraftPrompt` and the `DraftWorker` paths. M18.4 (UI) after M18.3. M18.5 (live) and M18.6 (docs) after M18.4, in parallel. M18.7 the user's check last.
 - [x] M18.1 Facts file: `FactsPaths`, template (exact text in the brief), create-once with `facts-state.json`, `FactsFile.ReadForPrompt` (16 KiB, comments/frontmatter stripped, `File`/`Empty`/`None`), `FactsIntro` + `<about_me>` block in drafting, manual, revisit and rescan system prompts, change-only reporting with the pinned texts + tests (§25.1, §25.2) `{arch:brief}` (deps: M16 done)
 - [x] M18.2 Related mail: `EmailIndex.RelatedCandidates` (terms and people queries, window, exclusions), `RelatedMail.Terms`/`Select` (scoring, dedupe, Sent Items slot, top 5, 4,000-char budget), `<related_mail>` block + `RelatedNote` in all four paths, `RelatedMail` setting, new consent text, one-time notice (`RelatedMailNoticeShown`), Debug count log + tests (§25.3, §19.1, §19.10) `{arch:brief}` (deps: M18.1)
@@ -323,3 +323,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-16 M17 review: APPROVED, non-blocking fixes (streaming links count toward limits, Add after Dispose deletes its file, HRESULT instead of COM text, invalid port -> McpException) 4813bc9; 4826 tests (IndexQueryBomb flaky under 3 parallel builds, passes alone)
 2026-11-16 M18.5 live Claude note/facts/related test (47aada8; not run, user runs with CLIPPY_LIVE_CLAUDE=1)
 2026-11-16 M18.6 docs facts/related/reason line (c148097); M19.5 attachments block + notes, skipped list capped at 30 (0a1ca8a); 4893 tests; docs strict build OK
+2026-11-16 M18 review: APPROVED, no blocking; fixed live note length (+1 for the ellipsis), MeetingTimesText spacing, RelatedMail.IsSent trim; localized Drafts/Deleted Items names left for M19.6/M20 check

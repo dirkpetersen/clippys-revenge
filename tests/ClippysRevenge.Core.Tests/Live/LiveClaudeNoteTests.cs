@@ -56,7 +56,7 @@ public sealed class LiveClaudeNoteTests(LiveOutlook fx)
         var reply = DraftReply.Parse(ok.Output);
         Assert.True(reply is not null, "The drafting output doesn't match ReplySchema.");
         Assert.True(reply.Confidence is >= 0.0 and <= 1.0, "The confidence is outside 0..1.");
-        Assert.True(reply.NoteForUser is null || reply.NoteForUser.Length <= DraftModel.MaxNoteChars,
+        Assert.True(reply.NoteForUser is null || reply.NoteForUser.Length <= DraftModel.MaxNoteChars + 1, // Cut adds "…"
             "note_for_user is longer than 160 characters.");
         var noteLen = reply.NoteForUser?.Length.ToString(CultureInfo.InvariantCulture) ?? "none";
         fx.Result("claude-note", $"ok in {AiHtmlChecks.Seconds(ok.Duration)} s, note length {noteLen}, model {model}");

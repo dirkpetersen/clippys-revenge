@@ -159,7 +159,7 @@ public static class AiTabTexts
     public const string ReviseDraftsText = "Update or remove my AI drafts when a thread moves on";
     public const string RelatedMailText = "Include related earlier emails";
     public const string ReasonLineText = "Start each draft with a highlighted note on why it was drafted";
-    public const string MeetingTimesText ="Offer meeting times when an email asks for a meeting";
+    public const string MeetingTimesText = "Offer meeting times when an email asks for a meeting";
     public const string MeetingCountLabel = "Number of times to offer";
     public const string UseLabel = "Use:";
     public const string UseClaudeCode = "Claude Code on this PC (your Claude subscription)";
