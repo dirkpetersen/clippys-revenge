@@ -114,6 +114,157 @@ internal sealed partial class OutlookMail
         }
     }
 
+    /// <summary>SPEC 26.9. Worker thread only. Reads one attachment for an AI prompt; nothing is kept.
+    /// Null when the email can't be opened. COM "Outlook gone" errors propagate (the worker turns them into
+    /// OutlookUnavailableException).</summary>
+    /// <exception cref="ArgumentNullException">app, mailbox, entryId, wanted or files null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">maxBytes &lt;= 0.</exception>
+    internal AiAttachmentRead? ReadAttachmentForAi(Outlook.Application app, string mailbox, string entryId,
+        AttachmentInfo wanted, long maxBytes, AiFiles files)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(mailbox);
+        ArgumentNullException.ThrowIfNull(entryId);
+        ArgumentNullException.ThrowIfNull(wanted);
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
+
+        ResolvedMailItem<Outlook.MailItem> r;
+        try
+        {
+            r = Resolve(app, entryId);
+        }
+        catch (ItemNotFoundException)
+        {
+            return null;
+        }
+
+        var item = r.Item;
+        Outlook.Attachments? atts = null;
+        Outlook.Attachment? att = null;
+        Outlook.PropertyAccessor? pa = null;
+        try
+        {
+            var live = ReadAttachments(item);
+            var m = AttachmentSelection.MatchLive(live, wanted);
+            if (m is null) return new AiAttachmentRead.NotOnEmail();
+            atts = item.Attachments;
+            att = atts[m.Position];
+            var type = (int)att.Type;
+            pa = ComSafe.Try(() => att.PropertyAccessor);
+            var method = pa is null ? null : ComSafe.Try(() => pa.GetProperty(AiAttachmentCom.PrAttachMethod));
+            if (AiAttachmentCom.IsCloud(method, type))
+            {
+                var longName = pa is null ? null : ComSafe.Try(() => pa.GetProperty(AiAttachmentCom.PrAttachLongFileName));
+                var longPath = pa is null ? null : ComSafe.Try(() => pa.GetProperty(AiAttachmentCom.PrAttachLongPathName));
+                return new AiAttachmentRead.Cloud(AiAttachmentCom.CloudUrl(longName, longPath),
+                    ComSafe.Try(() => att.DisplayName) ?? m.FileName);   // nothing saved
+            }
+            var size = ComSafe.Try<long?>(() => (long)att.Size);
+            if (size is { } s && s > maxBytes) return new AiAttachmentRead.TooLarge(s);   // nothing saved
+            return type switch
+            {
+                AiAttachmentCom.OlByValue => ReadFileForAi(att, maxBytes, files),
+                AiAttachmentCom.OlEmbeddedItem => ReadItemForAi(app, att, maxBytes, files),
+                _ => new AiAttachmentRead.Failed("UnsupportedAttachmentType"),
+            };
+        }
+        catch (Exception ex) when ((ex is COMException or IOException or UnauthorizedAccessException)
+                                   && !ComErrors.IsOutlookGone(ex))
+        {
+            // AiFolderUnusableException is an IOException. Only the type name leaves this method.
+            return new AiAttachmentRead.Failed(ex.GetType().Name);
+        }
+        finally
+        {
+            Release(pa);
+            Release(att);
+            Release(atts);
+            Release(item);
+        }
+    }
+
+    /// <summary>The one SaveAsFile of the AI read path (SPEC 26.11: three in this file). Returns the saved length.</summary>
+    private static long SaveForAi(Outlook.Attachment att, string path)
+    {
+        att.SaveAsFile(path);
+        return new FileInfo(path).Length;
+    }
+
+    private static AiAttachmentRead ReadFileForAi(Outlook.Attachment att, long maxBytes, AiFiles files)
+    {
+        var path = files.PrepareTempPath(item: false);
+        try
+        {
+            var len = SaveForAi(att, path);
+            if (len > maxBytes) return new AiAttachmentRead.TooLarge(len);
+            return new AiAttachmentRead.File(File.ReadAllBytes(path));
+        }
+        finally
+        {
+            files.Discard(path);
+        }
+    }
+
+    private static AiAttachmentRead ReadItemForAi(Outlook.Application app, Outlook.Attachment att, long maxBytes, AiFiles files)
+    {
+        var path = files.PrepareTempPath(item: true);
+        Outlook.NameSpace? ns = null;
+        object? opened = null;
+        try
+        {
+            var len = SaveForAi(att, path);
+            if (len > maxBytes) return new AiAttachmentRead.TooLarge(len);
+            ns = app.Session;
+            opened = ns.OpenSharedItem(path);
+            if (opened is not Outlook.MailItem mi) return new AiAttachmentRead.Failed("NotAMailItem");
+            try
+            {
+                var subject = ComSafe.Try(() => mi.Subject);
+                var name = ComSafe.Try(() => mi.SenderName);
+                var address = ComSafe.Try(() => mi.SenderEmailAddress);   // raw, no Exchange resolution
+                var sent = OutlookDates.FromLocal(ComSafe.Try(() => mi.SentOn), TimeZoneInfo.Local);
+                var body = ComSafe.Try(() => mi.Body);
+                var names = new List<string>();
+                Outlook.Attachments? inner = null;
+                try
+                {
+                    inner = mi.Attachments;
+                    var count = Math.Min(inner.Count, AiAttachmentCom.MaxItemAttachmentNames);
+                    for (var i = 1; i <= count; i++)
+                    {
+                        var a = inner[i];
+                        try
+                        {
+                            names.Add(InlineAttachments.FileNameFor(
+                                ComSafe.Try(() => a.FileName), ComSafe.Try(() => a.DisplayName), i));
+                        }
+                        finally
+                        {
+                            Release(a);
+                        }
+                    }
+                }
+                finally
+                {
+                    Release(inner);
+                }
+                return AiAttachmentCom.Item(subject, name, address, sent, body, names);
+            }
+            finally
+            {
+                ComSafe.Try(() => { mi.Close(Outlook.OlInspectorClose.olDiscard); return 0; });
+            }
+        }
+        finally
+        {
+            // Close (above), then release, then discard: Outlook holds the .msg open until released.
+            Release(opened);
+            Release(ns);
+            files.Discard(path);
+        }
+    }
+
     private static void DeleteQuietly(string path)
     {
         try
