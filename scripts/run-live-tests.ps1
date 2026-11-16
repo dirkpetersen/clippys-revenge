@@ -9,6 +9,8 @@
   nothing was sent. Results and leftovers are printed at the end.
   M16: one AI reply draft is moved to Deleted Items by Clippy's guarded move and then removed; one test waits two minutes.
   M17: one attachment download link is made on a private loopback port (not your running Clippy) and fetched once; its temp file is deleted.
+  M19: AI drafts read a test PDF, Word file and attached email; with a synced business OneDrive, two test files are written to a clippy-live-... folder there and removed. Optional: CLIPPY_LIVE_CLOUD_SUBJECT=<subject starting with clippy-live> probes one email you prepared with a OneDrive share link.
+  CLIPPY_LIVE_ONEDRIVE=1 (opt-in, with -Claude): also runs the synced-OneDrive test. It writes two small files into a clippy-live-... folder in your own business OneDrive and deletes them again; the deleted files stay in your OneDrive recycle bin. Without it that test skips before touching anything.
 
   Exit codes: 0 ok; 1 test or build failures; 2 preconditions; 3 Outlook not responding;
   4 timeout; 5 only leftovers.
