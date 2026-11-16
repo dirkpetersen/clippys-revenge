@@ -85,7 +85,7 @@ internal static class LiveObsoleteDrafts
     public static Task TagAsync(LiveOutlook fx, string entryId) =>
         fx.RunAsync("tagging the draft", app => LiveDrafts.ReadDraft(fx, app, "", entryId, tag: true));
 
-    /// <summary>Worker thread. The eight fingerprint inputs of the item, read like OutlookMail.ReadDraftFingerprint.</summary>
+    /// <summary>Worker thread. The ten fingerprint inputs of the item, read like OutlookMail.ReadDraftFingerprint.</summary>
     public static FingerprintFields ReadFields(Outlook.MailItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -123,6 +123,8 @@ internal static class LiveObsoleteDrafts
             ("html", item.HTMLBody),
             ("categories", item.Categories),
             ("importance", ((int)item.Importance).ToString(CultureInfo.InvariantCulture)),
+            ("from", item.SentOnBehalfOfName),
+            ("sensitivity", ((int)item.Sensitivity).ToString(CultureInfo.InvariantCulture)),
             ("attachments", string.Join("\n", names)),
         };
         var map = new Dictionary<string, string>(StringComparer.Ordinal);

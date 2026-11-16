@@ -7,9 +7,11 @@ namespace ClippysRevenge.Core;
 
 /// <summary>The saved draft's properties as read through COM (SPEC 23.4). Null means "".</summary>
 /// <param name="Importance">(int)MailItem.Importance.</param>
+/// <param name="From">MailItem.SentOnBehalfOfName (the From address); null = unset = "".</param>
+/// <param name="Sensitivity">(int)MailItem.Sensitivity.</param>
 /// <param name="AttachmentNames">File names in position order; null = none; a null entry is "".</param>
 public sealed record DraftFingerprintInput(string? Subject, string? To, string? Cc, string? Bcc, string? HtmlBody,
-    string? Categories, int Importance, IReadOnlyList<string?>? AttachmentNames);
+    string? Categories, int Importance, string? From, int Sensitivity, IReadOnlyList<string?>? AttachmentNames);
 
 /// <summary>SPEC 23.4 unedited test. Pure, thread-safe.</summary>
 public static class DraftFingerprint
@@ -21,7 +23,9 @@ public static class DraftFingerprint
     public static string Compute(DraftFingerprintInput input) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Canonical(input))));
 
-    /// <summary>The hashed text: name=len:value lines, in a fixed order. Exposed for tests.</summary>
+    /// <summary>The hashed text: name=len:value lines, in this fixed order: subject, to, cc, bcc, html, categories,
+    /// importance, from, sensitivity, attachments. Null is "", integers are invariant decimal, value length is in
+    /// UTF-16 code units. Exposed for tests.</summary>
     /// <exception cref="ArgumentNullException">input is null.</exception>
     internal static string Canonical(DraftFingerprintInput input)
     {
@@ -34,6 +38,8 @@ public static class DraftFingerprint
         Add(sb, "html", input.HtmlBody);
         Add(sb, "categories", input.Categories);
         Add(sb, "importance", input.Importance.ToString(CultureInfo.InvariantCulture));
+        Add(sb, "from", input.From);
+        Add(sb, "sensitivity", input.Sensitivity.ToString(CultureInfo.InvariantCulture));
         Add(sb, "attachments", input.AttachmentNames is null ? "" : string.Join("\n", input.AttachmentNames.Select(n => n ?? "")));
         return sb.ToString();
     }

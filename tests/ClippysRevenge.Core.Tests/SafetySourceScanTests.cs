@@ -438,7 +438,7 @@ public class SafetySourceScanTests
     public void OpenDraftInvite_WritesNothing()
     {
         var f = Scan.Value.Files.Single(x => x.Rel == OpenInviteApp);
-        Assert.DoesNotMatch(@"\.\s*(Save|Send|Close|Move|Delete|PermanentDelete|Copy)\s*\(", f.Code);
+        Assert.DoesNotMatch(@"\.\s*(Save|Send|Close|Move|MoveTo|Delete|PermanentDelete|Copy)\s*\(", f.Code);
         Assert.DoesNotMatch(@"\b\w+\s*\.\s*\w+\s*=(?![=>])", f.Code);
         Assert.Contains("Display(false)", f.Code);
     }
@@ -480,17 +480,23 @@ public class SafetySourceScanTests
 
     private static List<(string Rel, string Code)> RealFiles() => Scan.Value.Files.Select(f => (f.Rel, f.Code)).ToList();
 
-    /// <summary>Outlook .Move( hits in App code (File./Directory. exempt), as "rel:line: match".</summary>
+    /// <summary>Any move-like call: .Move( / ?.Move( / .MoveTo( (whitespace-tolerant) or InvokeMember("Move"/"MoveTo".</summary>
+    internal const string MoveLikePattern = @"\.\s*Move(To)?\s*\(|InvokeMember\s*\(\s*""Move(To)?""";
+
+    private static readonly Regex AppMoveRegex = new(
+        @"(?<recv>\w*)\s*\??\s*\.\s*Move(To)?\s*\(\s*\w*|InvokeMember\s*\(\s*""Move(To)?""\s*", RegexOptions.CultureInvariant);
+
+    /// <summary>Outlook move calls in App code (File./Directory. exempt by receiver token), as "rel:line: match".</summary>
     internal static List<string> AppMoveHits(IEnumerable<(string Rel, string Code)> files)
     {
-        var re = new Regex(@"\b\w+\s*\.\s*Move\s*\(\s*\w*");
         var hits = new List<string>();
         foreach (var (rel, code) in files)
         {
             if (!rel.StartsWith(AppPrefix, StringComparison.Ordinal)) continue;
-            foreach (Match m in re.Matches(code))
+            foreach (Match m in AppMoveRegex.Matches(code))
             {
-                if (Regex.IsMatch(m.Value, @"^(File|Directory)\s*\.")) continue;
+                // Only .NET IO calls by receiving token are exempt; casts, indexers and ?. receivers are not.
+                if (m.Groups["recv"].Value is "File" or "Directory") continue;
                 hits.Add($"{rel}:{LineOf(code, m.Index)}: {m.Value.Trim()}");
             }
         }
@@ -507,7 +513,7 @@ public class SafetySourceScanTests
     internal static List<string> ObsoleteDraftViolations(string code)
     {
         var v = new List<string>();
-        var moves = Regex.Matches(code, @"\.\s*Move\s*\(");
+        var moves = Regex.Matches(code, MoveLikePattern);
         if (moves.Count != 1) v.Add($"Expected exactly one .Move( but found {moves.Count}.");
         var deleted = Regex.Matches(code, @"olFolderDeletedItems").Count;
         if (deleted != 1) v.Add($"Expected exactly one olFolderDeletedItems but found {deleted}.");
@@ -620,6 +626,34 @@ public class SafetySourceScanTests
         var files = RealFiles();
         files.Add((AppPrefix + "Other.cs", "x.Move(deletedItems);"));
         Assert.Equal(3, AppMoveHits(files).Count);
+    }
+
+    [Theory]
+    [InlineData("((Outlook.MailItem)o).Move(f);")]
+    [InlineData("x?.Move(f);")]
+    [InlineData("items[1].Move(f);")]
+    [InlineData("folder.MoveTo(f);")]
+    [InlineData("x . Move ( f );")]
+    [InlineData("x\r\n    .Move(f);")]
+    [InlineData("var r = o.GetType().InvokeMember(\"Move\", flags, null, o, args);")]
+    [InlineData("o.GetType().InvokeMember( \"MoveTo\" , flags, null, o, args);")]
+    [InlineData("Foo.File.Move2(a); item.Move(f);")]
+    public void MoveScan_CatchesEveryPlantedForm(string code)
+    {
+        Assert.NotEmpty(AppMoveHits([(AppPrefix + "Other.cs", code)]));
+        Assert.Matches(MoveLikePattern, code);
+        Assert.NotEmpty(AiForbiddenHits(code));
+    }
+
+    [Theory]
+    [InlineData("File.Move(a, b, true);")]
+    [InlineData("System.IO.File.Move(a, b);")]
+    [InlineData("Directory.Move(a, b);")]
+    [InlineData("Directory . Move (a, b);")]
+    public void MoveScan_ExemptsDotNetIo(string code)
+    {
+        Assert.Empty(AppMoveHits([(AppPrefix + "Other.cs", code)]));
+        Assert.Empty(AiForbiddenHits(code));
     }
 
     private const string CompliantMethod = """
@@ -738,7 +772,7 @@ public class SafetySourceScanTests
         var assigns = Regex.Matches(f.Code, AnyAssign);
         var m = Assert.Single(assigns);
         Assert.Equal("Categories", m.Groups[1].Value);
-        Assert.DoesNotMatch(@"\.\s*(Close|Display|Send|Move|Delete|PermanentDelete)\s*\(", f.Code);
+        Assert.DoesNotMatch(@"\.\s*(Close|Display|Send|Move|MoveTo|Delete|PermanentDelete)\s*\(", f.Code);
     }
 
     [Fact]
@@ -888,7 +922,7 @@ public class SafetySourceScanTests
 
     private static readonly Regex CredentialLiteral = new(@"\.credentials|claudeAiOauth|oauthAccount|sk-ant-oat", RegexOptions.IgnoreCase);
 
-    private static readonly Regex AiForbiddenCall = new(@"\.\s*(Send|Display|Move)\s*\(|\bDelete\s*\(|\bPermanentDelete\s*\(");
+    private static readonly Regex AiForbiddenCall = new(@"\.\s*(Send|Display|Move|MoveTo)\s*\(|InvokeMember\s*\(\s*""(Send|Move|MoveTo)""|\bDelete\s*\(|\bPermanentDelete\s*\(");
 
     private static bool Hit(Regex re, string s) => re.IsMatch(s);
 
