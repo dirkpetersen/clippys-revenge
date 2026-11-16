@@ -41,8 +41,9 @@ sent to Claude, and how to set it up and fix it.
 - **Nothing is ever sent.** Clippy has no send function at all, and the model has no
   tools: its answer can only become a saved draft.
 
-When a pass creates drafts, the tray shows a balloon: "It looks like you got mail. I
-drafted 2 replies — they're in your Drafts folder." Click it to open Drafts.
+When a pass creates or updates drafts, the tray shows a balloon: "It looks like you got
+mail. I drafted 2 replies — they're in your Drafts folder." It counts new and updated
+drafts together. Click it to open Drafts.
 
 ## Set up
 
@@ -56,16 +57,19 @@ Uses your own Claude Code, signed in with your Claude plan.
 2. Open a terminal, run `claude` and sign in. **You sign in yourself.** Clippy never
    signs in for you, never offers a claude.ai login, and never reads your Claude
    credentials. It only asks `claude auth status --json` whether you are signed in.
-3. In the tray, right-click, **AI drafts**, **AI drafts settings...**. Under **Use**,
+3. In the tray, right-click, **AI drafts**, **AI drafts settings…**. Under **Use**,
    keep **Claude Code on this PC (your Claude subscription)** and press **Check**.
    The status line should show a check mark, for example
-   `✓ Claude Code 2.1.323 · signed in (<sign-in method>)`.
+   `✓ Claude Code 2.1.323 · signed in (<sign-in method>, <plan>)`, with what
+   `claude auth status` reports in the brackets.
 
 Clippy runs `claude` headless, without a shell, with no tools for the model, and
-never with `--bare`. It finds `claude.exe` on your `PATH`, in
-`%USERPROFILE%\.local\bin`, or an npm install of Claude Code. Script shims
-(`.cmd`, `.bat`, `.ps1`) are never run. If yours is somewhere else, set **Claude Code
-path** to the full path of `claude.exe`.
+never with `--bare`. It looks for `claude.exe` on your `PATH`, then in
+`%USERPROFILE%\.local\bin`, then for an npm install of Claude Code
+(`%APPDATA%\npm\node_modules\@anthropic-ai\claude-code\cli.js`, run with the
+`node.exe` on your `PATH`). Script shims (`.cmd`, `.bat`, `.ps1`) are never run. If
+yours is somewhere else, set **Claude Code path (optional)** to the full path of
+`claude.exe` or of Claude Code's `cli.js`.
 
 ### Anthropic API key
 
@@ -141,13 +145,13 @@ the API:
 | The email being answered | Sender, recipients, date, subject and the **full body including quoted history**, cut at 20,000 characters |
 | Thread excerpts | Up to 8 earlier messages of the same conversation from your local index, your own text only (quoted history and signatures cut), each cut at 4,000 characters |
 | Related earlier emails | Up to 5 earlier emails from the same mailbox that may relate to this one, own text only, at most 4,000 characters in all. Only while [Include related earlier emails](#related-earlier-mail) is on |
-| Your earlier draft | Only when Clippy [re-checks an outdated draft](#outdated-drafts): the text of Clippy's own earlier draft and the newer messages of the thread. Nothing beyond what the consent text already names |
+| Your earlier draft | Only when Clippy [re-checks an outdated draft](#outdated-drafts): the text of Clippy's own earlier draft (cut at 4,000 characters) and the newer messages of the thread. Nothing beyond what the consent text already names |
 | Attachment **names** | For the email and the thread messages |
 | Attachment **text** | Text extracted from the attachments of the email and its thread, and from OneDrive/SharePoint files linked in those emails that are already synced to your PC: at most 40,000 characters in all, 20,000 per file. Only while [Read attachments and synced shared files for drafts](#attachments-and-shared-files) is on. Sent for that one draft, never stored |
 | Your name and address, today's date | So the draft is addressed and dated correctly |
 | Your facts file | What you wrote in [Facts about you](#facts-about-you), without the comments. Only when you filled something in |
 | Your writing style guide | The skill described [below](#your-writing-style), which contains short examples of your sent mail with addresses, links and phone numbers removed. Its meeting-times section is left out |
-| About 150 to 300 samples of your sent mail | Sent once a week, with addresses, links and phone numbers removed, to write the style guide |
+| Up to 200 samples of your sent mail | From the last 12 months, your own text only, each cut at 1,500 characters. Sent once a week, with addresses, links and phone numbers removed, to write the style guide |
 | Up to 20 pairs of an AI draft and what you sent | Only with the writing-style update (weekly, or when you press **Regenerate**), and only when at least 3 pairs exist. Each side is your own text without the quoted email or signature, with addresses, links and phone numbers removed, at most 1,500 characters. Only while [Learn from how I edit Clippy's drafts](#learning-from-how-you-edit-drafts) is on |
 
 **Never sent:**
@@ -188,7 +192,7 @@ first rule that matches wins. No Claude call is made for skipped mail.
 | **Only when I'm in To or CC** | On by default. Your address isn't in To or CC. Mail sent to an alias address is skipped |
 | Already answered | You or Clippy already replied, or a draft reply already exists |
 | Not normal mail | Meeting requests, receipts, encrypted mail and similar |
-| Newsletters and lists | `List-Id`, `List-Unsubscribe` or bulk `Precedence` headers |
+| Newsletters and lists | A `List-Id` or `List-Unsubscribe` header, or `Precedence` `bulk`, `list` or `junk` |
 | Automatic mail | An `Auto-Submitted` header other than `no` |
 
 **Never draft for** and **Only draft for** take one entry per line: an address
@@ -301,8 +305,9 @@ edited the **Never draft for** box in that window.
 Select one email in Outlook and choose **Draft a reply to the selected email** from
 the tray's **AI drafts** menu. This works even when automatic drafting is off, still
 needs your consent and a ready Claude, and counts toward the daily limit. It skips
-the rules and the confidence check, because you asked for it. Drafts made this way
-are never re-checked later: see [Outdated drafts](#outdated-drafts).
+the rules and the confidence check, because you asked for it. When the draft is saved,
+a balloon says `It looks like you want a reply. It's in your Drafts folder.` Drafts
+made this way are never re-checked later: see [Outdated drafts](#outdated-drafts).
 
 ## Outdated drafts
 
@@ -340,8 +345,8 @@ Clippy checks the draft again. It acts only if all of these are true:
 
 - the draft carries Clippy's own AI marker (`ClippyDraft = ai`);
 - it is **unchanged** since Clippy saved it. Clippy compares a fingerprint of the
-  subject, recipients, text, categories, importance and attachment names, so any edit
-  you make, even one letter, counts;
+  subject, recipients, text, categories, importance, sensitivity, sending account and
+  attachment names, so any edit you make, even one letter, counts;
 - it is **unsent** and still in your **Drafts** folder;
 - it is **not open** in a window (or as an inline reply in the reading pane);
 - **you haven't replied** in the thread, and you haven't sent the draft itself.
@@ -384,7 +389,7 @@ a fresh draft first and then move the old one.
 
 ## Rescan emails from the last 24 hours
 
-In the tray, **AI drafts**, **Rescan emails from the last 24 hours...** runs the
+In the tray, **AI drafts**, **Rescan emails from the last 24 hours…** runs the
 drafting workflow once over the last day of mail, so you can watch it work. Use it to
 catch up after Claude was unavailable, or after you changed the rules.
 
@@ -754,10 +759,10 @@ never read.
 |---|---|---|
 | PDF | `pdf` | Text of the first **30 pages**. No scans: a PDF without text is reported as maybe a scan (no OCR). A PDF that needs a password is skipped |
 | Word | `docx`, `docm`, `dotx` | Paragraphs and tables (cells separated by tabs). Not headers, footnotes or comments |
-| Excel | `xlsx`, `xlsm`, `xltx` | The first **5 sheets**, up to **200 rows** and **30 columns** each, as tab-separated lines under the sheet name. Cells are cut at 200 characters. Dates show as `yyyy-MM-dd`. Formulas show their last calculated value |
+| Excel | `xlsx`, `xlsm`, `xltx` | The first **5 sheets**, up to **200 rows** and **30 columns** each, as tab-separated lines under the sheet name. Cells are cut at 200 characters. Dates show as `yyyy-MM-dd` (`yyyy-MM-dd HH:mm` when the cell has a time). Formulas show their last calculated value |
 | PowerPoint | `pptx`, `pptm`, `ppsx` | The first **60 slides**: the text of each slide, then its speaker notes |
 | Text | `txt`, `text`, `csv`, `tsv`, `md`, `markdown`, `log`, `json`, `xml`, `ics`, `vcf` | The first 1 MiB. A file with binary content is reported as damaged |
-| Web page | `html`, `htm` | The visible text. Scripts and styles are dropped |
+| Web page | `html`, `htm` | The visible text of the first 1 MiB. Scripts and styles are dropped |
 | Saved email | `eml` | Subject, sender, date and the text part |
 | Outlook message | `msg` and attached emails | Read through Outlook itself, as described above |
 | Not read | `doc`, `dot`, `xls`, `xlt`, `xlsb`, `ppt`, `pps`, `rtf`, `odt`, `ods`, `odp`, `pages`, `numbers`, `key`, `zip`, `7z`, `rar` | Skipped, with a yellow note. Save as `docx`, `xlsx` or `pdf` to have it read |
@@ -786,10 +791,13 @@ These limits are fixed. There is no setting for them.
    word, for example "see the budget" for `budget.xlsx`;
 3. everything else in the thread, newest message first.
 
-The same file sent twice (same name and size) counts once. When the total text is more
-than 40,000 characters, Clippy shortens the **later tiers first**, oldest first. Files
-in the first tier are only shared down, and each keeps at least 2,000 characters while
-there is room. A file that gets nothing is skipped as too much text for one draft.
+The same file sent twice (same name and size) counts once. The 40,000 characters go to
+the tiers in order: tier 1 first, then tier 2, then tier 3. When the files of a tier
+don't all fit in what is left, they are cut to the same length. If that length would be
+under 2,000 characters, each file of the tier gets 2,000 in turn (in tier 3, newest
+message first) until fewer than 2,000 are left, and the rest are skipped as too much
+text for one draft. So the oldest files of the thread go first, and the email's own
+files are only cut, never dropped while 2,000 characters per file are left.
 
 Clippy tells the model which files were not read and why, so a reply that depends on
 one gets a placeholder like `[[check budget.xlsx]]` instead of an invented answer. The
@@ -978,8 +986,9 @@ Deleted Items. See [Outdated drafts](#outdated-drafts).
 Clippy learns your style from your own sent mail and keeps it in a Claude Code
 **skill** file, `my-email-style`.
 
-- It samples about 200 emails from the last 12 months of your Sent Items, a mix of
-  internal and external, short and long, newest first, at most 3 per recipient.
+- It samples up to 200 emails from the last 12 months of your Sent Items, a mix of
+  internal and external, short and long, newest first, at most 3 per recipient, each
+  cut at 1,500 characters.
 - It uses only **your own text**. Quoted history and signatures are cut, and
   automatic replies and meeting responses are left out.
 - **Mail Clippy drafted for you is excluded** from the samples, even after you edited
@@ -1043,25 +1052,30 @@ toward the daily limit. In Settings you also have **View** (read-only), **Regene
 ### The meeting-times section of the skill
 
 The end of `SKILL.md` always has a section, **Offering meeting times**, written by
-Clippy between the markers `<!-- clippy:meeting-times v1 -->` and
+Clippy between the markers `<!-- clippy:meeting-times v2 -->` and
 `<!-- /clippy:meeting-times -->`. It teaches your **interactive** Claude Code
 sessions the same habit: to get times from [`find_free_times`](tools.md#find_free_times)
 instead of making them up, to paste its `offer_text` unchanged, one option per line,
 and to set `offer_cet` when writing to someone in Europe. It also says to leave the
-options in the ranked order, to say that you will suggest times if none are found,
-and not to book anything unless you ask. A short paragraph on how **you** usually
+options in the ranked order and to say that you will suggest times if none are found.
+When you pick one of the offered times (for example "make the invite for option 2"),
+the session is to call [`create_meeting_draft`](tools.md#create_meeting_draft) with
+`reply_to_id` set to the email that asked for the meeting, and never to create an
+invite unless you ask. A short paragraph on how **you** usually
 introduce meeting options is taken from your own sent mail.
 
 - A **new or regenerated** skill always gets the section.
-- A skill written **before** this feature gets the section added automatically, once,
-  when Clippy starts, with no Claude call, as long as **you haven't edited the file**.
-  The Activity window then shows `writing style: added how to offer meeting times`.
+- A skill with no section, or with an older version of it (`v1`), gets the current
+  section automatically, once, when Clippy starts, with no Claude call, as long as
+  **you haven't edited the file**. The Activity window then shows `writing style: added
+  how to offer meeting times`.
 - If you **edited** the skill, or wrote a `my-email-style` skill yourself, Clippy
   doesn't touch it. **Regenerate** replaces it, including the new section.
 - Changing anything inside the section counts as editing the file, like any other
   change.
 - The AI drafting prompt leaves the section out. It is meant for Claude Code sessions
   with tools, not for drafting.
+
 !!! warning "Security note: this skill is also loaded by Claude Code"
     `%USERPROFILE%\.claude\skills\my-email-style\SKILL.md` is a *user-level Claude
     Code skill*. That means your **interactive** Claude Code sessions, the ones with
@@ -1099,8 +1113,12 @@ email**, a [rescan](#rescan-emails-from-the-last-24-hours) or a replacement in t
 [outdated-draft check](#outdated-drafts)), it keeps a copy of the draft's text in its
 own local index:
 
-- Only **the reply text Claude wrote, after Clippy added the meeting times** (the text is taken at the end, just before the draft is saved). The yellow [reason line](#the-reason-line), the
-  yellow [notes](#the-yellow-notes) and your signature are left out.
+- Only **the reply text**: what Claude wrote, including any
+  [meeting times](#meeting-times) Clippy offered in it (the text is taken just before
+  the draft is saved). The yellow [reason line](#the-reason-line), the yellow
+  [notes](#the-yellow-notes) and your signature are left out. So deleting or changing
+  an offered time before you send counts as an edit. The style update is told to
+  ignore one-off content such as dates, so this doesn't change your style.
 - Addresses, links and phone numbers are replaced by `<email>`, `<link>` and `<phone>`,
   and the text is cut to **1,500 characters**.
 - A copy is kept only when the setting is on, the email has an internet message id (so
@@ -1126,17 +1144,11 @@ matched to a recorded draft when:
 - its "in reply to" id equals the internet message id of the email the draft answered, and
 - the draft was recorded before the message was sent.
 
-If Clippy drafted a reply to the same email more than once (for example, a replaced
-draft), **the newest draft wins**: it is marked as matched, and the older ones for that
-email become *superseded*, because you didn't send them. Both lose their text. A reply
-that you wrote from scratch has no marker and is never matched. Sent mail without any
+Each sent reply is matched with the draft it came from. A recorded draft for that email
+that you never sent (for example one that Clippy replaced) loses its text. A reply that
+you wrote from scratch has no marker and is never matched. Sent mail without any
 recorded draft (for example, from before version 0.1.1, or when the draft used
 attachment text) is simply ignored.
-
-!!! note "Known limit"
-    If an outdated-draft check couldn't move your old draft and you send the **old**
-    one, Clippy compares it with the newer recorded text. That gives one noisy pair,
-    which ages out with the others.
 
 ### Sent unchanged, or edited
 
@@ -1240,10 +1252,11 @@ then press **Check**.
 
 | Message | What to do |
 |---|---|
-| `✗ Claude Code wasn't found. Install it from https://claude.com/claude-code, sign in once in a terminal, then press Check.` | Install Claude Code, or set **Claude Code path** to `claude.exe`. A `.cmd` or `.ps1` shim isn't supported |
+| `✗ Claude Code wasn't found. Install it from https://claude.com/claude-code, sign in once in a terminal, then press Check.` | Install Claude Code, or set **Claude Code path (optional)** to `claude.exe` or `cli.js`. A `.cmd`, `.bat` or `.ps1` shim isn't supported |
 | `✗ Claude Code <version> is too old for AI drafts. Run "claude update", then press Check.` | Run `claude update` in a terminal |
 | `✗ Claude Code is installed but not signed in. Open a terminal, run claude and sign in, then press Check.` | Run `claude` and sign in yourself. Clippy can't do it |
-| `✗ Claude Code didn't answer (version)` and similar (`help`, `auth status`) | Press **Check** again. If it repeats, run `claude --version` in a terminal |
+| `✗ Claude Code didn't answer (version). Press Check to try again.`, also with `help` or `auth status` | Press **Check** again. If it repeats, run `claude --version` in a terminal |
+| `✗ The check didn't finish. Press Check to try again.` | Something unexpected went wrong during the check. Press **Check** again |
 | `✓ Claude Code <version> · signed in (...)` plus `· update Claude Code for best results` | Works. Updating lets Clippy keep your own CLAUDE.md, hooks and plugins out of drafting calls |
 | `✗ No API key saved.` | Paste your key and press **Save key** |
 | `✗ The API key was rejected (HTTP 401).` | The key is wrong or revoked. Save a new one |
@@ -1262,8 +1275,12 @@ then press **Check**.
 | `AI drafts: a reply draft couldn't be saved in Outlook. I'll try again later.` | Check that Outlook is running and Drafts is available |
 | `Select one email in Outlook first.` | Manual draft: select one email |
 | `That email isn't in your mailbox or an enabled shared mailbox.` | Manual draft: turn the shared mailbox on first |
-| `Claude isn't ready: ...` | Manual draft: fix the status shown, then try again |
+| `That mailbox isn't indexed yet.` | Manual draft: wait until the shared mailbox's first backfill is done |
+| `Claude isn't ready: ...` | Manual draft or rescan: fix the status shown, then try again |
+| `Today's AI draft limit (30) is used up.` | Manual draft or rescan: raise **Daily limit** or wait until tomorrow |
 | `I couldn't draft that reply: ...` | The reason follows, for example Claude's usage limit, or that Outlook isn't running |
+| `I couldn't start the rescan: ...` | The reason follows. Fix it and rescan again |
+| `Couldn't change AI drafts: ...` | A tray item couldn't save the settings. The reason follows |
 | `AI drafts need the email index, which couldn't be opened. Check the tray icon for the reason.` | The index failed to open. See [Troubleshooting](troubleshooting.md) |
 | `Clippy doesn't know your email address yet. Start Outlook, wait for the first sync, then try again.` | Needed to write the style. Start Outlook and let it sync |
 | `Only 12 sent emails found. Clippy needs 20.` | Not enough sent mail to learn from yet |
