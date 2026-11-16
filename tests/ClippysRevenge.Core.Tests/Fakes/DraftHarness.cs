@@ -109,7 +109,29 @@ internal sealed class DraftHarness : IDisposable
         return e;
     }
 
+    public string Dir => _dir;
+
     public AiDecision? Decision(string id, string mailbox = "") => Indexes.For(mailbox).GetDecision(id);
+
+    /// <summary>The ai_revisits rows of a mailbox, oldest first.</summary>
+    public IReadOnlyList<(string DraftId, string Outcome, int Calls)> RevisitRows(string mailbox = "")
+    {
+        Indexes.For(mailbox);
+        var rows = new List<(string, string, int)>();
+        var cs = new SqliteConnectionStringBuilder { DataSource = MailboxIndexes.PathFor(Dir, mailbox), Pooling = false }.ToString();
+        using var conn = new SqliteConnection(cs);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT draft_entry_id, outcome, model_calls FROM ai_revisits ORDER BY id";
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) rows.Add((r.GetString(0), r.GetString(1), r.GetInt32(2)));
+        return rows;
+    }
+
+    /// <summary>Tracks an AI draft in ai_drafts (state open).</summary>
+    public void Track(string draftId, string sourceId, DateTimeOffset created, string fingerprint, DateTimeOffset checkedUpTo,
+        string mailbox = "") =>
+        Indexes.For(mailbox).RecordAiDraft(draftId, sourceId, created, fingerprint, checkedUpTo, created);
 
     public IReadOnlyList<ActivityEvent> Events(ActivityKind kind) => Hub.GetEvents().Where(e => e.Kind == kind).ToList();
 

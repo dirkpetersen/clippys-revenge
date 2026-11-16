@@ -5,7 +5,8 @@ public static class DraftRuleIds
 {
     public const string Self = "self", NoReply = "no_reply", AutoSubject = "auto_subject", Excluded = "excluded",
         NotIncluded = "not_included", NotDirect = "not_direct", Replied = "replied", Gone = "gone",
-        NotNote = "not_note", List = "list", Auto = "auto", DraftExists = "draft_exists";
+        NotNote = "not_note", List = "list", Auto = "auto", DraftExists = "draft_exists",
+        Revisited = "revisited";
 }
 
 /// <summary>What one COM work item learned about a candidate (SPEC 19.7, 19.9). Plain data, no COM objects.</summary>

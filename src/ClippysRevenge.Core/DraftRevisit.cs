@@ -16,6 +16,58 @@ public static class DraftRevisit
     public const int MaxRevisitsPerMailbox = 10;    // SPEC 23.2
     public const int MaxAttempts = 3;               // SPEC 23.6 step 5 give-up
 
+    /// <summary>Rows fetched with EmailIndex.Thread for a revisit prompt before PromptThread filters them.</summary>
+    public const int ThreadFetch = 50;
+
+    /// <summary>True when the trimmed address equals userSmtp or mailboxSmtp (OrdinalIgnoreCase). Null/blank gives false.</summary>
+    public static bool IsOwnAddress(string? address, string? userSmtp, string? mailboxSmtp)
+    {
+        var a = address?.Trim();
+        if (string.IsNullOrEmpty(a)) return false;
+        var u = userSmtp?.Trim();
+        var m = mailboxSmtp?.Trim();
+        return (!string.IsNullOrEmpty(u) && string.Equals(a, u, StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrEmpty(m) && string.Equals(a, m, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>SPEC 23.6 step 3: the first row (newest first) whose sender isn't own and that the index rules don't
+    /// skip (EvaluateIndex gives null or not_direct). Null = none.</summary>
+    /// <exception cref="ArgumentNullException">rows or settings is null.</exception>
+    /// <exception cref="ArgumentException">mailboxSmtp is null or blank.</exception>
+    public static DraftCandidate? PickReplyTarget(IReadOnlyList<DraftCandidate> newestFirst, string mailboxSmtp,
+        string? userSmtp, AiDraftingSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(newestFirst);
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentException.ThrowIfNullOrWhiteSpace(mailboxSmtp);
+        foreach (var row in newestFirst)
+        {
+            if (IsOwnAddress(row.SenderEmail, userSmtp, mailboxSmtp)) continue;
+            var rule = DraftRules.EvaluateIndex(row, mailboxSmtp, settings, () => false);
+            if (rule is null || rule == DraftRuleIds.NotDirect) return row;
+        }
+        return null;
+    }
+
+    /// <summary>The revisit &lt;thread&gt; rows: drops the old draft's own row and rows in Drafts or Deleted Items
+    /// (first folder segment, OrdinalIgnoreCase). Order kept.</summary>
+    /// <exception cref="ArgumentNullException">rows is null.</exception>
+    public static IReadOnlyList<ThreadMessage> PromptThread(IReadOnlyList<ThreadMessage> rows, string? draftEntryId)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        var result = new List<ThreadMessage>();
+        foreach (var r in rows)
+        {
+            if (!string.IsNullOrWhiteSpace(draftEntryId)
+                && string.Equals(r.EntryId, draftEntryId, StringComparison.OrdinalIgnoreCase)) continue;
+            var first = (r.Folder ?? "").Split('\\')[0].Trim();
+            if (first.Equals("Drafts", StringComparison.OrdinalIgnoreCase)
+                || first.Equals("Deleted Items", StringComparison.OrdinalIgnoreCase)) continue;
+            result.Add(r);
+        }
+        return result;
+    }
+
     /// <summary>Null when invalid (the caller treats it as BadOutput). Never throws.</summary>
     public static RevisitReply? Parse(JsonElement output)
     {
