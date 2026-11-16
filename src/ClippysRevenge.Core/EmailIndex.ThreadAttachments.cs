@@ -33,7 +33,7 @@ public sealed partial class EmailIndex
     }
 
     /// <summary>Read-only. Rows with conversation_topic = topic (trimmed, COLLATE NOCASE), event_time &lt;= upTo,
-    /// any folder, entry_id &lt;&gt; excludeEntryId (exact), newest first (event_time DESC, id DESC), at most
+    /// any folder except Deleted Items (and its subfolders, as the related-mail query does), entry_id &lt;&gt; excludeEntryId (exact), newest first (event_time DESC, id DESC), at most
     /// maxMessages. Rows without attachments are included (their bodies may hold links).
     /// Null or blank topic gives [].</summary>
     /// <exception cref="ArgumentOutOfRangeException">maxMessages &lt; 1 or &gt; 100.</exception>
@@ -50,7 +50,9 @@ public sealed partial class EmailIndex
         var sql = "SELECT e.id AS Id, e.entry_id AS EntryId, e.event_time AS EventTime, e.sender_name AS SenderName, " +
                   "e.sender_email AS SenderEmail, substr(e.body, 1, " + MaxThreadBodyChars + ") AS Body " +
                   "FROM emails e WHERE e.conversation_topic = @t COLLATE NOCASE AND e.event_time <= @upTo " +
-                  "AND e.entry_id <> @x ORDER BY e.event_time DESC, e.id DESC LIMIT @max";
+                  "AND e.entry_id <> @x " +
+                  "AND NOT (e.folder = 'Deleted Items' COLLATE NOCASE OR e.folder LIKE 'Deleted Items\\%') " +
+                  "ORDER BY e.event_time DESC, e.id DESC LIMIT @max";
         using var conn = OpenConnection();
         var mails = conn.Query<ThreadAttachmentMailRow>(sql,
             new { t, upTo = upTo.ToUnixTimeSeconds(), x = excludeEntryId, max = maxMessages }).ToList();

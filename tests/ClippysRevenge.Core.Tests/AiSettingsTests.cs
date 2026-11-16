@@ -564,6 +564,33 @@ public class AiSettingsTests
     }
 
     [Fact]
+    public void ReadAttachments_defaults_validation_json_and_clone()
+    {
+        var a = new AiDraftingSettings();
+        Assert.True(a.ReadAttachments);
+        Assert.False(a.AttachmentsNoticeShown);
+        Assert.Empty(a.Validate());
+        a.ReadAttachments = false;
+        a.AttachmentsNoticeShown = true;
+        Assert.Empty(a.Validate());
+
+        var defaults = Settings.FromJson("{\"AiDrafting\":{}}").AiDrafting;
+        Assert.True(defaults.ReadAttachments);
+        Assert.False(defaults.AttachmentsNoticeShown);
+
+        var s = Settings.FromJson("{\"AiDrafting\":{\"ReadAttachments\":false,\"AttachmentsNoticeShown\":true}}");
+        Assert.False(s.AiDrafting.ReadAttachments);
+        Assert.True(s.AiDrafting.AttachmentsNoticeShown);
+        var c = s.Clone().AiDrafting;
+        Assert.False(c.ReadAttachments);
+        Assert.True(c.AttachmentsNoticeShown);
+        var back = Settings.FromJson(s.ToJson()).AiDrafting;
+        Assert.False(back.ReadAttachments);
+        Assert.True(back.AttachmentsNoticeShown);
+        Assert.Contains("\"ReadAttachments\": true", S().ToJson());
+    }
+
+    [Fact]
     public void ReasonLine_defaults_validation_json_and_clone()
     {
         var a = new AiDraftingSettings();

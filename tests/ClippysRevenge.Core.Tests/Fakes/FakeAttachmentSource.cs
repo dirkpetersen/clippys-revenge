@@ -10,6 +10,7 @@ internal sealed class FakeAttachmentSource : IAttachmentSource
     private int _inFlight;
 
     public List<string> Log { get; } = [];
+    public List<(string Mailbox, string EntryId, WorkPriority Priority)> Calls { get; } = [];
     public IReadOnlyList<SyncedRoot> Roots { get; set; } = [];
     public int RootsCalls { get; private set; }
     public int ReadCalls { get; private set; }
@@ -52,6 +53,7 @@ internal sealed class FakeAttachmentSource : IAttachmentSource
             MaxInFlight = Math.Max(MaxInFlight, now);
             ReadCalls++;
             lock (Log) Log.Add($"read {entryId}/{wanted.Position}");
+            lock (Calls) Calls.Add((mailbox, entryId, priority));
             OnRead?.Invoke();
             await Task.Yield();
             if (_gone.Contains(entryId)) return null;

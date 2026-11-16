@@ -66,7 +66,8 @@ public sealed record DraftWorkerServices(
     IFreeBusySource? FreeBusy = null,                 // null = calendar never readable (placeholder)
     Func<TimeZoneInfo?>? CentralEurope = null,        // null = SenderRegion.CentralEurope
     IFactsSource? Facts = null,                       // null = no facts block (prompts byte-identical to M16)
-    Action<AiNotice>? MarkNoticeShown = null);        // null = the notice isn't persisted (shown once per process)
+    Action<AiNotice>? MarkNoticeShown = null,         // null = the notice isn't persisted (shown once per process)
+    DraftAttachments? Attachments = null);            // null = attachment text is never read (prompts byte-identical to M18)
 
 public enum DraftPassEnd
 {
@@ -688,8 +689,6 @@ public sealed partial class DraftWorker : BackgroundService
         }
         var email = new PromptEmail(detail.SenderName, detail.SenderEmail, detail.To, detail.Cc, detail.EventTime,
             detail.Subject, NonInlineNames(detail.Attachments), detail.Body);
-        var request = BuildRequest(ai, cur, index, key, email, c.ConversationTopic ?? facts!.ConversationTopic, c.EventTime,
-            c.EntryId, detail.InternetMessageId ?? factsImid, identity, userSmtp, manual: false);
 
         var callCt = p.CallToken ?? ct;
         if (callCt.IsCancellationRequested) return DraftPassEnd.Cancelled;
@@ -699,8 +698,19 @@ public sealed partial class DraftWorker : BackgroundService
             p.Total++;
             _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
         }
+        DraftPromptBuild built;
+        try
+        {
+            built = await BuildRequestAsync(ai, cur, index, key, email, c.ConversationTopic ?? facts!.ConversationTopic,
+                c.EventTime, c.EntryId, detail.InternetMessageId ?? factsImid, identity, userSmtp, manual: false,
+                detail.SenderName, detail.Attachments, p.Priority, callCt).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (callCt.IsCancellationRequested)
+        {
+            return DraftPassEnd.Cancelled;
+        }
         var result = await _s.Model.RunAsync(
-            request with { Kind = p.Rescan ? ModelCallKind.Rescan : ModelCallKind.Draft }, callCt).ConfigureAwait(false);
+            built.Request with { Kind = p.Rescan ? ModelCallKind.Rescan : ModelCallKind.Draft }, callCt).ConfigureAwait(false);
         p.Usage = p.Usage.AddCall(result);
         if (!p.Rescan)
         {
@@ -840,7 +850,8 @@ public sealed partial class DraftWorker : BackgroundService
         // 8. Create.
         try
         {
-            var made = await _s.Writer.ReplyAsync(MakePlan(c.EntryId, reply!.ReplyAll ?? false, html, p.Priority, ReasonTop(ai, reply.NoteForUser)), ct)
+            var made = await _s.Writer.ReplyAsync(MakePlan(c.EntryId, reply!.ReplyAll ?? false, html, p.Priority,
+                ReasonTop(ai, reply.NoteForUser) + AttachmentNotes.Html(built.Attachments.Notes)), ct)
                 .ConfigureAwait(false);
             var created = _time.GetUtcNow();
             Write(p, index, c, factsImid, prior, AiOutcome.Drafted, calls: 1, confidence: reply.Confidence,
@@ -856,7 +867,8 @@ public sealed partial class DraftWorker : BackgroundService
                     _log?.LogWarning("AI drafts: couldn't record an AI draft ({Type}).", ex.GetType().Name);
                 }
             }
-            _s.Hub.Event(ActivityKind.Draft, DraftTexts.DraftCreated(made.Subject),
+            _s.Hub.Event(ActivityKind.Draft,
+                DraftTexts.DraftCreated(made.Subject) + DraftAttachmentTexts.EventSuffix(built.Attachments.Counts),
                 mailbox: string.IsNullOrEmpty(made.Mailbox) ? null : made.Mailbox);
             return null;
         }
@@ -929,8 +941,14 @@ public sealed partial class DraftWorker : BackgroundService
         return new DraftPromptInput(now, _s.Zone, label, key, sig is not null, thread, email, sigText);
     }
 
-    private ModelRequest BuildRequest(AiDraftingSettings ai, Settings settings, EmailIndex index, string key, PromptEmail email,
-        string? topic, DateTimeOffset eventTime, string entryId, string? imid, AiIdentity identity, string userSmtp, bool manual)
+    /// <summary>The request and the attachment set it was built with (AttachmentSet.Empty when nothing was collected).</summary>
+    private sealed record DraftPromptBuild(ModelRequest Request, AttachmentSet Attachments);
+
+    /// <exception cref="OperationCanceledException">ct was cancelled during collection.</exception>
+    private async Task<DraftPromptBuild> BuildRequestAsync(AiDraftingSettings ai, Settings settings, EmailIndex index,
+        string key, PromptEmail email, string? topic, DateTimeOffset eventTime, string entryId, string? imid,
+        AiIdentity identity, string userSmtp, bool manual, string? anchorSenderName,
+        IReadOnlyList<AttachmentInfo> anchorAttachments, WorkPriority priority, CancellationToken ct)
     {
         var thread = index.Thread(topic, eventTime, DraftPrompt.MaxThreadMessages, entryId);
         var input = PromptInput(settings, key, email, thread);
@@ -938,11 +956,17 @@ public sealed partial class DraftWorker : BackgroundService
             new RelatedAnchor(entryId, imid, topic, eventTime, email.SenderEmail, email.Subject, email.Body),
             input.SignatureText, userSmtp, key.Length == 0 ? userSmtp : key);
         input = input with { Related = related };
-        return new ModelRequest(
+        var set = await CollectAttachmentsAsync(ai, index, key,
+            new AttachmentAnchor(entryId, topic, eventTime, email.Subject, email.Body, anchorSenderName, email.SenderEmail,
+                anchorAttachments), input.SignatureText, identity, userSmtp, priority, null, ct).ConfigureAwait(false);
+        input = input with { Attachments = set.Items.Count > 0 ? set.Items : null };
+        var request = new ModelRequest(
             DraftPrompt.SystemPrompt(identity.DisplayName, userSmtp, manual, _s.Style.ReadForPrompt(), ai.MeetingTimes,
-                _s.Facts?.ReadForPrompt() ?? "", DraftPrompt.HasRelated(input), ai.ReasonLine),
+                _s.Facts?.ReadForPrompt() ?? "", DraftPrompt.HasRelated(input), ai.ReasonLine,
+                attachments: DraftPrompt.HasAttachments(input)),
             DraftPrompt.UserPrompt(input), DraftModel.ReplySchema, ai.Model, ai.Effort,
             TimeSpan.FromSeconds(ai.TimeoutSeconds), DraftModel.DraftMaxOutputTokens);
+        return new DraftPromptBuild(request, set);
     }
 
     // ---------------------------------------------------------------- manual path
@@ -1051,9 +1075,11 @@ public sealed partial class DraftWorker : BackgroundService
         var prior = index.GetDecision(e.EntryId);
         var email = new PromptEmail(e.SenderName, e.SenderEmail, e.To, e.Cc, e.EventTime, e.Subject,
             NonInlineNames(e.Attachments), e.Body);
-        var request = BuildRequest(ai, cur, index, key, email, e.ConversationTopic, e.EventTime, e.EntryId, e.InternetMessageId, identity, userSmtp, manual: true);
+        var built = await BuildRequestAsync(ai, cur, index, key, email, e.ConversationTopic, e.EventTime, e.EntryId,
+            e.InternetMessageId, identity, userSmtp, manual: true, e.SenderName, e.Attachments,
+            WorkPriority.Interactive, ct).ConfigureAwait(false);
 
-        var result = await _s.Model.RunAsync(request with { Kind = ModelCallKind.Manual }, ct).ConfigureAwait(false);
+        var result = await _s.Model.RunAsync(built.Request with { Kind = ModelCallKind.Manual }, ct).ConfigureAwait(false);
         var now = _time.GetUtcNow();
 
         var called = true;
@@ -1122,7 +1148,8 @@ public sealed partial class DraftWorker : BackgroundService
                 }
                 try
                 {
-                    made = await _s.Writer.ReplyAsync(MakePlan(e.EntryId, reply.ReplyAll ?? false, html, WorkPriority.Interactive, ReasonTop(ai, reply.NoteForUser)), ct)
+                    made = await _s.Writer.ReplyAsync(MakePlan(e.EntryId, reply.ReplyAll ?? false, html, WorkPriority.Interactive,
+                        ReasonTop(ai, reply.NoteForUser) + AttachmentNotes.Html(built.Attachments.Notes)), ct)
                         .ConfigureAwait(false);
                     text = DraftTexts.ManualDone;
                 }
@@ -1177,7 +1204,8 @@ public sealed partial class DraftWorker : BackgroundService
                 // The draft exists; a failed bookkeeping row must not turn that into a failure.
                 _log?.LogWarning("AI drafts: couldn't record the manual draft ({Type}).", ex.GetType().Name);
             }
-            _s.Hub.Event(ActivityKind.Draft, DraftTexts.DraftCreated(made.Subject),
+            _s.Hub.Event(ActivityKind.Draft,
+                DraftTexts.DraftCreated(made.Subject) + DraftAttachmentTexts.EventSuffix(built.Attachments.Counts),
                 mailbox: string.IsNullOrEmpty(made.Mailbox) ? null : made.Mailbox);
             return new ManualDraftResult(true, text);
         }

@@ -42,7 +42,8 @@ public sealed class AiDraftsUiTests : IDisposable
     [Fact]
     public void Consent_text_is_exact()
     {
-        Assert.Equal("Clippy will send new emails from your Inbox, earlier messages in the same thread, up to 5 related earlier emails, and samples of your sent mail to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.", AiConsent.Text);
+        Assert.Equal("Clippy will send new emails from your Inbox, earlier messages in the same thread, the text of their attachments and of shared files synced to this PC, up to 5 related earlier emails, and samples of your sent mail to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.", AiConsent.Text);
+        Assert.Equal("Read attachments and synced shared files for drafts", AiTabTexts.ReadAttachmentsText);
         Assert.Equal("Turn on AI drafts?", AiConsent.Title);
         Assert.Equal("Turn on", AiConsent.TurnOnButton);
         Assert.Equal("Cancel", AiConsent.CancelButton);

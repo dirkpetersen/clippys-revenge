@@ -63,6 +63,22 @@ public class EmailIndexThreadAttachmentsTests : IDisposable
     }
 
     [Fact]
+    public void Deleted_items_and_its_subfolders_are_never_returned()
+    {
+        _ix.UpsertBatch(
+        [
+            Mail("T1", -40, folder: "Deleted Items"),
+            Mail("T2", -30, folder: "deleted items\\Old"),
+            Mail("T3", -20, folder: "Drafts"),
+            Mail("T4", -10, folder: "Deleted Items Archive"),
+            Mail("A", 0),
+        ]);
+
+        var r = _ix.ThreadAttachments("budget", T(0), "A");
+        Assert.Equal(["T4", "T3"], r.Select(x => x.EntryId).ToArray());
+    }
+
+    [Fact]
     public void UpTo_is_inclusive()
     {
         _ix.UpsertBatch([Mail("T1", -5), Mail("T2", 0), Mail("T3", 5)]);
