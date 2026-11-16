@@ -150,7 +150,7 @@ public sealed partial class DraftWorker
         input = input with { Related = related };
         var request = new ModelRequest(
             DraftPrompt.RevisitSystemPrompt(s.Identity.DisplayName, s.UserSmtp, _s.Style.ReadForPrompt(), ai.MeetingTimes,
-                _s.Facts?.ReadForPrompt() ?? "", DraftPrompt.HasRelated(input)),
+                _s.Facts?.ReadForPrompt() ?? "", DraftPrompt.HasRelated(input), ai.ReasonLine),
             DraftPrompt.RevisitUserPrompt(new RevisitPromptInput(input, info!.PlainBody, t.Draft.Created)),
             DraftModel.RevisitSchema, ai.Model, ai.Effort, TimeSpan.FromSeconds(ai.TimeoutSeconds),
             DraftModel.DraftMaxOutputTokens);
@@ -398,7 +398,7 @@ public sealed partial class DraftWorker
         RepliedDraft made;
         try
         {
-            made = await _s.Writer.ReplyAsync(MakePlan(targetId, reply.ReplyAll ?? false, html, s.Priority), ct).ConfigureAwait(false);
+            made = await _s.Writer.ReplyAsync(MakePlan(targetId, reply.ReplyAll ?? false, html, s.Priority, ReasonTop(ai, reply.NoteForUser)), ct).ConfigureAwait(false);
         }
         catch (ItemNotFoundException)
         {

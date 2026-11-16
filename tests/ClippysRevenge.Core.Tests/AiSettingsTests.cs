@@ -562,4 +562,20 @@ public class AiSettingsTests
         Assert.False(c.RelatedMail);
         Assert.True(c.RelatedMailNoticeShown);
     }
+
+    [Fact]
+    public void ReasonLine_defaults_validation_json_and_clone()
+    {
+        var a = new AiDraftingSettings();
+        Assert.True(a.ReasonLine);
+        Assert.Empty(a.Validate());
+        a.ReasonLine = false;
+        Assert.Empty(a.Validate());
+        Assert.True(Settings.FromJson("{\"AiDrafting\":{\"DailyCap\":7}}").AiDrafting.ReasonLine);
+        Assert.False(Settings.FromJson("{\"AiDrafting\":{\"ReasonLine\":false}}").AiDrafting.ReasonLine);
+        Assert.Contains("\"ReasonLine\": true", S().ToJson());
+        var s = S();
+        s.AiDrafting.ReasonLine = false;
+        Assert.False(s.Clone().AiDrafting.ReasonLine);
+    }
 }

@@ -69,6 +69,7 @@ internal sealed class DraftHarness : IDisposable
         Settings.AiDrafting.MaxAgeDays = 2;
         // Existing worker tests stay byte-identical; the related-mail tests turn it on.
         Settings.AiDrafting.RelatedMail = false;
+        Settings.AiDrafting.ReasonLine = false;
         Settings.AiDrafting.RelatedMailNoticeShown = true;
         Settings.SharedMailboxes.Add(new SharedMailbox { Smtp = Shared, Enabled = true, AiDrafts = false });
         if (withMarkNoticeShown) MarkNoticeShown = NoticeMarks.Add;

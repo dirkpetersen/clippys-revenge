@@ -19,6 +19,8 @@ public class DraftRevisitTests
         Assert.Equal(["action", "confidence", "reason"], root.GetProperty("required").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal(["keep", "replace", "remove"],
             root.GetProperty("properties").GetProperty("action").GetProperty("enum").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal("{\"type\":\"string\",\"maxLength\":160}", root.GetProperty("properties").GetProperty("note_for_user").GetRawText());
+        Assert.DoesNotContain("note_for_user", root.GetProperty("required").EnumerateArray().Select(x => x.GetString()));
         Assert.True(JsonElement.DeepEquals(root.GetProperty("properties").GetProperty("meeting"),
             r.RootElement.GetProperty("properties").GetProperty("meeting")));
     }
@@ -27,7 +29,7 @@ public class DraftRevisitTests
     public void Wire_schema_reduces_as_expected()
     {
         Assert.True(AnthropicWireSchema.TryReduce(DraftModel.RevisitSchema, out var d));
-        using var expected = JsonDocument.Parse("""{"type":"object","additionalProperties":false,"required":["action","confidence","reason"],"properties":{"action":{"type":"string","enum":["keep","replace","remove"]},"confidence":{"type":"number"},"reply_all":{"type":"boolean"},"body_html":{"type":"string"},"reason":{"type":"string"},"meeting":{"type":"object","additionalProperties":false,"required":["requested"],"properties":{"requested":{"type":"boolean"},"duration_minutes":{"type":"integer"},"earliest_date":{"type":"string"},"latest_date":{"type":"string"},"outside_hours_heading":{"type":"string"}}}}}""");
+        using var expected = JsonDocument.Parse("""{"type":"object","additionalProperties":false,"required":["action","confidence","reason"],"properties":{"action":{"type":"string","enum":["keep","replace","remove"]},"confidence":{"type":"number"},"reply_all":{"type":"boolean"},"body_html":{"type":"string"},"reason":{"type":"string"},"note_for_user":{"type":"string"},"meeting":{"type":"object","additionalProperties":false,"required":["requested"],"properties":{"requested":{"type":"boolean"},"duration_minutes":{"type":"integer"},"earliest_date":{"type":"string"},"latest_date":{"type":"string"},"outside_hours_heading":{"type":"string"}}}}}""");
         Assert.Equal(expected.RootElement.EnumerateObject().Select(p => p.Name), d.Keys);
         foreach (var p in expected.RootElement.EnumerateObject())
             Assert.True(JsonElement.DeepEquals(p.Value, d[p.Name]), p.Name);
@@ -193,5 +195,16 @@ public class DraftRevisitTests
     {
         Assert.Equal("revisited", DraftRuleIds.Revisited);
         Assert.Matches("^[a-z_]+$", DraftRuleIds.Revisited);
+    }
+
+    [Fact]
+    public void NoteForUser_only_for_replace()
+    {
+        Assert.Equal("n", P("""{"action":"replace","confidence":0.7,"body_html":"<p>New</p>","reason":"r","note_for_user":"n"}""")!.NoteForUser);
+        Assert.Null(P("""{"action":"keep","confidence":0.7,"reason":"r","note_for_user":"n"}""")!.NoteForUser);
+        Assert.Null(P("""{"action":"remove","confidence":0.7,"reason":"r","note_for_user":"n"}""")!.NoteForUser);
+        Assert.Equal(new RevisitReply(RevisitAction.Keep, 0.9, null, null, null),
+            P("""{"action":"keep","confidence":0.9,"reason":"r","note_for_user":5}"""));
+        Assert.Null(P("""{"action":"replace","confidence":0.7,"body_html":"<p>New</p>","reason":"r","note_for_user":5}""")!.NoteForUser);
     }
 }

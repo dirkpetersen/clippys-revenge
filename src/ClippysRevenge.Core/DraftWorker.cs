@@ -840,7 +840,7 @@ public sealed partial class DraftWorker : BackgroundService
         // 8. Create.
         try
         {
-            var made = await _s.Writer.ReplyAsync(MakePlan(c.EntryId, reply!.ReplyAll ?? false, html, p.Priority), ct)
+            var made = await _s.Writer.ReplyAsync(MakePlan(c.EntryId, reply!.ReplyAll ?? false, html, p.Priority, ReasonTop(ai, reply.NoteForUser)), ct)
                 .ConfigureAwait(false);
             var created = _time.GetUtcNow();
             Write(p, index, c, factsImid, prior, AiOutcome.Drafted, calls: 1, confidence: reply.Confidence,
@@ -910,10 +910,11 @@ public sealed partial class DraftWorker : BackgroundService
             _log?.LogWarning("{Message}", FreeTimeFinder.CetMissingWarning);
     }
 
-    private ReplyPlan MakePlan(string entryId, bool replyAll, string html, WorkPriority priority)
+    /// <param name="top">Clippy's lines above the body (the reason line; M19 adds the attachment notes). "" = none.</param>
+    private ReplyPlan MakePlan(string entryId, bool replyAll, string html, WorkPriority priority, string top)
     {
         var sig = _s.ReplySignatureHtml();
-        return new ReplyPlan(entryId, null, replyAll, DraftBody.Fragment(html, html: true, sig),
+        return new ReplyPlan(entryId, null, replyAll, DraftBody.Fragment(top + html, html: true, sig),
             DraftBody.SignatureContent(sig) is not null, DraftMarker.Ai, priority);
     }
 
@@ -939,7 +940,7 @@ public sealed partial class DraftWorker : BackgroundService
         input = input with { Related = related };
         return new ModelRequest(
             DraftPrompt.SystemPrompt(identity.DisplayName, userSmtp, manual, _s.Style.ReadForPrompt(), ai.MeetingTimes,
-                _s.Facts?.ReadForPrompt() ?? "", DraftPrompt.HasRelated(input)),
+                _s.Facts?.ReadForPrompt() ?? "", DraftPrompt.HasRelated(input), ai.ReasonLine),
             DraftPrompt.UserPrompt(input), DraftModel.ReplySchema, ai.Model, ai.Effort,
             TimeSpan.FromSeconds(ai.TimeoutSeconds), DraftModel.DraftMaxOutputTokens);
     }
@@ -1121,7 +1122,7 @@ public sealed partial class DraftWorker : BackgroundService
                 }
                 try
                 {
-                    made = await _s.Writer.ReplyAsync(MakePlan(e.EntryId, reply.ReplyAll ?? false, html, WorkPriority.Interactive), ct)
+                    made = await _s.Writer.ReplyAsync(MakePlan(e.EntryId, reply.ReplyAll ?? false, html, WorkPriority.Interactive, ReasonTop(ai, reply.NoteForUser)), ct)
                         .ConfigureAwait(false);
                     text = DraftTexts.ManualDone;
                 }

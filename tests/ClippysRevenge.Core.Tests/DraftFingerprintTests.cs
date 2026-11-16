@@ -111,4 +111,14 @@ public class DraftFingerprintTests
         Assert.Throws<ArgumentNullException>(() => DraftFingerprint.Compute(null!));
         Assert.Throws<ArgumentNullException>(() => DraftFingerprint.Canonical(null!));
     }
+
+    [Fact]
+    public void The_reason_line_is_part_of_the_fingerprint()
+    {
+        DraftFingerprintInput With(string html) => new("Re:: Budget", "Ann <ann@x.org>", null, null, html, null, 1, null, 0, null);
+        var withLine = "<html><body>" + DraftReasonLine.Html("x") + "<p>Hi</p></body></html>";
+        var without = "<html><body><p>Hi</p></body></html>";
+        Assert.NotEqual(DraftFingerprint.Compute(With(withLine)), DraftFingerprint.Compute(With(without)));
+        Assert.Equal(DraftFingerprint.Compute(With(withLine)), DraftFingerprint.Compute(With(withLine)));
+    }
 }

@@ -51,16 +51,18 @@ internal sealed class FakeDraftModel : IDraftModel
             new TokenUsage(10, 5, null, null));
 
     public static ModelResult OkReply(double confidence, bool replyAll = false, bool needsReply = true,
-        string body = "<p>Hi [[date]]</p><script>x</script>")
+        string body = "<p>Hi [[date]]</p><script>x</script>", string? note = null)
     {
-        var json = JsonSerializer.Serialize(new Dictionary<string, object>
+        var fields = new Dictionary<string, object>
         {
             ["needs_reply"] = needsReply,
             ["confidence"] = confidence,
             ["reply_all"] = replyAll,
             ["body_html"] = body,
             ["reason"] = "SECRET-REASON",
-        });
+        };
+        if (note is not null) fields["note_for_user"] = note;
+        var json = JsonSerializer.Serialize(fields);
         return Ok(json);
     }
 }
