@@ -210,7 +210,7 @@ internal sealed class OutlookStores
 
         var session = app.Session;
         Outlook.Store? store = null;
-        Outlook.Folder? inbox = null, sent = null;
+        Outlook.Folder? inbox = null, sent = null, drafts = null, deleted = null;
         Outlook.Folder? root = null;
         try
         {
@@ -219,24 +219,30 @@ internal sealed class OutlookStores
             {
                 throw StoreCatalog.NotAvailable(mailbox, [key]);
             }
-            string? inboxName = null, sentName = null;
+            string? inboxName = null, sentName = null, draftsName = null, deletedName = null;
             try
             {
                 inbox = (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderInbox);
                 inboxName = inbox.Name;
                 sent = (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderSentMail);
                 sentName = sent.Name;
+                drafts = (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderDrafts);
+                draftsName = drafts.Name;
+                deleted = (Outlook.Folder?)OutlookMail.TryDeletedItems(store);
+                deletedName = deleted?.Name;
             }
             catch (COMException ex) when (!ComErrors.IsOutlookGone(ex)) { }
 
             var result = new List<string>();
             root = (Outlook.Folder)store.GetRootFolder();
-            Walk(root, 0, inboxName, sentName, result);
+            Walk(root, 0, inboxName, sentName, draftsName, deletedName, result);
             return result;
         }
         finally
         {
             if (root is not null) Marshal.ReleaseComObject(root);
+            if (deleted is not null) Marshal.ReleaseComObject(deleted);
+            if (drafts is not null) Marshal.ReleaseComObject(drafts);
             if (sent is not null) Marshal.ReleaseComObject(sent);
             if (inbox is not null) Marshal.ReleaseComObject(inbox);
             if (store is not null) Marshal.ReleaseComObject(store);
@@ -244,7 +250,8 @@ internal sealed class OutlookStores
         }
     }
 
-    private static void Walk(Outlook.Folder parent, int depth, string? inboxName, string? sentName, List<string> into)
+    private static void Walk(Outlook.Folder parent, int depth, string? inboxName, string? sentName,
+        string? draftsName, string? deletedName, List<string> into)
     {
         if (depth >= MaxFolderDepth) return;
         var children = parent.Folders;
@@ -256,9 +263,9 @@ internal sealed class OutlookStores
                 {
                     if (into.Count >= MaxFolders) return;
                     if (f.DefaultItemType == Outlook.OlItemType.olMailItem
-                        && MailFolderPath.FromOutlook(f.FolderPath, inboxName, sentName) is { } path)
+                        && MailFolderPath.FromOutlook(f.FolderPath, inboxName, sentName, draftsName, deletedName) is { } path)
                         into.Add(path);
-                    Walk(f, depth + 1, inboxName, sentName, into);
+                    Walk(f, depth + 1, inboxName, sentName, draftsName, deletedName, into);
                 }
                 catch (COMException ex) when (!ComErrors.IsOutlookGone(ex)) { }
                 finally

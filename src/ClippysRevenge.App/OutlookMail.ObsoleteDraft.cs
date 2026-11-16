@@ -130,7 +130,8 @@ internal sealed partial class OutlookMail
         }
     }
 
-    private static Outlook.MAPIFolder? TryDeletedItems(Outlook.Store store)
+    /// <summary>The store's Deleted Items folder, or null. Also used read-only to canonicalize the localized name (SPEC 9); the only place olFolderDeletedItems is named besides the draft-invite cleanup.</summary>
+    internal static Outlook.MAPIFolder? TryDeletedItems(Outlook.Store store)
     {
         try
         {

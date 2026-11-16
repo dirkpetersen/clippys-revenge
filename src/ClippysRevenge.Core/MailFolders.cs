@@ -2,9 +2,9 @@ using ModelContextProtocol;
 
 namespace ClippysRevenge.Core;
 
-public enum FolderRoot { Inbox, SentItems, StoreRoot }
+public enum FolderRoot { Inbox, SentItems, Drafts, DeletedItems, StoreRoot }
 
-/// <summary>Canonical: "Inbox", "Sent Items", "Inbox\Projects", "Archive\2025".</summary>
+/// <summary>Canonical: "Inbox", "Sent Items", "Drafts", "Deleted Items", "Inbox\Projects", "Archive\2025".</summary>
 public sealed record ParsedFolderPath(FolderRoot Root, IReadOnlyList<string> SubPath, string Canonical);
 
 /// <summary>A folder resolved on the worker thread; plain data. Mailbox is the normalized key, Path is canonical.</summary>
@@ -15,6 +15,8 @@ public static class MailFolderPath
 {
     public const string Inbox = "Inbox";
     public const string SentItems = "Sent Items";
+    public const string Drafts = "Drafts";
+    public const string DeletedItems = "Deleted Items";
 
     public static ParsedFolderPath Parse(string path)
     {
@@ -35,6 +37,18 @@ public static class MailFolderPath
         {
             root = FolderRoot.SentItems;
             segs[0] = SentItems;
+            sub = segs.Skip(1).ToList();
+        }
+        else if (segs[0].Equals(Drafts, StringComparison.OrdinalIgnoreCase))
+        {
+            root = FolderRoot.Drafts;
+            segs[0] = Drafts;
+            sub = segs.Skip(1).ToList();
+        }
+        else if (segs[0].Equals(DeletedItems, StringComparison.OrdinalIgnoreCase))
+        {
+            root = FolderRoot.DeletedItems;
+            segs[0] = DeletedItems;
             sub = segs.Skip(1).ToList();
         }
         return new ParsedFolderPath(root, sub, string.Join('\\', segs));
@@ -69,7 +83,8 @@ public static class MailFolderPath
     }
 
     /// <summary>Outlook Folder.FolderPath ("\\store\Inbox\Sub") -> canonical path. Null when no segment follows the store.</summary>
-    public static string? FromOutlook(string? folderPath, string? inboxName, string? sentItemsName)
+    public static string? FromOutlook(string? folderPath, string? inboxName, string? sentItemsName,
+        string? draftsName = null, string? deletedItemsName = null)
     {
         if (string.IsNullOrWhiteSpace(folderPath)) return null;
         var segs = folderPath.TrimStart('\\').Split('\\', StringSplitOptions.RemoveEmptyEntries).Skip(1).ToList();
@@ -78,6 +93,10 @@ public static class MailFolderPath
             segs[0] = Inbox;
         else if (!string.IsNullOrWhiteSpace(sentItemsName) && segs[0].Equals(sentItemsName, StringComparison.OrdinalIgnoreCase))
             segs[0] = SentItems;
+        else if (!string.IsNullOrWhiteSpace(draftsName) && segs[0].Equals(draftsName, StringComparison.OrdinalIgnoreCase))
+            segs[0] = Drafts;
+        else if (!string.IsNullOrWhiteSpace(deletedItemsName) && segs[0].Equals(deletedItemsName, StringComparison.OrdinalIgnoreCase))
+            segs[0] = DeletedItems;
         try { return Parse(string.Join('\\', segs)).Canonical; }
         catch (ArgumentException) { return null; }
     }
