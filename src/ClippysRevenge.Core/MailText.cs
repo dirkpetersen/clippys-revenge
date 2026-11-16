@@ -41,13 +41,13 @@ public static partial class MailText
     [GeneratedRegex(@"^Il\s.{1,300}?\sha\s+scritto\s*:\s*$", Ci, 2000)]
     private static partial Regex AttributionItRegex();
 
-    [GeneratedRegex(@"^\*?(From|Von|De|Van|Da)\*?\s*:\*?(\s|$)", Ci, 2000)]
+    [GeneratedRegex(@"^\*?(From|Von|De|Van|Da|Från|Od|差出人)\*?\s*:\*?(\s|$)", Ci, 2000)]
     private static partial Regex FromLabelRegex();
 
-    [GeneratedRegex(@"^\*?(Sent|Date|Gesendet|Datum|Envoyé|Enviado|Fecha|Verzonden|Inviato|Data)\*?\s*:", Ci, 2000)]
+    [GeneratedRegex(@"^\*?(Sent|Date|Gesendet|Datum|Envoyé|Enviado|Fecha|Verzonden|Inviato|Data|Skickat|Wysłano|送信日時)\*?\s*:", Ci, 2000)]
     private static partial Regex DateLabelRegex();
 
-    [GeneratedRegex(@"^\*?(To|Subject|An|Betreff|À|A|Objet|Para|Asunto|Aan|Onderwerp|Oggetto)\*?\s*:", Ci, 2000)]
+    [GeneratedRegex(@"^\*?(To|Subject|An|Betreff|À|A|Objet|Para|Asunto|Aan|Onderwerp|Oggetto|Till|Ämne|Do|Temat|宛先|件名)\*?\s*:", Ci, 2000)]
     private static partial Regex ToSubjectLabelRegex();
 
     [GeneratedRegex(@"(?<![\p{L}\p{N}_@/])<?(?:(?:https?|ftp)://|www\.)[^\s<>""]+>?", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 5000)]

@@ -110,13 +110,16 @@ public sealed class DraftAttachments
     private readonly ILogger? _logger;
     private readonly Func<string, ReadOnlyMemory<byte>, CancellationToken, ExtractedText> _extract;
     private readonly Func<MappedLink.Local, long, CancellationToken, SyncedFileResult> _readSynced;
+    private readonly PdfAbandonGate _pdfGate;
 
     /// <param name="extract">Test seam; default AttachmentText.Extract.</param>
     /// <param name="readSynced">Test seam; default SyncedFileReader.Read.</param>
+    /// <param name="pdfGate">Test seam; default PdfAbandonGate.Shared (process-wide).</param>
     /// <exception cref="ArgumentNullException">source is null.</exception>
     public DraftAttachments(IAttachmentSource source, TimeProvider? time = null, ILogger? logger = null,
         Func<string, ReadOnlyMemory<byte>, CancellationToken, ExtractedText>? extract = null,
-        Func<MappedLink.Local, long, CancellationToken, SyncedFileResult>? readSynced = null)
+        Func<MappedLink.Local, long, CancellationToken, SyncedFileResult>? readSynced = null,
+        PdfAbandonGate? pdfGate = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         _source = source;
@@ -124,6 +127,7 @@ public sealed class DraftAttachments
         _logger = logger;
         _extract = extract ?? AttachmentText.Extract;
         _readSynced = readSynced ?? SyncedFileReader.Read;
+        _pdfGate = pdfGate ?? PdfAbandonGate.Shared;
     }
 
     /// <summary>The result of one read-and-extract run. ErrorType: exception type name for the Warning, or null.</summary>
@@ -276,6 +280,11 @@ public sealed class DraftAttachments
                     finals.Add(Final.Skipped(p, name, AttachmentKind.File, AttachmentReasons.NotOnEmail));
                     break;
 
+                case AiAttachmentRead.Failed { ErrorType: "UnsupportedAttachmentType" }:
+                    // Not a file or an attached email (e.g. an extension-less item): not damaged, just unreadable.
+                    finals.Add(Final.Skipped(p, name, AttachmentKind.File, AttachmentReasons.UnknownKind));
+                    break;
+
                 case AiAttachmentRead.Failed failed:
                     Warn(failed.ErrorType);
                     finals.Add(Final.Skipped(p, name, AttachmentKind.File, AttachmentReasons.Damaged));
@@ -360,18 +369,11 @@ public sealed class DraftAttachments
             }
         }, ct, AttachmentText.FormatOf(local.Path) == AttachmentFormat.Pdf);
 
-    // PDF extraction can't be cancelled and has no decompression cap, so at most one timed-out (abandoned) PDF
-    // extraction may still run in the process; while it runs, further PDFs are skipped as "took too long".
-    private static int _abandonedPdf;
-
-    /// <summary>True while an abandoned PDF extraction is still running (test seam).</summary>
-    internal static bool PdfAbandoned => Volatile.Read(ref _abandonedPdf) != 0;
-
     /// <summary>SPEC 26.5 per-file limit: runs the work on the thread pool and gives up after PerFileTimeout.
     /// <paramref name="pdf"/>: the work is a PDF extraction (one abandoned run at a time, process-wide).</summary>
     private async Task<Outcome> RunAsync(Func<CancellationToken, Outcome> work, CancellationToken ct, bool pdf = false)
     {
-        if (pdf && PdfAbandoned) return Outcome.Skip(AttachmentReasons.TookTooLong);
+        if (pdf && _pdfGate.IsAbandoned) return Outcome.Skip(AttachmentReasons.TookTooLong);
         var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var task = Task.Run(() => work(cts.Token), CancellationToken.None);
         try
@@ -400,11 +402,11 @@ public sealed class DraftAttachments
             else
             {
                 cts.Cancel();
-                var holdsPdf = pdf && Interlocked.CompareExchange(ref _abandonedPdf, 1, 0) == 0;
+                var holdsPdf = pdf && _pdfGate.TryHold();
                 _ = task.ContinueWith(t =>
                 {
                     _ = t.Exception;
-                    if (holdsPdf) Volatile.Write(ref _abandonedPdf, 0);
+                    if (holdsPdf) _pdfGate.Release();
                     cts.Dispose();
                 }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
             }
@@ -496,4 +498,20 @@ public sealed class DraftAttachments
         }
         return null;
     }
+}
+
+/// <summary>At most one timed-out (abandoned) PDF extraction may still run per gate: PDF extraction can't be
+/// cancelled and has no decompression cap. While one runs, further PDFs are skipped as "took too long".
+/// Production uses <see cref="Shared" /> (process-wide); tests pass their own.</summary>
+public sealed class PdfAbandonGate
+{
+    public static PdfAbandonGate Shared { get; } = new();
+
+    private int _held;
+
+    public bool IsAbandoned => Volatile.Read(ref _held) != 0;
+
+    internal bool TryHold() => Interlocked.CompareExchange(ref _held, 1, 0) == 0;
+
+    internal void Release() => Volatile.Write(ref _held, 0);
 }

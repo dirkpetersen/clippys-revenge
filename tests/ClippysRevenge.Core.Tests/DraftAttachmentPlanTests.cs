@@ -172,6 +172,63 @@ public class DraftAttachmentPlanTests
     }
 
     [Theory]
+    [InlineData("attachment-3", AttachmentReasons.UnknownKind)]
+    [InlineData("attachment-12", AttachmentReasons.UnknownKind)]
+    [InlineData("attachment-", null)]
+    [InlineData("attachment-x", null)]
+    [InlineData("my attachment-3", null)]
+    [InlineData("Quarterly review", null)]
+    public void Extensionless_name_is_read_unless_it_is_the_fallback_name(string name, string? skip)
+    {
+        var p = Assert.Single(Plan(AttFx.Req(anchor: [AttFx.A(1, name)])));
+        Assert.Equal(skip, p.SkipReason);
+    }
+
+    [Theory]
+    [InlineData("me@x.com", false)]
+    [InlineData("a@hotmail.co.uk", true)]
+    [InlineData("a@hotmail.fr", true)]
+    [InlineData("a@hotmail.de", true)]
+    [InlineData("a@outlook.de", true)]
+    [InlineData("a@outlook.fr", true)]
+    [InlineData("a@outlook.jp", true)]
+    [InlineData("a@live.co.uk", true)]
+    [InlineData("a@live.nl", true)]
+    [InlineData("a@yahoo.co.uk", true)]
+    [InlineData("a@yahoo.co.jp", true)]
+    [InlineData("a@yahoo.com.br", true)]
+    [InlineData("a@yahoo.it", true)]
+    [InlineData("a@ymail.com", true)]
+    [InlineData("a@rocketmail.com", true)]
+    [InlineData("a@mail.com", true)]
+    [InlineData("a@t-online.de", true)]
+    [InlineData("a@qq.com", true)]
+    [InlineData("a@163.com", true)]
+    [InlineData("a@126.com", true)]
+    [InlineData("a@yandex.ru", true)]
+    [InlineData("a@yandex.com", true)]
+    [InlineData("a@mail.ru", true)]
+    [InlineData("a@comcast.net", true)]
+    [InlineData("a@verizon.net", true)]
+    [InlineData("a@att.net", true)]
+    [InlineData("a@fastmail.com", true)]
+    [InlineData("a@zoho.com", true)]
+    [InlineData("a@gmx.at", true)]
+    [InlineData("a@outlook.contoso.com", false)]
+    [InlineData("a@live.contoso.com", false)]
+    [InlineData("a@yahoo.example.org", false)]
+    [InlineData("a@outlook.company", false)]
+    [InlineData("a@hotmailer.fr", false)]
+    [InlineData("a@contoso.com", false)]
+    public void Consumer_domain_rule_blocks_a_colleague_match(string own, bool consumer)
+    {
+        var colleague = "bob@" + own[(own.IndexOf('@') + 1)..];
+        // A consumer domain is not the organization: only the own address counts. Otherwise the same domain matches.
+        Assert.True(DraftAttachmentPlan.MayOpenShared(own, new AiIdentity("Me", own), ""));
+        Assert.Equal(!consumer, DraftAttachmentPlan.MayOpenShared(colleague, new AiIdentity("Me", own), ""));
+    }
+
+    [Theory]
     [InlineData("me@contoso.com", "", true)]
     [InlineData("ME@Contoso.com ", "", true)]
     [InlineData("bob@contoso.com", "", true)]
@@ -269,6 +326,19 @@ public class DraftAttachmentPlanTests
         var thread = Assert.Single(Plan(AttFx.Req(thread: [AttFx.Th("S1", 10, body: body)]), AttFx.Root));
         Assert.Equal("a.docx", thread.Name);
         Assert.Null(thread.SkipReason);
+    }
+
+    [Fact]
+    public void Link_on_a_quoted_line_of_an_inline_reply_is_not_the_senders()
+    {
+        // An inline reply: the quote is followed by own text, so MailText.OwnText keeps the ">" lines.
+        var inline = "Quoting you:\n> see " + AttFx.Share + "a.docx\nMy answer is no.";
+        Assert.Empty(Plan(AttFx.Req(body: inline), AttFx.Root));
+        Assert.Empty(Plan(AttFx.Req(thread: [AttFx.Th("S1", 10, body: inline)]), AttFx.Root));
+
+        var withOwn = inline + "\nMine: " + AttFx.Share + "b.docx";
+        Assert.Equal("b.docx", Assert.Single(Plan(AttFx.Req(body: withOwn), AttFx.Root)).Name);
+        Assert.Equal("b.docx", Assert.Single(Plan(AttFx.Req(thread: [AttFx.Th("S1", 10, body: withOwn)]), AttFx.Root)).Name);
     }
 
     [Fact]
