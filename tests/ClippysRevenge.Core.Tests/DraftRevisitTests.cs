@@ -113,5 +113,85 @@ public class DraftRevisitTests
         Assert.Equal(14, DraftRevisit.MaxDraftAgeDays);
         Assert.Equal(10, DraftRevisit.MaxRevisitsPerMailbox);
         Assert.Equal(3, DraftRevisit.MaxAttempts);
+        Assert.Equal(50, DraftRevisit.ThreadFetch);
+    }
+
+    // 27
+    [Fact]
+    public void Summary_has_the_revisit_parts()
+    {
+        Assert.Equal("AI drafts: 1 drafted, 1 updated, 1 moved to Deleted Items, 1 kept, 2 no reply needed (1.8 s)",
+            DraftTexts.Summary(1, 2, 0, 0, 0, TimeSpan.FromSeconds(1.8), updated: 1, moved: 1, kept: 1));
+        Assert.Equal("AI drafts: 0 drafted, 1 kept (2 s)", DraftTexts.Summary(0, 0, 0, 0, 0, TimeSpan.FromSeconds(2), kept: 1));
+        Assert.Equal("AI drafts: 1 drafted, 2 no reply needed, 3 low confidence, 4 skipped, 5 failed (1.8 s)",
+            DraftTexts.Summary(1, 2, 3, 4, 5, TimeSpan.FromSeconds(1.8)));
+    }
+
+    // 28
+    [Fact]
+    public void IsOwnAddress_matches_user_or_mailbox()
+    {
+        Assert.True(DraftRevisit.IsOwnAddress(" ME@example.org ", "me@example.org", null));
+        Assert.True(DraftRevisit.IsOwnAddress("help@example.org", "me@example.org", "Help@example.org"));
+        Assert.False(DraftRevisit.IsOwnAddress(null, "me@example.org", "help@example.org"));
+        Assert.False(DraftRevisit.IsOwnAddress("", "", ""));
+        Assert.False(DraftRevisit.IsOwnAddress("  ", "  ", "  "));
+        Assert.False(DraftRevisit.IsOwnAddress("bob@x.example", "me@example.org", "help@example.org"));
+        Assert.False(DraftRevisit.IsOwnAddress("me@example.org", null, "help@example.org"));
+        Assert.True(DraftRevisit.IsOwnAddress("help@example.org", null, "help@example.org"));
+    }
+
+    private static DraftCandidate Row(string id, string sender, string subject = "Hi", string to = "Me <me@example.org>") =>
+        new(id, null, null, "Ski", DateTimeOffset.Parse("2026-11-13T10:00:00Z"), subject, "N", sender, to, null);
+
+    // 29
+    [Fact]
+    public void PickReplyTarget_skips_own_and_ruled_out_rows()
+    {
+        var ai = new AiDraftingSettings { ExcludeSenders = ["spam.example"] };
+        var rows = new[]
+        {
+            Row("me", "me@example.org"), Row("nr", "noreply@x.example"), Row("auto", "a@x.example", "Automatic reply: a"),
+            Row("spam", "z@spam.example"), Row("bob", "bob@x.example"),
+        };
+        Assert.Equal("bob", DraftRevisit.PickReplyTarget(rows, "me@example.org", "me@example.org", ai)!.EntryId);
+    }
+
+    [Fact]
+    public void PickReplyTarget_edge_cases()
+    {
+        var bob = Row("bob", "bob@x.example", to: "list@x.example");
+        Assert.Null(DraftRevisit.PickReplyTarget([bob], "me@example.org", "me@example.org",
+            new AiDraftingSettings { IncludeOnlySenders = ["ann@x.example"] }));
+        Assert.Equal("bob", DraftRevisit.PickReplyTarget([bob], "me@example.org", "me@example.org",
+            new AiDraftingSettings { RequireDirectRecipient = true })!.EntryId);
+        Assert.Null(DraftRevisit.PickReplyTarget([], "me@example.org", null, new AiDraftingSettings()));
+        Assert.Throws<ArgumentException>(() => DraftRevisit.PickReplyTarget([bob], " ", null, new AiDraftingSettings()));
+        Assert.Throws<ArgumentNullException>(() => DraftRevisit.PickReplyTarget(null!, "me@example.org", null, new AiDraftingSettings()));
+        Assert.Throws<ArgumentNullException>(() => DraftRevisit.PickReplyTarget([bob], "me@example.org", null, null!));
+    }
+
+    // 30
+    [Fact]
+    public void PromptThread_drops_drafts_deleted_and_the_old_draft()
+    {
+        static ThreadMessage M(string id, string folder) =>
+            new(id, folder, DateTimeOffset.Parse("2026-11-13T10:00:00Z"), "N", "a@x.example", null, null, "s", [], "b");
+        var rows = new[]
+        {
+            M("a", "Inbox"), M("b", "Drafts"), M("c", @"drafts\Sub"), M("d", "Deleted Items"), M("e", "Sent Items"),
+            M("f", @"Archive\Drafts"), M("d0", "Inbox"),
+        };
+        Assert.Equal(["a", "e", "f"], DraftRevisit.PromptThread(rows, "D0").Select(r => r.EntryId));
+        Assert.Equal(["a", "e", "f", "d0"], DraftRevisit.PromptThread(rows, null).Select(r => r.EntryId));
+        Assert.Throws<ArgumentNullException>(() => DraftRevisit.PromptThread(null!, null));
+    }
+
+    // 31
+    [Fact]
+    public void Revisited_rule_id()
+    {
+        Assert.Equal("revisited", DraftRuleIds.Revisited);
+        Assert.Matches("^[a-z_]+$", DraftRuleIds.Revisited);
     }
 }

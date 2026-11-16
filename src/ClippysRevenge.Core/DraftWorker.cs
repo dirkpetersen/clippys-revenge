@@ -73,9 +73,10 @@ public enum DraftPassEnd
 }
 
 /// <summary>NoReply is needs_reply = false only; LowConfidence counts low_confidence skips.
-/// ModelCalls counts calls made in this pass.</summary>
+/// ModelCalls counts calls made in this pass. Updated = replace outcomes (new draft saved), Moved = removes that moved
+/// the draft, Kept = keep and low-confidence revisits (SPEC 23.6 "Counting").</summary>
 public sealed record DraftPassResult(DraftPassEnd End, int Drafted, int NoReply, int LowConfidence, int Skipped,
-    int Failed, int ModelCalls);
+    int Failed, int ModelCalls, int Updated = 0, int Moved = 0, int Kept = 0);
 
 /// <summary>Today's Claude calls and created drafts (Settings "Today" line).</summary>
 public sealed record AiDraftsToday(int Calls, int Drafts);
@@ -136,9 +137,13 @@ public static class DraftTexts
         _ => " (highest " + Confidence(highest) + " < " + Confidence(minimum) + ")",
     };
 
-    public static string Summary(int drafted, int noReply, int lowConfidence, int skipped, int failed, TimeSpan duration)
+    public static string Summary(int drafted, int noReply, int lowConfidence, int skipped, int failed, TimeSpan duration,
+        int updated = 0, int moved = 0, int kept = 0)
     {
         var s = Fmt($"AI drafts: {drafted} drafted");
+        if (updated > 0) s += Fmt($", {updated} updated");
+        if (moved > 0) s += Fmt($", {moved} moved to Deleted Items");
+        if (kept > 0) s += Fmt($", {kept} kept");
         if (noReply > 0) s += Fmt($", {noReply} no reply needed");
         if (lowConfidence > 0) s += Fmt($", {lowConfidence} low confidence");
         if (skipped > 0) s += Fmt($", {skipped} skipped");
@@ -152,7 +157,7 @@ public static class DraftTexts
 /// Every draft is a saved reply draft made through <see cref="IReplyDraftWriter"/>; nothing is ever sent.
 /// Logs and activity events never hold mail text, prompts, style text, model output or addresses (SPEC 19.11).
 /// </summary>
-public sealed class DraftWorker : BackgroundService
+public sealed partial class DraftWorker : BackgroundService
 {
     public static readonly TimeSpan TickInterval = TimeSpan.FromMinutes(15);
     public const int MaxCandidatesPerMailbox = 50;
@@ -399,6 +404,10 @@ public sealed class DraftWorker : BackgroundService
         public int Failed { get; set; }
         public int Calls { get; set; }
         public int Rows { get; set; }
+        public int Updated { get; set; }
+        public int Moved { get; set; }
+        public int Kept { get; set; }
+        public int Revisits { get; set; }   // revisits that made a model call
     }
 
     /// <summary>One automatic pass, serialized with the loop and the manual path. Exposed for tests.</summary>
@@ -493,15 +502,18 @@ public sealed class DraftWorker : BackgroundService
             p.Scope?.Dispose();
             p.Scope = null;
             var elapsed = _time.GetElapsedTime(p.Start);
-            if (p.Rows > 0)
-                _s.Hub.Event(ActivityKind.Ai, DraftTexts.Summary(p.Drafted, p.NoReply, p.LowConfidence, p.Skipped, p.Failed, elapsed),
+            if (p.Rows > 0 || p.Revisits > 0)
+                _s.Hub.Event(ActivityKind.Ai,
+                    DraftTexts.Summary(p.Drafted, p.NoReply, p.LowConfidence, p.Skipped, p.Failed, elapsed, p.Updated, p.Moved, p.Kept),
                     duration: elapsed);
-            if (p.Drafted > 0) _s.Balloons.Post(BalloonTexts.AiDrafted(p.Drafted), BalloonKind.Info, BalloonAction.ShowDrafts);
-            _log?.LogInformation("AI drafts pass: {End}, {Drafted} drafted, {NoReply} no reply, {LowConfidence} low confidence{LowConfidenceDetail}, {Skipped} skipped, {Failed} failed, {Calls} calls in {Ms} ms",
-                end, p.Drafted, p.NoReply, p.LowConfidence, DraftTexts.LowConfidenceLogDetail(p.LowConfidence, p.HighestLow, p.LowMinimum),
+            if (p.Drafted + p.Updated > 0)
+                _s.Balloons.Post(BalloonTexts.AiDrafted(p.Drafted + p.Updated), BalloonKind.Info, BalloonAction.ShowDrafts);
+            _log?.LogInformation("AI drafts pass: {End}, {Drafted} drafted, {Updated} updated, {Moved} moved, {Kept} kept, {NoReply} no reply, {LowConfidence} low confidence{LowConfidenceDetail}, {Skipped} skipped, {Failed} failed, {Calls} calls in {Ms} ms",
+                end, p.Drafted, p.Updated, p.Moved, p.Kept, p.NoReply, p.LowConfidence,
+                DraftTexts.LowConfidenceLogDetail(p.LowConfidence, p.HighestLow, p.LowMinimum),
                 p.Skipped, p.Failed, p.Calls, (long)elapsed.TotalMilliseconds);
         }
-        return new DraftPassResult(end, p.Drafted, p.NoReply, p.LowConfidence, p.Skipped, p.Failed, p.Calls);
+        return new DraftPassResult(end, p.Drafted, p.NoReply, p.LowConfidence, p.Skipped, p.Failed, p.Calls, p.Updated, p.Moved, p.Kept);
     }
 
     private string UserSmtp(AiIdentity identity)
@@ -544,6 +556,13 @@ public sealed class DraftWorker : BackgroundService
         {
             var index = _s.Indexes.For(key);
             var mailboxSmtp = key.Length == 0 ? userSmtp : key;
+            var cur0 = _s.Settings().Clone();
+            if (cur0.AiDrafting.ReviseDrafts)
+            {
+                var halt = await RevisitMailboxAsync(p, new RevisitScope(index, key, mailboxSmtp, cur0, identity, userSmtp,
+                    WorkPriority.Background), ct).ConfigureAwait(false);
+                if (halt is { } h) return h;
+            }
             foreach (var c in index.DraftCandidates(cutoff, MaxCandidatesPerMailbox))
             {
                 if (ct.IsCancellationRequested) return DraftPassEnd.Cancelled;
@@ -793,6 +812,17 @@ public sealed class DraftWorker : BackgroundService
             var created = _time.GetUtcNow();
             Write(p, index, c, factsImid, prior, AiOutcome.Drafted, calls: 1, confidence: reply.Confidence,
                 draftId: made.EntryId, draftCreated: created);
+            if (made.Fingerprint is not null && DraftFingerprint.IsValid(made.Fingerprint))
+            {
+                try
+                {
+                    index.RecordAiDraft(made.EntryId, c.EntryId, created, made.Fingerprint, c.EventTime, created);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _log?.LogWarning("AI drafts: couldn't record an AI draft ({Type}).", ex.GetType().Name);
+                }
+            }
             _s.Hub.Event(ActivityKind.Draft, DraftTexts.DraftCreated(made.Subject),
                 mailbox: string.IsNullOrEmpty(made.Mailbox) ? null : made.Mailbox);
             return null;
@@ -854,16 +884,22 @@ public sealed class DraftWorker : BackgroundService
             DraftBody.SignatureContent(sig) is not null, DraftMarker.Ai, priority);
     }
 
-    private ModelRequest BuildRequest(AiDraftingSettings ai, Settings settings, EmailIndex index, string key, PromptEmail email,
-        string? topic, DateTimeOffset eventTime, string entryId, AiIdentity identity, string userSmtp, bool manual)
+    /// <summary>now, zone, label and signature text, as every drafting prompt gets them.</summary>
+    private DraftPromptInput PromptInput(Settings settings, string key, PromptEmail email, IReadOnlyList<ThreadMessage> thread)
     {
         var now = _time.GetUtcNow();
-        var thread = index.Thread(topic, eventTime, DraftPrompt.MaxThreadMessages, entryId);
         var sig = DraftBody.SignatureContent(_s.ReplySignatureHtml());
         var sigText = sig is null ? null : DraftHtml.ToPlainText(sig);
         var localNow = TimeZoneInfo.ConvertTime(now, _s.Zone);
         var label = TimeZoneLabels.Resolve(settings.TimeZoneLabel, _s.Zone, localNow.DateTime);
-        var input = new DraftPromptInput(now, _s.Zone, label, key, sig is not null, thread, email, sigText);
+        return new DraftPromptInput(now, _s.Zone, label, key, sig is not null, thread, email, sigText);
+    }
+
+    private ModelRequest BuildRequest(AiDraftingSettings ai, Settings settings, EmailIndex index, string key, PromptEmail email,
+        string? topic, DateTimeOffset eventTime, string entryId, AiIdentity identity, string userSmtp, bool manual)
+    {
+        var thread = index.Thread(topic, eventTime, DraftPrompt.MaxThreadMessages, entryId);
+        var input = PromptInput(settings, key, email, thread);
         return new ModelRequest(
             DraftPrompt.SystemPrompt(identity.DisplayName, userSmtp, manual, _s.Style.ReadForPrompt(), ai.MeetingTimes),
             DraftPrompt.UserPrompt(input), DraftModel.ReplySchema, ai.Model, ai.Effort,
