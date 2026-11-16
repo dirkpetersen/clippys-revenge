@@ -1196,7 +1196,8 @@ public class SafetySourceScanTests
         Assert.Single(mapCalls);
         Assert.StartsWith(host + ":", mapCalls[0]);
 
-        var routes = Find(f => f.Code, @"(?<!FilesEndpoint)\s*\.\s*Map(Get|Post|Put|Patch|Delete|Methods|Fallback)?\s*\(");
+        // OneDriveMap.Map maps a cloud link to a synced file (M19.3), not an HTTP route.
+        var routes = Find(f => f.Code, @"(?<!FilesEndpoint|OneDriveMap)\s*\.\s*Map(Get|Post|Put|Patch|Delete|Methods|Fallback)?\s*\(");
         Assert.Single(routes);
         Assert.StartsWith(endpoint + ":", routes[0]);
 
