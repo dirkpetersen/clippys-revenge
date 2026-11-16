@@ -1,0 +1,183 @@
+namespace ClippysRevenge.Core;
+
+/// <summary>Exactly one of Attachment and Link is set. Mapped is set only for links (plan-time mapping).
+/// SkipReason: set when the item is not read at all (an AttachmentReasons text).</summary>
+public sealed record PlannedAttachment(int Tier, AttachmentOrigin Origin, string EntryId,
+    string? SenderName, string? SenderEmail, DateTimeOffset MessageTime, bool SharedAllowed,
+    AttachmentInfo? Attachment, FoundLink? Link, MappedLink? Mapped, string? SkipReason)
+{
+    public string Name => Attachment is not null ? Attachment.FileName.Trim() : Link!.Name;
+    public AttachmentKind Kind => Link is null ? AttachmentKind.File : AttachmentKind.Link;
+}
+
+/// <summary>SPEC 26.1 and 26.3: which attachments and links to read, in which order. Pure.</summary>
+public static class DraftAttachmentPlan
+{
+    private const int MinMentionChars = 4;
+
+    /// <summary>SPEC 26.1 sources, tiers, mention detection, dedupe, caps; 26.3 sender rule and mapping for
+    /// links. Pure; never throws except ArgumentNullException (request, roots). Result is in tier order.</summary>
+    public static IReadOnlyList<PlannedAttachment> Build(AttachmentRequest request, IReadOnlyList<SyncedRoot> roots)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(roots);
+
+        var ownText = MailText.OwnText(request.AnchorBody ?? "", request.SignatureText);
+        var candidates = new List<PlannedAttachment>();
+
+        void AddMessage(AttachmentOrigin origin, string entryId, string? senderName, string? senderEmail,
+            DateTimeOffset time, IReadOnlyList<AttachmentInfo>? attachments, string? body, bool anchor)
+        {
+            var shared = MayOpenShared(senderEmail, request.Identity, request.Mailbox);
+            int TierOf(string name) => anchor ? 1 : IsMentioned(request.AnchorSubject, ownText, name) ? 2 : 3;
+
+            foreach (var a in (attachments ?? []).Where(a => !a.IsInline).OrderBy(a => a.Position))
+            {
+                var name = (a.FileName ?? "").Trim();
+                candidates.Add(new PlannedAttachment(TierOf(name), origin, entryId, senderName, senderEmail, time,
+                    shared, a, null, null, null));
+            }
+            foreach (var link in OneDriveLinks.Find(body))
+            {
+                candidates.Add(new PlannedAttachment(TierOf(link.Name), origin, entryId, senderName, senderEmail, time,
+                    shared, null, link, null, null));
+            }
+        }
+
+        AddMessage(AttachmentOrigin.Email, request.AnchorEntryId, request.AnchorSenderName, request.AnchorSenderEmail,
+            request.AnchorTime, request.AnchorAttachments, request.AnchorBody, anchor: true);
+        foreach (var t in (request.Thread ?? [])
+                     .Where(t => !string.Equals(t.EntryId, request.AnchorEntryId, StringComparison.Ordinal))
+                     .OrderByDescending(t => t.EventTime))
+        {
+            AddMessage(AttachmentOrigin.Thread, t.EntryId, t.SenderName, t.SenderEmail, t.EventTime, t.Attachments,
+                t.Body, anchor: false);
+        }
+
+        // OrderBy is stable: within a tier the order of the steps above stands.
+        var sorted = candidates.OrderBy(c => c.Tier).Select(c => PreRead(c, roots)).ToList();
+
+        // Dedupe: first occurrence (best tier, then newest) wins.
+        var seenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenUrls = new HashSet<string>(StringComparer.Ordinal);
+        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var kept = new List<PlannedAttachment>();
+        foreach (var p in sorted)
+        {
+            if (p.Attachment is { } att)
+            {
+                if (att.Size is > 0 && !seenFiles.Add(p.Name + "\u0000" + att.Size.Value)) continue;
+            }
+            else
+            {
+                var path = (p.Mapped as MappedLink.Local)?.Path;
+                var dupUrl = seenUrls.Contains(p.Link!.NormalizedUrl);
+                var dupPath = path is not null && seenPaths.Contains(path);
+                if (dupUrl || dupPath) continue;
+                seenUrls.Add(p.Link.NormalizedUrl);
+                if (path is not null) seenPaths.Add(path);
+            }
+            kept.Add(p);
+        }
+
+        // Cap: only items that need a read use a slot.
+        var slots = 0;
+        for (var i = 0; i < kept.Count; i++)
+        {
+            if (kept[i].SkipReason is not null) continue;
+            if (++slots > DraftAttachments.MaxItems)
+                kept[i] = kept[i] with { SkipReason = AttachmentReasons.TooManyFiles };
+        }
+        return kept;
+    }
+
+    private static PlannedAttachment PreRead(PlannedAttachment p, IReadOnlyList<SyncedRoot> roots)
+    {
+        if (p.Link is { } link)
+        {
+            if (!p.SharedAllowed) return p with { SkipReason = AttachmentReasons.FromOutside };
+            var mapped = OneDriveMap.Map(link.Url, roots);
+            return mapped is MappedLink.Unmappable
+                ? p with { Mapped = mapped, SkipReason = AttachmentReasons.NotSynced }
+                : p with { Mapped = mapped };
+        }
+
+        var name = p.Name;
+        switch (AttachmentText.FormatOf(name))
+        {
+            case AttachmentFormat.Image:
+                return p with { SkipReason = AttachmentReasons.Image };
+            case AttachmentFormat.Unsupported:
+            case AttachmentFormat.UnsupportedNoted:
+                var ext = AttachmentText.Extension(name);
+                if (ext != "msg") return p with { SkipReason = AttachmentReasons.CantRead(ext) };
+                break;
+        }
+        return p;
+    }
+
+    /// <summary>SPEC 26.3 sender rule: sender is the own SMTP, the shared mailbox's address (mailbox != ""), or an
+    /// address whose domain equals the own SMTP's domain or ends with "." + it. Case-insensitive. False for a
+    /// sender that isn't an SMTP address (MailAddresses.LooksLikeSmtp) and when nothing matches.</summary>
+    public static bool MayOpenShared(string? senderEmail, AiIdentity identity, string mailbox)
+    {
+        var sender = senderEmail?.Trim();
+        if (!MailAddresses.LooksLikeSmtp(sender)) return false;
+
+        var own = identity?.OwnSmtp;
+        if (!string.IsNullOrWhiteSpace(own) && sender!.Equals(own.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+        if (!string.IsNullOrEmpty(mailbox) && sender!.Equals(mailbox.Trim(), StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var ownDomain = DomainOf(own);
+        var d = DomainOf(sender);
+        if (ownDomain is null || d is null) return false;
+        return d == ownDomain || d.EndsWith("." + ownDomain, StringComparison.Ordinal);
+    }
+
+    private static string? DomainOf(string? address)
+    {
+        if (address is null) return null;
+        var at = address.LastIndexOf('@');
+        if (at < 0) return null;
+        var d = address[(at + 1)..].Trim().ToLowerInvariant();
+        if (d.EndsWith('.')) d = d[..^1];
+        return d.Length == 0 ? null : d;
+    }
+
+    /// <summary>SPEC 26.1 tier-2 test against subject and own text (whole-token, case-insensitive).</summary>
+    public static bool IsMentioned(string? subject, string ownText, string name)
+    {
+        var trimmed = (name ?? "").Trim();
+        var candidates = new List<string> { trimmed };
+        if (AttachmentText.Extension(trimmed).Length > 0)
+        {
+            var dot = trimmed.LastIndexOf('.');
+            if (dot > 0) candidates.Add(trimmed[..dot].Trim());
+        }
+
+        foreach (var c in candidates)
+        {
+            if (c.Length < MinMentionChars) continue;
+            if (ContainsToken(subject, c) || ContainsToken(ownText, c)) return true;
+        }
+        return false;
+    }
+
+    private static bool ContainsToken(string? haystack, string needle)
+    {
+        if (string.IsNullOrEmpty(haystack)) return false;
+        var from = 0;
+        while (from <= haystack.Length - needle.Length)
+        {
+            var i = haystack.IndexOf(needle, from, StringComparison.OrdinalIgnoreCase);
+            if (i < 0) return false;
+            var end = i + needle.Length;
+            var before = i == 0 || !char.IsLetterOrDigit(haystack[i - 1]);
+            var after = end >= haystack.Length || !char.IsLetterOrDigit(haystack[end]);
+            if (before && after) return true;
+            from = i + 1;
+        }
+        return false;
+    }
+}

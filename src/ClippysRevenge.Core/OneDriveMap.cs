@@ -23,7 +23,7 @@ public abstract record MappedLink
 public static partial class OneDriveMap
 {
     /// <summary>Same text as AttachmentReasons.NotSynced (M19.2).</summary>
-    public const string NotSyncedReason = "not synced to this PC";
+    public const string NotSyncedReason = AttachmentReasons.NotSynced;
 
     private static readonly MappedLink.Unmappable NotSynced = new(NotSyncedReason);
 
