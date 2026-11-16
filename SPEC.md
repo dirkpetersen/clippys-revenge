@@ -5710,13 +5710,14 @@ time adds nothing a content hash doesn't already prove.
   SHA-256 over UTF-8 of, in this order, each as
   `<name>=<UTF-16 length>:<value>\n`: `subject`, `to`, `cc`, `bcc`,
   `html` (`HTMLBody`), `categories`, `importance` (the integer),
-  `attachments` (file names joined with `\n`, in position order),
-  then `from` (`SentOnBehalfOfName`) and `sensitivity` (the integer),
-  added by the M16 review (2026-11-15) so a draft whose only edit is
-  the From address or the sensitivity also counts as changed. Null
+  `from` (`SentOnBehalfOfName`), `sensitivity` (the integer),
+  `attachments` (file names joined with `\n`, in position order).
+  `from` and `sensitivity` were added by the M16 review (2026-11-15) so
+  a draft whose only edit is the From address or the sensitivity also
+  counts as changed. Null
   is `""`. No trimming or other normalization: any change counts.
   Input record: `DraftFingerprintInput(Subject, To, Cc, Bcc, HtmlBody,
-  Categories, Importance, AttachmentNames, From, Sensitivity)`;
+  Categories, Importance, From, Sensitivity, AttachmentNames)`;
   `importance` and `sensitivity` are written as invariant decimal
   integers; a null attachment list and an empty one hash the same. `DraftFingerprint.IsValid(string?)` checks the 64
   lower-case hex form. Test vectors: the M16.2 brief.
