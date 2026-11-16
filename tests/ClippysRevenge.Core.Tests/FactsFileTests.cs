@@ -34,7 +34,7 @@ public sealed class FactsFileTests : IDisposable
     private static string Expected(string name) => string.Join("\n",
         "---",
         "name: my-email-context",
-        "description: \"Facts about " + name + " for writing their email: role and team, meeting links, office hours, standard answers and who people are. Use when drafting or replying to email as " + name + ".\"",
+        "description: \"Facts about " + name + " for writing their email: role and team, meeting links, office hours, standard answers, who people are, and how they want replies written. Use when drafting or replying to email as " + name + ".\"",
         "---",
         "",
         "<!-- Facts about you, for Clippy's Revenge and Claude Code. Clippy adds what you write here to every AI draft request it sends to Claude, and Claude Code reads it when it writes email for you. Write short facts under the headings, one per line. Text between these comment markers is ignored, so you can leave the examples. Clippy never changes this file once it exists. Don't put passwords or other secrets here. -->",
@@ -63,6 +63,11 @@ public sealed class FactsFileTests : IDisposable
         "",
         "<!-- Who people are and how you know them, one per line. -->",
         "<!-- e.g. Ricky, Dave: ski group -->",
+        "",
+        "## How I want replies written",
+        "",
+        "<!-- Preferences for your drafts; these win over the writing-style skill. -->",
+        "<!-- e.g. Sign off with just my first name. Keep replies to my team short. -->",
         "");
 
     // 1
