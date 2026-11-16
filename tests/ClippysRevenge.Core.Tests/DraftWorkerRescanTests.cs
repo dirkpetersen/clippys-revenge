@@ -709,4 +709,22 @@ public class DraftWorkerRescanTests
             Assert.DoesNotContain(h.Log.Lines, l => l.Contains(bad, StringComparison.Ordinal));
         Assert.DoesNotContain(h.Hub.GetEvents(), e => e.Summary.Contains("SECRET-REASON", StringComparison.Ordinal));
     }
+
+[Fact]
+    public async Task Rescan_prompts_carry_the_facts()
+    {
+        using var h = Fx();
+        h.Facts.Text = "FACTS-MARKER-42 x";
+        h.Seed("P", at: Now - TimeSpan.FromMinutes(10));
+        h.Model.Enqueue(OkReply(0.9));
+        await Run(h);
+        Assert.Contains("<about_me>\nFACTS-MARKER-42 x\n</about_me>", Assert.Single(h.Model.Requests).SystemPrompt);
+
+        using var h2 = FxRevisit(requireDirect: false);
+        h2.Facts.Text = "FACTS-MARKER-42 x";
+        h2.Model.Enqueue(R("keep", 0.9));
+        await Run(h2);
+        Assert.Contains("<about_me>\nFACTS-MARKER-42 x\n</about_me>", h2.Model.Requests[0].SystemPrompt);
+        Assert.DoesNotContain(h2.AllText(), t => t.Contains("FACTS-MARKER-42", StringComparison.Ordinal));
+    }
 }

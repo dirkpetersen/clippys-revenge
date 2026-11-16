@@ -931,7 +931,7 @@ public class SafetySourceScanTests
         var name = Path.GetFileName(rel);
         return name.StartsWith("Draft", StringComparison.Ordinal) || name.StartsWith("Claude", StringComparison.Ordinal)
             || name.StartsWith("Style", StringComparison.Ordinal) || name.StartsWith("Anthropic", StringComparison.Ordinal)
-            || name.StartsWith("OutlookAiMailbox", StringComparison.Ordinal);
+            || name.StartsWith("Facts", StringComparison.Ordinal) || name.StartsWith("OutlookAiMailbox", StringComparison.Ordinal);
     }
 
     /// <summary>Forbidden Outlook-style calls in AI file code; File./Directory. calls (temp files, atomic rename) are exempt.</summary>
@@ -973,6 +973,8 @@ public class SafetySourceScanTests
         Assert.Empty(AiForbiddenHits("var x = list.Remove(y);"));
         Assert.True(IsAiFile("src/A/DraftWorker.cs"));
         Assert.True(IsAiFile("src/A/OutlookAiMailbox.cs"));
+        Assert.True(IsAiFile("src/A/FactsFile.cs"));
+        Assert.True(IsAiFile("src/A/FactsReporter.cs"));
         Assert.False(IsAiFile("src/A/OutlookMail.cs"));
     }
 

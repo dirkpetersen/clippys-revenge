@@ -45,6 +45,7 @@ internal sealed class DraftHarness : IDisposable
     public FakeDraftModel Model { get; } = new();
     public FakeReplyWriter Writer { get; } = new();
     public FakeStyleGuide Style { get; } = new();
+    public FakeFacts Facts { get; } = new();
     public CapturingLog Log { get; } = new();
     public List<Balloon> Shown { get; } = [];
     public bool Available { get; set; } = true;
@@ -67,7 +68,7 @@ internal sealed class DraftHarness : IDisposable
         Settings.SharedMailboxes.Add(new SharedMailbox { Smtp = Shared, Enabled = true, AiDrafts = false });
         Worker = new DraftWorker(new DraftWorkerServices(() => Settings, Indexes, Mailbox, Writer, Model, Style,
             () => SignatureHtml, Hub, Balloons, () => Available, () => Paused, Zone, Time, Log,
-            FreeBusy: FreeBusy, CentralEurope: () => Cet()));
+            FreeBusy: FreeBusy, CentralEurope: () => Cet(), Facts: Facts));
     }
 
     public AiDraftingSettings Ai => Settings.AiDrafting;

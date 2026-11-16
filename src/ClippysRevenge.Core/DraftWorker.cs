@@ -64,7 +64,8 @@ public sealed record DraftWorkerServices(
     TimeProvider? Time = null,
     ILogger? Logger = null,
     IFreeBusySource? FreeBusy = null,                 // null = calendar never readable (placeholder)
-    Func<TimeZoneInfo?>? CentralEurope = null);       // null = SenderRegion.CentralEurope
+    Func<TimeZoneInfo?>? CentralEurope = null,        // null = SenderRegion.CentralEurope
+    IFactsSource? Facts = null);                      // null = no facts block (prompts byte-identical to M16)
 
 public enum DraftPassEnd
 {
@@ -928,7 +929,8 @@ public sealed partial class DraftWorker : BackgroundService
         var thread = index.Thread(topic, eventTime, DraftPrompt.MaxThreadMessages, entryId);
         var input = PromptInput(settings, key, email, thread);
         return new ModelRequest(
-            DraftPrompt.SystemPrompt(identity.DisplayName, userSmtp, manual, _s.Style.ReadForPrompt(), ai.MeetingTimes),
+            DraftPrompt.SystemPrompt(identity.DisplayName, userSmtp, manual, _s.Style.ReadForPrompt(), ai.MeetingTimes,
+                _s.Facts?.ReadForPrompt() ?? ""),
             DraftPrompt.UserPrompt(input), DraftModel.ReplySchema, ai.Model, ai.Effort,
             TimeSpan.FromSeconds(ai.TimeoutSeconds), DraftModel.DraftMaxOutputTokens);
     }
