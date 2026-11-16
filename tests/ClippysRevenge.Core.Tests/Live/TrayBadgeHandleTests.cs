@@ -32,6 +32,10 @@ public sealed class TrayBadgeHandleTests
     [InlineData(32)]
     public void No_handle_leak_over_1000_swaps(int px)
     {
+        // Warm up: the first GDI drawing in a fresh process creates process-wide objects
+        // (font cache, screen DC) that live until exit; they must not count as a leak.
+        using (var warm = new TrayBadgeRenderer(px))
+            _ = warm.Get(TrayIconKey.Idle, AttentionBadge.Text(1)).Handle;
         var (g0, u0) = Counts();
         var r = new TrayBadgeRenderer(px);
         void Swap(int i)
