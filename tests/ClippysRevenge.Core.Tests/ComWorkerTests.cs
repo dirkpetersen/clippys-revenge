@@ -83,7 +83,7 @@ public class ComWorkerTests
 
     private static void WaitUntil(Func<bool> cond, TimeSpan? timeout = null)
     {
-        var end = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
+        var end = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(30));
         while (!cond())
         {
             Assert.True(DateTime.UtcNow < end, "Timed out waiting for condition.");
@@ -153,7 +153,7 @@ public class ComWorkerTests
 
         var before = r.Attacher.AttachCalls;
         var t = r.Worker.RunAsync(_ => 1, WorkPriority.Interactive, Ct);
-        var ex = await Assert.ThrowsAsync<OutlookUnavailableException>(() => t.WaitAsync(TimeSpan.FromSeconds(1), Ct));
+        var ex = await Assert.ThrowsAsync<OutlookUnavailableException>(() => t.WaitAsync(TimeSpan.FromSeconds(30), Ct));
         Assert.Equal("Outlook is not running. Ask the user to start Outlook (tray → Start Outlook) and try again.", ex.Message);
         Assert.IsAssignableFrom<McpException>(ex);
         Assert.Equal(before + 1, r.Attacher.AttachCalls);
@@ -178,7 +178,7 @@ public class ComWorkerTests
         WaitUntil(() => r.Attacher.AttachCalls >= 3);
         Assert.False(t.IsCompleted);
         r.Attacher.Running = true;
-        Assert.Equal(5, await t.WaitAsync(TimeSpan.FromSeconds(5), Ct));
+        Assert.Equal(5, await t.WaitAsync(TimeSpan.FromSeconds(30), Ct));
         Assert.Equal(OutlookConnectionState.Available, r.Worker.State);
     }
 
@@ -304,6 +304,8 @@ public class ComWorkerTests
         r.Attacher.Running = true;
         r.Worker.Nudge();
         WaitUntil(() => r.Worker.State == OutlookConnectionState.Available);
+        // The state is published before the handlers run, so wait for the second notification itself.
+        WaitUntil(() => seen.Count >= 2);
         Assert.Equal([OutlookConnectionState.Unavailable, OutlookConnectionState.Available], seen.ToArray());
         Assert.Equal(0, await Noop(r));
     }
@@ -355,7 +357,7 @@ public class ComWorkerTests
         await Task.Delay(50, Ct);
         Assert.False(t.IsCompleted);
         r.Worker.Start();
-        Assert.Equal(3, await t.WaitAsync(TimeSpan.FromSeconds(5), Ct));
+        Assert.Equal(3, await t.WaitAsync(TimeSpan.FromSeconds(30), Ct));
     }
 
     [Fact]

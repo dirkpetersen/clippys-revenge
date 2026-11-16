@@ -42,7 +42,7 @@ public sealed class ConnectionTesterTests
         var (host, hub) = await StartHost();
         await using var _ = host;
         using var __ = hub;
-        using var t = new ConnectionTester();
+        using var t = new ConnectionTester(null, TimeSpan.FromSeconds(60));
         var r = await t.TestAsync(host.Port, Token, TestContext.Current.CancellationToken);
         Assert.True(r.Ok, r.Message);
         Assert.Equal($"✓ Connection works: 127.0.0.1:{host.Port} needs the token and answers MCP.", r.Message);
@@ -54,7 +54,7 @@ public sealed class ConnectionTesterTests
         var (host, hub) = await StartHost();
         await using var _ = host;
         using var __ = hub;
-        using var t = new ConnectionTester();
+        using var t = new ConnectionTester(null, TimeSpan.FromSeconds(60));
         var r = await t.TestAsync(host.Port, "other-token", TestContext.Current.CancellationToken);
         Assert.False(r.Ok);
         Assert.Equal("✗ The server rejected the token (HTTP 401).", r.Message);
@@ -76,7 +76,7 @@ public sealed class ConnectionTesterTests
         l.Start();
         var port = ((IPEndPoint)l.LocalEndpoint).Port;
         l.Stop();
-        using var t = new ConnectionTester();
+        using var t = new ConnectionTester(null, TimeSpan.FromSeconds(60));
         var r = await t.TestAsync(port, Token, TestContext.Current.CancellationToken);
         Assert.False(r.Ok);
         Assert.Equal($"✗ Nothing answers on 127.0.0.1:{port}.", r.Message);
@@ -95,7 +95,7 @@ public sealed class ConnectionTesterTests
     {
         var h = new FakeHandler(async (_, ct) =>
         {
-            await Task.Delay(3000, ct);
+            await Task.Delay(System.Threading.Timeout.Infinite, ct); // Only the tester's own timeout ends this call.
             return Resp(HttpStatusCode.Unauthorized);
         });
         using var t = new ConnectionTester(h, TimeSpan.FromSeconds(1));

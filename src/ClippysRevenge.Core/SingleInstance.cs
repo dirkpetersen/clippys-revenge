@@ -58,18 +58,29 @@ public sealed class SingleInstance : IDisposable
 
     public static bool SignalExisting(string command, string? pipeName = null, int timeoutMs = 2000)
     {
-        try
+        var sw = Stopwatch.StartNew();
+        while (true)
         {
-            using var client = new NamedPipeClientStream(".", pipeName ?? DefaultPipeName, PipeDirection.Out, PipeOptions.CurrentUserOnly);
-            client.Connect(timeoutMs);
-            var bytes = Encoding.UTF8.GetBytes(command + "\n");
-            client.Write(bytes, 0, bytes.Length);
-            client.Flush();
-            return true;
-        }
-        catch
-        {
-            return false;
+            try
+            {
+                var left = timeoutMs - (int)sw.ElapsedMilliseconds;
+                using var client = new NamedPipeClientStream(".", pipeName ?? DefaultPipeName, PipeDirection.Out, PipeOptions.CurrentUserOnly);
+                client.Connect(Math.Max(left, 1));
+                var bytes = Encoding.UTF8.GetBytes(command + "\n");
+                client.Write(bytes, 0, bytes.Length);
+                client.Flush();
+                return true;
+            }
+            catch (IOException) when (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                // The listener closed the instance we connected to while it was already finishing the previous
+                // signal ("Pipe is broken"). It opens a fresh instance right away, so try again within the timeout.
+                Thread.Sleep(20);
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 

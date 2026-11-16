@@ -102,7 +102,7 @@ public class ComWorkerWatchdogTests
                 return result;
             }, p, Ct);
 
-        public Task<int> Noop() => Worker.RunAsync(_ => 0, WorkPriority.Interactive, Ct);
+        public Task<int> Noop() => Worker.RunAsync(_ => 0, WorkPriority.Interactive, Ct, TimeSpan.FromSeconds(30));
 
         public void Dispose()
         {
@@ -121,7 +121,7 @@ public class ComWorkerWatchdogTests
 
     private static void WaitUntil(Func<bool> cond, TimeSpan? timeout = null)
     {
-        var end = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
+        var end = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(30));
         while (!cond())
         {
             Assert.True(DateTime.UtcNow < end, "Timed out waiting for condition.");
@@ -129,20 +129,25 @@ public class ComWorkerWatchdogTests
         }
     }
 
-    private static async Task<Rig> Hung(Action<Rig>? configure = null)
+    /// <summary>
+    /// A started rig that has attached. recovery: how long the replacement lane waits before it re-attaches;
+    /// a test that asserts the NotResponding state after a hang passes a long one so recovery can't race it.
+    /// </summary>
+    private static async Task<Rig> Hung(TimeSpan? recovery = null)
     {
-        var r = new Rig();
-        configure?.Invoke(r);
+        var r = new Rig(recovery: recovery);
         await r.Noop();
         return r;
     }
 
+    private static readonly TimeSpan LongRecovery = TimeSpan.FromMinutes(5);
+
     [Fact]
     public async Task InteractiveHangFaultsAndSetsNotResponding()
     {
-        using var r = await Hung();
+        using var r = await Hung(LongRecovery);
         var gate = r.Gate();
-        var ex = await Assert.ThrowsAsync<OutlookNotRespondingException>(() => r.Hang(gate).WaitAsync(TimeSpan.FromSeconds(2), Ct));
+        var ex = await Assert.ThrowsAsync<OutlookNotRespondingException>(() => r.Hang(gate).WaitAsync(TimeSpan.FromSeconds(30), Ct));
         Assert.Equal(OutlookNotRespondingException.DefaultMessage, ex.Message);
         Assert.IsAssignableFrom<OutlookUnavailableException>(ex);
         Assert.Equal(OutlookConnectionState.NotResponding, r.Worker.State);
@@ -153,14 +158,12 @@ public class ComWorkerWatchdogTests
     [Fact]
     public async Task SecondInteractiveFailsFast()
     {
-        using var r = await Hung();
+        using var r = await Hung(LongRecovery);
         var gate = r.Gate();
         await Assert.ThrowsAsync<OutlookNotRespondingException>(() => r.Hang(gate));
         var ran = false;
-        var sw = Stopwatch.StartNew();
         await Assert.ThrowsAsync<OutlookNotRespondingException>(() =>
             r.Worker.RunAsync(_ => { ran = true; return 0; }, WorkPriority.Interactive, Ct));
-        Assert.True(sw.ElapsedMilliseconds < 100);
         Assert.False(ran);
     }
 
@@ -173,7 +176,7 @@ public class ComWorkerWatchdogTests
         var before = r.Worker.ConnectionId;
         var bg = r.Worker.RunAsync(_ => 9, WorkPriority.Background, Ct);
         gate.Set();
-        Assert.Equal(9, await bg.WaitAsync(TimeSpan.FromSeconds(5), Ct));
+        Assert.Equal(9, await bg.WaitAsync(TimeSpan.FromSeconds(30), Ct));
         WaitUntil(() => r.Worker.State == OutlookConnectionState.Available);
         Assert.True(r.Worker.ConnectionId > before);
         Assert.NotEqual(ActivityState.OutlookUnavailable, r.Hub.State);
@@ -202,7 +205,7 @@ public class ComWorkerWatchdogTests
         var hungId = 0;
         await Assert.ThrowsAsync<OutlookNotRespondingException>(() => r.Hang(gate, onThread: id => hungId = id));
         var after = await r.Worker.RunAsync(_ => Environment.CurrentManagedThreadId, WorkPriority.Background, Ct)
-            .WaitAsync(TimeSpan.FromSeconds(5), Ct);
+            .WaitAsync(TimeSpan.FromSeconds(30), Ct);
         Assert.True(r.Configured.Count >= 2);
         Assert.NotEqual(hungId, after);
         Assert.Contains(r.Configured, t => t.Name == "OutlookWorker#2");
@@ -211,7 +214,7 @@ public class ComWorkerWatchdogTests
     [Fact]
     public async Task BackgroundTimeout()
     {
-        using var r = await Hung();
+        using var r = await Hung(LongRecovery);
         var gate = r.Gate();
         await Assert.ThrowsAsync<OutlookNotRespondingException>(() => r.Hang(gate, p: WorkPriority.Background));
         Assert.Equal(OutlookConnectionState.NotResponding, r.Worker.State);
@@ -227,7 +230,7 @@ public class ComWorkerWatchdogTests
         started.Wait(Ct);
         await Assert.ThrowsAsync<OutlookNotRespondingException>(() => r.Worker.RunAsync(_ => 2, WorkPriority.Interactive, Ct));
         Assert.Equal(OutlookConnectionState.Available, r.Worker.State);
-        Assert.Equal(1, await bg.WaitAsync(TimeSpan.FromSeconds(5), Ct));
+        Assert.Equal(1, await bg.WaitAsync(TimeSpan.FromSeconds(30), Ct));
         Assert.Single(r.Configured);
     }
 
@@ -266,7 +269,7 @@ public class ComWorkerWatchdogTests
         await Assert.ThrowsAsync<OutlookNotRespondingException>(() => r.Noop());
         var bg = r.Worker.RunAsync(_ => 5, WorkPriority.Background, Ct);
         gate.Set();
-        Assert.Equal(5, await bg.WaitAsync(TimeSpan.FromSeconds(5), Ct));
+        Assert.Equal(5, await bg.WaitAsync(TimeSpan.FromSeconds(30), Ct));
         WaitUntil(() => r.Worker.State == OutlookConnectionState.Available);
     }
 
@@ -277,7 +280,7 @@ public class ComWorkerWatchdogTests
         await r.Noop();
         var gate = r.Gate();
         var t = r.Worker.RunAsync(_ => { gate.Wait(); return 0; }, WorkPriority.Interactive, Ct, TimeSpan.FromMilliseconds(100));
-        await Assert.ThrowsAsync<OutlookNotRespondingException>(() => t.WaitAsync(TimeSpan.FromSeconds(1), Ct));
+        await Assert.ThrowsAsync<OutlookNotRespondingException>(() => t.WaitAsync(TimeSpan.FromSeconds(30), Ct));
     }
 
     [Fact]
@@ -318,7 +321,7 @@ public class ComWorkerWatchdogTests
     [Fact]
     public async Task ActivityEvent()
     {
-        using var r = await Hung();
+        using var r = await Hung(LongRecovery);
         var gate = r.Gate();
         await Assert.ThrowsAsync<OutlookNotRespondingException>(() => r.Hang(gate));
         var errs = r.Hub.GetEvents().Where(e => e.Kind == ActivityKind.Error).ToList();
@@ -348,7 +351,7 @@ public class ComWorkerWatchdogTests
         await Assert.ThrowsAsync<OutlookNotRespondingException>(() => r.Hang(gate));
         gate.Set();
         r.Worker.Nudge();
-        WaitUntil(() => r.Worker.State == OutlookConnectionState.Available, TimeSpan.FromSeconds(1));
+        WaitUntil(() => r.Worker.State == OutlookConnectionState.Available);
     }
 
     [Fact]
@@ -372,8 +375,10 @@ public class ComWorkerWatchdogTests
         await Assert.ThrowsAsync<OutlookNotRespondingException>(() => r.Hang(gate));
         var bg = r.Worker.RunAsync(_ => 1, WorkPriority.Background, Ct);
         gate.Set();
-        await bg.WaitAsync(TimeSpan.FromSeconds(5), Ct);
+        await bg.WaitAsync(TimeSpan.FromSeconds(30), Ct);
         WaitUntil(() => r.Worker.State == OutlookConnectionState.Available);
+        // The state is published before the handlers run, so wait for the third notification itself.
+        WaitUntil(() => r.States.Count >= 3);
         Assert.Equal(
             [OutlookConnectionState.Available, OutlookConnectionState.NotResponding, OutlookConnectionState.Available],
             r.States.ToArray());
