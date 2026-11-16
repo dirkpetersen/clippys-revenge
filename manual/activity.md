@@ -60,7 +60,7 @@ in.
 | `Sync` | `Retention changed to 24 months: backfilling older mail` |
 | `Purge` | `Retention changed to 6 months: purged 1204 emails` |
 | `Sync` | `Reconciled Inbox: 3 removed, 2 added, 5 read-state updated` (once a day per folder, when something differed; with `, <n> unreadable` if some mail couldn't be read) |
-| `Sync` | `Reconcile Inbox: Outlook listed no items, kept 4102 indexed emails`, or `Reconcile Inbox abandoned: Outlook ids did not match the index, will retry`. Clippy refused to remove mail from its index because Outlook's answer looked wrong |
+| `Sync` | `Reconcile Inbox: Outlook listed no items, kept 4102 indexed emails`, or `Reconcile Inbox abandoned: Outlook ids did not match the index, will retry` (with `, kept <n> indexed emails` before `, will retry` when it held some back). Clippy refused to remove mail from its index because Outlook's answer looked wrong |
 | `Error` | `sync failed: <reason>` |
 | `Error` | `<mailbox> is not in Outlook; skipped`, `folder "<path>" not found; skipped` |
 | `Error` | `Outlook isn't responding: a call took longer than <n> s` |
@@ -97,7 +97,7 @@ rescan items.
 | Kind | Text |
 |---|---|
 | `Draft` | `AI reply draft created: <subject>`. When Clippy considered attachments or shared files for it, a suffix follows: `AI reply draft created: Re:: Budget (attachments: 3 read, 1 not read)`. "Read" counts files read in full or in part, "not read" counts files that were skipped. Only counts, never names. A replaced draft carries the same suffix before its final period. See [Attachments and shared files](ai-drafts.md#attachments-and-shared-files) |
-| `Ai` | `AI drafts: 3 drafted, 5 no reply needed, 2 skipped (41 s)`. One summary line after each pass. Parts that are 0 are left out. Possible parts, in order: `<d> drafted`, `<u> updated`, `<m> moved to Deleted Items`, `<k> kept`, `<x> no reply needed`, `<l> low confidence`, `<s> skipped`, `<f> failed` |
+| `Ai` | `AI drafts: 3 drafted, 5 no reply needed, 2 skipped (41 s)`. One summary line after each pass. `<d> drafted` is always there; the other parts appear only when they are not 0, in this order: `<u> updated`, `<m> moved to Deleted Items`, `<k> kept`, `<x> no reply needed`, `<l> low confidence`, `<s> skipped`, `<f> failed` |
 | `Ai` | `AI drafts: no draft for the email received 2026-11-15 09:42: Claude's confidence 0.45 is below your minimum of 0.60. To draft it anyway, select it in Outlook and use "Draft a reply to the selected email" in the tray menu, or lower Minimum confidence in Settings → AI drafts.` Low confidence. It shows the received time, no subject or sender. The email is decided once |
 | `Ai` | `AI drafts: daily limit of 30 reached. I'll continue tomorrow.` |
 | `Ai` | `AI drafts: Claude's usage limit was reached. I'll try again at 14:05.` |
@@ -152,10 +152,11 @@ See [Facts about you](ai-drafts.md#facts-about-you). These texts never contain t
 
 | Kind | Text |
 |---|---|
-| `Ai` (warning) | `Facts about you: my-email-context SKILL.md not found or unreadable — drafts go without it. Use "Edit my facts…" in the AI drafts menu.` Shown once when the file goes missing, becomes unreadable, is larger than 16 KiB or isn't valid UTF-8 |
-| `Ai` | `Facts about you: using my-email-context SKILL.md again.` The file is back |
+| `Ai` | `Facts about you: my-email-context SKILL.md not found or unreadable — drafts go without it. Use "Edit my facts…" in the AI drafts menu.` Shown once when the file goes missing, becomes unreadable, is larger than 16 KiB or isn't valid UTF-8 |
+| `Ai` | `Facts about you: using my-email-context SKILL.md again.` The file is back (filled in or template only) |
 
-An untouched template is normal and reports nothing.
+An untouched template is normal and reports nothing. Clippy checks the file each time it
+builds a draft, so these lines appear at the next draft after the change.
 
 ### Related mail
 

@@ -11,9 +11,11 @@ Not supported. An Exchange or Microsoft 365 mailbox is required.
 
 ## Can it send email?
 
-No. Clippy never sends anything, neither mail nor meetings. It saves drafts and
-you send them from Outlook. Meeting invites are saved unsent in your calendar too.
-See [Meeting drafts](calendar.md#meeting-drafts).
+No. Clippy never sends anything, neither mail nor meetings, with or without AI. It has
+no send function at all, and the code is checked for this on every build. It saves
+drafts and you send them from Outlook. Meeting invites are saved unsent in your
+calendar too. See [Meeting drafts](calendar.md#meeting-drafts) and
+[Security](security.md#what-it-never-does).
 
 ## Why can't Clippy send a meeting invite?
 
@@ -42,13 +44,6 @@ you can drag it back). It does this only when you haven't edited it, opened it o
 it, and the Activity window records it. Nothing is ever deleted for good. You can turn
 it off with **Update or remove my AI drafts when a thread moves on** in Settings, AI
 drafts. See [Outdated drafts](ai-drafts.md#outdated-drafts).
-
-## Does Clippy ever send an email or a meeting?
-
-No, never. Clippy has no send function at all. Mail and replies, with or without AI,
-are saved as drafts. Meetings are saved unsent in your calendar. You read them and
-press Send in Outlook yourself. The code is checked for this on every build. See
-[Security](security.md#what-it-never-does).
 
 ## What does "Rescan emails from the last 24 hours" do?
 
@@ -226,6 +221,11 @@ A folder indexed before v0.1.1 under its translated name keeps its old entries u
 add the folder again or use **Rebuild index…**. See
 [Drafts and Deleted Items in other languages](ai-drafts.md#drafts-and-deleted-items-in-other-languages).
 
+To cut quoted history from mail, Clippy recognizes the reply headers Outlook writes in
+English, German, French, Spanish, Dutch, Italian, Swedish, Polish and Japanese (for
+example `From:`/`Von:`/`Från:`/`差出人:` blocks and "On … wrote:" lines). In other
+languages more of the quoted text may reach Claude as part of an email.
+
 ## Can I tell the AI drafts my Zoom link or how I like to sign off?
 
 Yes. Use **Edit my facts…** in the tray, under **AI drafts**. It opens a file with
@@ -261,7 +261,7 @@ newsletter or automatic mail, match a never-draft rule, or not need a reply. See
 
 ## Is the writing-style file safe?
 
-It is a Claude Code skill in %USERPROFILE%\.claude\skills\my-email-style, so your
+It is a Claude Code skill in `%USERPROFILE%\.claude\skills\my-email-style`, so your
 interactive Claude Code sessions can load it. Review, edit or delete it any time. See
 the [security note](ai-drafts.md#your-writing-style).
 
