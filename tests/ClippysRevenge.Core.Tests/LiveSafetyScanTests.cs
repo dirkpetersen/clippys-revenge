@@ -110,4 +110,14 @@ public class LiveSafetyScanTests
         Assert.Contains("GetItemFromID(tracked.EntryId, tracked.StoreId)", fixture, StringComparison.Ordinal);
         Assert.Contains("StartsWith(\"[\" + RunToken + \"] \"", fixture, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Live_link_test_uses_its_own_host_and_folder()
+    {
+        var text = File.ReadAllText(Path.Combine(LiveDir(), "LiveAttachmentLinkTests.cs"));
+        foreach (var needed in new[] { "StartAsync(0", "PrivateFolder.Ensure", "fx.TempRoot, \"links\"" })
+            Assert.True(text.Contains(needed, StringComparison.Ordinal), "The live link test is missing: " + needed);
+        foreach (var banned in new[] { "LinkPaths.Default", "LocalApplicationData", "ClippysRevenge\\\\links" })
+            Assert.False(text.Contains(banned, StringComparison.Ordinal), "The live link test must not use: " + banned);
+    }
 }
