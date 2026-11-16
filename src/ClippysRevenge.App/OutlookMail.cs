@@ -190,7 +190,10 @@ internal sealed partial class OutlookMail
                     if (c == DraftMarker.PropertyName)
                     {
                         // Outlook may refuse the named property as a column; then the marker reads as null.
+                        // The interop surfaces that refusal as ArgumentException (E_INVALIDARG, "does not
+                        // support this operation") or as a COMException, depending on the store.
                         try { cols.Add(c); }
+                        catch (ArgumentException) { markerMissing = true; }
                         catch (COMException ex) when (!ComErrors.IsOutlookGone(ex)) { markerMissing = true; }
                     }
                     else
