@@ -1,0 +1,4055 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Your classic Outlook as a local MCP server for Claude Code. No cloud, no Graph, no OAuth.">
+      
+      
+      
+        <link rel="canonical" href="https://dirkpetersen.github.io/clippys-revenge/ai-drafts/">
+      
+      
+      
+        <link rel="prev" href="../calendar/">
+      
+      
+        <link rel="next" href="../security/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/logo.svg">
+      <meta name="generator" content="zensical-0.1.1">
+    
+    
+      
+        <title>AI drafts - Clippy's Revenge</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.ebb7f775.min.css">
+      
+        
+          
+        
+        <link rel="stylesheet" href="../assets/stylesheets/modern/palette.b60ce83d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-hidden="true"></label>
+    <div data-md-component="skip">
+      <a href="#__skip" class="md-skip">
+        Skip to content
+      </a>
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="./.." title="Clippy&#x27;s Revenge" class="md-header__button md-logo" aria-label="Clippy's Revenge" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="Clippy's Revenge">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+      <span class="md-visually-hidden">Navigation</span>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Clippy's Revenge
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              AI drafts
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-sun-moon" viewBox="0 0 24 24"><path d="M12 2v2M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715M16 12a4 4 0 0 0-4-4M19 5l-1.256 1.256M20 12h2"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-moon" viewBox="0 0 24 24"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+          <span class="md-visually-hidden">Search</span>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+        <a href="https://github.com/dirkpetersen/clippys-revenge" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.3.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M216.5 362.5c-66-8-112.5-55.5-112.5-117 0-25 9-52 24-70-6.5-16.5-5.5-51.5 2-66 20-2.5 47 8 63 22.5 19-6 39-9 63.5-9s44.5 3 62.5 8.5c15.5-14 43-24.5 63-22 7 13.5 8 48.5 1.5 65.5 16 19 24.5 44.5 24.5 70.5 0 61.5-46.5 108-113.5 116.5 17 11 28.5 35 28.5 62.5v52c0 15 12.5 23.5 27.5 17.5C441 459.5 512 369 512 257 512 115.5 397 0 255.5 0S0 115.5 0 257c0 111 70.5 203 165.5 237.5 13.5 5 26.5-4 26.5-17.5v-40c-7 3-16 5-24 5-33 0-52.5-18-66.5-51.5-5.5-13.5-11.5-21.5-23-23-6-.5-8-3-8-6 0-6 10-10.5 20-10.5 14.5 0 27 9 40 27.5 10 14.5 20.5 21 33 21s20.5-4.5 32-16c8.5-8.5 15-16 21-21"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dirkpetersen/clippys-revenge
+  </div>
+</a>
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="./.." class="md-tabs__link">
+        
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+      
+    
+    
+    
+      <li class="md-tabs__item">
+        <a href="../install/" class="md-tabs__link">
+          
+  
+  Get started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+      
+    
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../tools/" class="md-tabs__link">
+          
+  
+  Use
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+      
+    
+    
+    
+      <li class="md-tabs__item">
+        <a href="../security/" class="md-tabs__link">
+          
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="./.." title="Clippy&#x27;s Revenge" class="md-nav__button md-logo" aria-label="Clippy's Revenge" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="Clippy's Revenge">
+
+    </a>
+    Clippy's Revenge
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dirkpetersen/clippys-revenge" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.3.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M216.5 362.5c-66-8-112.5-55.5-112.5-117 0-25 9-52 24-70-6.5-16.5-5.5-51.5 2-66 20-2.5 47 8 63 22.5 19-6 39-9 63.5-9s44.5 3 62.5 8.5c15.5-14 43-24.5 63-22 7 13.5 8 48.5 1.5 65.5 16 19 24.5 44.5 24.5 70.5 0 61.5-46.5 108-113.5 116.5 17 11 28.5 35 28.5 62.5v52c0 15 12.5 23.5 27.5 17.5C441 459.5 512 369 512 257 512 115.5 397 0 255.5 0S0 115.5 0 257c0 111 70.5 203 165.5 237.5 13.5 5 26.5-4 26.5-17.5v-40c-7 3-16 5-24 5-33 0-52.5-18-66.5-51.5-5.5-13.5-11.5-21.5-23-23-6-.5-8-3-8-6 0-6 10-10.5 20-10.5 14.5 0 27 9 40 27.5 10 14.5 20.5 21 33 21s20.5-4.5 32-16c8.5-8.5 15-16 21-21"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dirkpetersen/clippys-revenge
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="./.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Home
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Get started
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        
+          <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_2">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  Get started
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Install
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Connect Claude Code
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../updates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Updates
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Use
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        
+          <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+            <label class="md-nav__title" for="__nav_3">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  Use
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Tools reference
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tray/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Tray menu
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Settings
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../activity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Activity window
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../indexing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Indexing and search
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../calendar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Calendar and meetings
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  AI drafts
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  AI drafts
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-does-and-doesnt-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What it does and doesn't do
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#set-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Set up
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Set up">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#claude-code-on-this-pc-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Claude Code on this PC (default)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#anthropic-api-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Anthropic API key
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-effort-and-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Model, effort and cost
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#turn-it-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Turn it on
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consent-and-what-is-sent" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Consent and what is sent
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Rules
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Rules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#limits-and-backoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Limits and backoff
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#emails-clippy-decides-not-to-draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Emails Clippy decides not to draft
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shared-mailboxes" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Shared mailboxes
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dont-draft-for-this-sender" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Don't draft for this sender
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#draft-one-reply-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Draft one reply now
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#outdated-drafts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Outdated drafts
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Outdated drafts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#worked-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Worked example
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rescan-emails-from-the-last-24-hours" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Rescan emails from the last 24 hours
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#meeting-times" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Meeting times
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#facts-about-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Facts about you
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Facts about you">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-the-file-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Where the file is
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-the-file-is-created" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How the file is created
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The template
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-to-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What to write
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-claude-gets" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What Claude gets
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#edit-my-facts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Edit my facts…
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#status-in-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Status in Settings
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#activity-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Activity messages
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Worked example
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-earlier-mail" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Related earlier mail
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Related earlier mail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-picked" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What is picked
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-goes-to-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What goes to Claude
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-one-time-notice" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The one-time notice
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attachments-and-shared-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Attachments and shared files
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attachments and shared files">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What is read
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Formats
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Limits
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shared-files-onedrive-and-sharepoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Shared files (OneDrive and SharePoint)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-yellow-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The yellow notes
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-you-see-in-activity" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What you see in Activity
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#privacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Privacy
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#turning-it-off-and-the-one-time-notice" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Turning it off, and the one-time notice
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#token-tally" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Token tally
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#drafts-and-deleted-items-in-other-languages" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Drafts and Deleted Items in other languages
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-reason-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The reason line
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#your-writing-style" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Your writing style
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Your writing style">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-meeting-times-section-of-the-skill" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The meeting-times section of the skill
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#learning-from-how-you-edit-drafts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Learning from how you edit drafts
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Learning from how you edit drafts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-clippy-records-when-it-saves-a-draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What Clippy records when it saves a draft
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-clippy-finds-what-you-sent" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How Clippy finds what you sent
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sent-unchanged-or-edited" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Sent unchanged, or edited
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-kept-and-for-how-long" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What is kept, and for how long
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-your-edits-go-to-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        When your edits go to Claude
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-you-see-in-activity_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What you see in Activity
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#turning-it-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Turning it off
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notice-for-existing-users" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Notice for existing users
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#privacy-in-short" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Privacy in short
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Troubleshooting
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Reference
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        
+          <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_4">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  Reference
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Security model
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Troubleshooting
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  FAQ
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Changelog
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-does-and-doesnt-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What it does and doesn't do
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#set-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Set up
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Set up">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#claude-code-on-this-pc-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Claude Code on this PC (default)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#anthropic-api-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Anthropic API key
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-effort-and-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Model, effort and cost
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#turn-it-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Turn it on
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consent-and-what-is-sent" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Consent and what is sent
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Rules
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Rules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#limits-and-backoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Limits and backoff
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#emails-clippy-decides-not-to-draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Emails Clippy decides not to draft
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shared-mailboxes" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Shared mailboxes
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dont-draft-for-this-sender" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Don't draft for this sender
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#draft-one-reply-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Draft one reply now
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#outdated-drafts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Outdated drafts
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Outdated drafts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#worked-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Worked example
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rescan-emails-from-the-last-24-hours" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Rescan emails from the last 24 hours
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#meeting-times" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Meeting times
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#facts-about-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Facts about you
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Facts about you">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-the-file-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Where the file is
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-the-file-is-created" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How the file is created
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The template
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-to-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What to write
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-claude-gets" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What Claude gets
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#edit-my-facts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Edit my facts…
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#status-in-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Status in Settings
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#activity-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Activity messages
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Worked example
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-earlier-mail" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Related earlier mail
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Related earlier mail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-picked" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What is picked
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-goes-to-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What goes to Claude
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-one-time-notice" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The one-time notice
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attachments-and-shared-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Attachments and shared files
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attachments and shared files">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What is read
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Formats
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Limits
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shared-files-onedrive-and-sharepoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Shared files (OneDrive and SharePoint)
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-yellow-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The yellow notes
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-you-see-in-activity" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What you see in Activity
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#privacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Privacy
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#turning-it-off-and-the-one-time-notice" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Turning it off, and the one-time notice
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#token-tally" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Token tally
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#drafts-and-deleted-items-in-other-languages" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Drafts and Deleted Items in other languages
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-reason-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The reason line
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#your-writing-style" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Your writing style
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Your writing style">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-meeting-times-section-of-the-skill" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        The meeting-times section of the skill
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#learning-from-how-you-edit-drafts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Learning from how you edit drafts
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Learning from how you edit drafts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-clippy-records-when-it-saves-a-draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What Clippy records when it saves a draft
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-clippy-finds-what-you-sent" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How Clippy finds what you sent
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sent-unchanged-or-edited" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Sent unchanged, or edited
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-kept-and-for-how-long" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What is kept, and for how long
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-your-edits-go-to-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        When your edits go to Claude
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-you-see-in-activity_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What you see in Activity
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#turning-it-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Turning it off
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notice-for-existing-users" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Notice for existing users
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#privacy-in-short" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Privacy in short
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Troubleshooting
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                <a id="__skip" tabindex="-1"></a>
+                
+                  
+
+  
+  
+
+
+<h1 id="ai-drafts">AI drafts<a class="headerlink" href="#ai-drafts" title="Permanent link">&para;</a></h1>
+<p>Clippy's Revenge can write reply drafts for you, in your own writing style, using
+Claude. It is <strong>off by default</strong>. This page explains what it does, exactly what is
+sent to Claude, and how to set it up and fix it.</p>
+<h2 id="what-it-does-and-doesnt-do">What it does and doesn't do<a class="headerlink" href="#what-it-does-and-doesnt-do" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Drafts only.</strong> A reply is saved in your Drafts folder. Clippy never sends it.
+  You read it, edit it and send it from Outlook.</li>
+<li><strong>Never sends, never deletes mail.</strong> Nothing is ever permanently deleted and
+  Deleted Items is never emptied. Clippy moves only two kinds of item: the new reply
+  draft going into Drafts (the same as for <a href="../tools/#reply_draft"><code>reply_draft</code></a>), and,
+  since version 0.1.0, one of <strong>its own unedited AI drafts</strong> that a newer message in
+  the thread has made obsolete, which goes to Deleted Items so you can still get it
+  back. See <a href="#outdated-drafts">Outdated drafts</a>.</li>
+<li><strong>Reply subjects start with <code>Re::</code></strong> (double colon), like every reply draft.
+  The model can't change the subject or the recipients. It can only choose reply or
+  reply all.</li>
+<li><strong>Only new mail.</strong> It looks at mail that arrives in your Inbox <strong>after</strong> you turn
+  it on, and never at mail older than the age limit (2 days by default). There is no
+  backlog pass. The one thing that looks further back is the manual
+  <a href="#rescan-emails-from-the-last-24-hours">rescan of the last 24 hours</a>.</li>
+<li><strong>Your mailbox only</strong>, unless you turn on a shared mailbox one by one.</li>
+<li><strong>Not every email gets a draft.</strong> Newsletters, notifications, automatic mail and
+  mail that needs no answer are skipped. See <a href="#rules">Rules</a>.</li>
+<li><strong>Attachments are read.</strong> Since version 0.1.1, Clippy also reads the text of the
+  attachments of the email and its thread, and of OneDrive and SharePoint files that
+  are already synced to your PC, and sends that text to Claude so the reply can use
+  it. You can turn it off. See <a href="#attachments-and-shared-files">Attachments and shared files</a>.</li>
+<li><strong>It learns from your edits.</strong> Since version 0.1.1, when you send a reply that began
+  as one of Clippy's AI drafts, Clippy notes how you changed it and uses that to
+  improve your writing style. You can turn it off. See
+  <a href="#learning-from-how-you-edit-drafts">Learning from how you edit drafts</a>.</li>
+<li><strong>Your signature</strong> is added, as for <code>reply_draft</code>.</li>
+<li><strong>Meeting times</strong> are added by Clippy from your calendar, never written by the model.
+  See <a href="#meeting-times">Meeting times</a>.</li>
+<li><strong>Check every draft.</strong> The model can make mistakes. Where a reply needs a fact,
+  such as a date or a number, it is told to leave a placeholder like <code>[[date]]</code>
+  instead of inventing one.</li>
+<li><strong>Nothing is ever sent.</strong> Clippy has no send function at all, and the model has no
+  tools: its answer can only become a saved draft.</li>
+</ul>
+<p>When a pass creates or updates drafts, the tray shows a balloon: "It looks like you got
+mail. I drafted 2 replies — they're in your Drafts folder." It counts new and updated
+drafts together. Click it to open Drafts.</p>
+<h2 id="set-up">Set up<a class="headerlink" href="#set-up" title="Permanent link">&para;</a></h2>
+<p>You need one of two ways to reach Claude. Pick one in Settings, <strong>AI drafts</strong>.</p>
+<h3 id="claude-code-on-this-pc-default">Claude Code on this PC (default)<a class="headerlink" href="#claude-code-on-this-pc-default" title="Permanent link">&para;</a></h3>
+<p>Uses your own Claude Code, signed in with your Claude plan.</p>
+<ol>
+<li><a href="https://claude.com/claude-code">Install Claude Code</a>.</li>
+<li>Open a terminal, run <code>claude</code> and sign in. <strong>You sign in yourself.</strong> Clippy never
+   signs in for you, never offers a claude.ai login, and never reads your Claude
+   credentials. It only asks <code>claude auth status --json</code> whether you are signed in.</li>
+<li>In the tray, right-click, <strong>AI drafts</strong>, <strong>AI drafts settings…</strong>. Under <strong>Use</strong>,
+   keep <strong>Claude Code on this PC (your Claude subscription)</strong> and press <strong>Check</strong>.
+   The status line should show a check mark, for example
+   <code>✓ Claude Code 2.1.323 · signed in (&lt;sign-in method&gt;, &lt;plan&gt;)</code>, with what
+   <code>claude auth status</code> reports in the brackets.</li>
+</ol>
+<p>Clippy runs <code>claude</code> headless, without a shell, with no tools for the model, and
+never with <code>--bare</code>. It looks for <code>claude.exe</code> on your <code>PATH</code>, then in
+<code>%USERPROFILE%\.local\bin</code>, then for an npm install of Claude Code
+(<code>%APPDATA%\npm\node_modules\@anthropic-ai\claude-code\cli.js</code>, run with the
+<code>node.exe</code> on your <code>PATH</code>). Script shims (<code>.cmd</code>, <code>.bat</code>, <code>.ps1</code>) are never run. If
+yours is somewhere else, set <strong>Claude Code path (optional)</strong> to the full path of
+<code>claude.exe</code> or of Claude Code's <code>cli.js</code>.</p>
+<h3 id="anthropic-api-key">Anthropic API key<a class="headerlink" href="#anthropic-api-key" title="Permanent link">&para;</a></h3>
+<p>Choose <strong>Anthropic API key</strong>, paste the key and press <strong>Save key</strong>. The key is stored
+encrypted with Windows DPAPI for your Windows user, is never shown again, and is
+never written to settings or logs. <strong>Remove key</strong> deletes it. Press <strong>Check</strong>: it
+reads the model list from the API, which uses no tokens. Clippy talks only to
+<code>api.anthropic.com</code>, and never uses a key from environment variables.</p>
+<p>Either way, Clippy never reads Claude Code's stored sign-in and never asks you to
+sign in to claude.ai inside Clippy.</p>
+<h3 id="model-effort-and-cost">Model, effort and cost<a class="headerlink" href="#model-effort-and-cost" title="Permanent link">&para;</a></h3>
+<p>The default model is the alias <strong><code>opus</code>, the latest Opus</strong>, at <strong>medium</strong> effort, for
+drafting and for the writing style alike. Because it is an alias, drafts move to a
+newer Opus without a Clippy update. You can change <strong>Model</strong> and <strong>Effort</strong> in the
+tab. Next to the Model box, a small hint reads <code>latest Opus</code> (or <code>latest Sonnet</code>,
+<code>latest Haiku</code>) while the box holds <code>opus</code>, <code>sonnet</code> or <code>haiku</code>. A specific model name
+such as <code>claude-opus-5-5</code> is used exactly as typed. If you had the old default
+<code>claude-opus-5-5</code> saved, Clippy changes it to <code>opus</code> once; any other model you chose
+stays.</p>
+<p>How the alias is resolved depends on the way you reach Claude:</p>
+<ul>
+<li><strong>Claude Code:</strong> the alias is passed to <code>claude</code>, which picks its newest model of
+  that family.</li>
+<li><strong>API key:</strong> the API needs a concrete model name, so Clippy asks the API for the
+  list of models available to your key and takes the newest active model of that
+  family. It remembers the answer for 24 hours (in memory only). <strong>Check</strong> always
+  looks it up fresh and shows, for example, <code>✓ API key works (opus → &lt;model name&gt;)</code>.
+  If the lookup fails (not because of a rejected key), Clippy uses a built-in
+  fallback model, logs a warning without any key or mail text, and tries the lookup
+  again after 10 minutes. Saving or removing the key, and pressing <strong>Check</strong>, also
+  start a new lookup.</li>
+</ul>
+<p>Usage and cost come from your Claude plan or your API
+account, not from Clippy. Each email that Clippy evaluates is one Claude call,
+whether or not it ends up as a draft. <strong>Daily limit</strong> (default 30) caps the calls
+per day across all mailboxes. The tab shows <code>Today: 3 of 30 Claude calls, 1 draft</code>.</p>
+<p>Because attachment text makes requests longer, Clippy also keeps a <strong>daily token
+tally</strong> so you can see the cost. See <a href="#token-tally">Token tally</a>.</p>
+<h3 id="turn-it-on">Turn it on<a class="headerlink" href="#turn-it-on" title="Permanent link">&para;</a></h3>
+<p>Check <strong>Draft replies to new email automatically</strong> in the tab, or use the tray menu
+item <strong>Draft replies automatically</strong>. The first time, Clippy asks for your
+<a href="#consent-and-what-is-sent">consent</a>. If Claude isn't ready, the tray opens the AI
+drafts tab so you can fix it first.</p>
+<h2 id="consent-and-what-is-sent">Consent and what is sent<a class="headerlink" href="#consent-and-what-is-sent" title="Permanent link">&para;</a></h2>
+<p>The first time you turn it on (and before the first manual draft), a dialog titled
+<strong>Turn on AI drafts?</strong> says:</p>
+<blockquote>
+<p>Clippy will send new emails from your Inbox, earlier messages in the same thread,
+the text of their attachments and of shared files synced to this PC, up to 5 related
+earlier emails, and samples of your sent mail and how you edited Clippy's drafts to
+Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never
+sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are
+included only if you turn them on one by one.</p>
+</blockquote>
+<p>Buttons: <strong>Turn on</strong> and <strong>Cancel</strong> (the default). If you consented to an older text,
+you are not asked again. Instead you get one-time notices for what was added since, for
+the edits see <a href="#notice-for-existing-users">Notice for existing users</a>.</p>
+<p>While the feature is on, this leaves your PC for Anthropic, through Claude Code or
+the API:</p>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The email being answered</td>
+<td>Sender, recipients, date, subject and the <strong>full body including quoted history</strong>, cut at 20,000 characters</td>
+</tr>
+<tr>
+<td>Thread excerpts</td>
+<td>Up to 8 earlier messages of the same conversation from your local index, your own text only (quoted history and signatures cut), each cut at 4,000 characters</td>
+</tr>
+<tr>
+<td>Related earlier emails</td>
+<td>Up to 5 earlier emails from the same mailbox that may relate to this one, own text only, at most 4,000 characters in all. Only while <a href="#related-earlier-mail">Include related earlier emails</a> is on</td>
+</tr>
+<tr>
+<td>Your earlier draft</td>
+<td>Only when Clippy <a href="#outdated-drafts">re-checks an outdated draft</a>: the text of Clippy's own earlier draft (cut at 4,000 characters) and the newer messages of the thread. Nothing beyond what the consent text already names</td>
+</tr>
+<tr>
+<td>Attachment <strong>names</strong></td>
+<td>For the email and the thread messages</td>
+</tr>
+<tr>
+<td>Attachment <strong>text</strong></td>
+<td>Text extracted from the attachments of the email and its thread, and from OneDrive/SharePoint files linked in those emails that are already synced to your PC: at most 40,000 characters in all, 20,000 per file. Only while <a href="#attachments-and-shared-files">Read attachments and synced shared files for drafts</a> is on. Sent for that one draft, never stored</td>
+</tr>
+<tr>
+<td>Your name and address, today's date</td>
+<td>So the draft is addressed and dated correctly</td>
+</tr>
+<tr>
+<td>Your facts file</td>
+<td>What you wrote in <a href="#facts-about-you">Facts about you</a>, without the comments. Only when you filled something in</td>
+</tr>
+<tr>
+<td>Your writing style guide</td>
+<td>The skill described <a href="#your-writing-style">below</a>, which contains short examples of your sent mail with addresses, links and phone numbers removed. Its meeting-times section is left out</td>
+</tr>
+<tr>
+<td>Up to 200 samples of your sent mail</td>
+<td>From the last 12 months, your own text only, each cut at 1,500 characters. Sent once a week, with addresses, links and phone numbers removed, to write the style guide</td>
+</tr>
+<tr>
+<td>Up to 20 pairs of an AI draft and what you sent</td>
+<td>Only with the writing-style update (weekly, or when you press <strong>Regenerate</strong>), and only when at least 3 pairs exist. Each side is your own text without the quoted email or signature, with addresses, links and phone numbers removed, at most 1,500 characters. Only while <a href="#learning-from-how-you-edit-drafts">Learn from how I edit Clippy's drafts</a> is on</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Never sent:</strong></p>
+<ul>
+<li>Any file itself. Only text that Clippy extracted from the attachments and synced
+  files described <a href="#attachments-and-shared-files">below</a> is sent, and images are
+  never sent.</li>
+<li>Anything else from your index: other mail, your calendar (also for meeting times: free/busy is read by Clippy after Claude has answered), other folders.</li>
+<li>Mail from shared mailboxes you haven't turned on.</li>
+<li>Your Claude credentials. Clippy never reads them.</li>
+</ul>
+<p><strong>The model gets no tools.</strong> It can't read files, run commands, search your mail or
+call anything. Its answer is limited to: needs a reply or not, how sure it is, reply
+or reply all, a short HTML body and the one-sentence <a href="#the-reason-line">reason line</a>. A sanitizer then removes everything except plain
+formatting (paragraphs, line breaks, lists, bold, italic, underline, quotes), so
+links, images, styles and scripts never reach the draft. A prompt-injected email can
+at worst produce a bad draft, which you see before sending.</p>
+<p>What Claude Code and Anthropic do with the data is governed by your Claude plan or
+API terms. See also <a href="../security/#ai-drafts-data-flow">Security</a>.</p>
+<h2 id="rules">Rules<a class="headerlink" href="#rules" title="Permanent link">&para;</a></h2>
+<p>These rules decide which new emails get a draft. (They don't decide whether an
+existing draft is still current: any newer message in the thread triggers an
+<a href="#outdated-drafts">outdated-draft check</a>.)</p>
+<p>Before any email goes to Claude, cheap rules skip mail that needs no reply. The
+first rule that matches wins. No Claude call is made for skipped mail.</p>
+<table>
+<thead>
+<tr>
+<th>Skipped when</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>You sent it</td>
+<td>The sender is your own address</td>
+</tr>
+<tr>
+<td>No-reply sender</td>
+<td><code>noreply</code>, <code>no-reply</code>, <code>donotreply</code>, <code>mailer-daemon</code>, <code>postmaster</code>, <code>bounce</code> and similar</td>
+</tr>
+<tr>
+<td>Automatic subject</td>
+<td>Starts with <code>Automatic reply:</code>, <code>Autoreply:</code>, <code>Out of Office</code>, <code>Undeliverable:</code>, <code>Delivery Status Notification</code></td>
+</tr>
+<tr>
+<td><strong>Never draft for</strong></td>
+<td>Sender matches your exclusion list</td>
+</tr>
+<tr>
+<td><strong>Only draft for</strong></td>
+<td>The list isn't empty and the sender isn't on it</td>
+</tr>
+<tr>
+<td><strong>Only when I'm in To or CC</strong></td>
+<td>On by default. Your address isn't in To or CC. Mail sent to an alias address is skipped</td>
+</tr>
+<tr>
+<td>Already answered</td>
+<td>You or Clippy already replied, or a draft reply already exists</td>
+</tr>
+<tr>
+<td>Not normal mail</td>
+<td>Meeting requests, receipts, encrypted mail and similar</td>
+</tr>
+<tr>
+<td>Newsletters and lists</td>
+<td>A <code>List-Id</code> or <code>List-Unsubscribe</code> header, or <code>Precedence</code> <code>bulk</code>, <code>list</code> or <code>junk</code></td>
+</tr>
+<tr>
+<td>Automatic mail</td>
+<td>An <code>Auto-Submitted</code> header other than <code>no</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Never draft for</strong> and <strong>Only draft for</strong> take one entry per line: an address
+(<code>alex@example.org</code>) or a domain (<code>example.org</code> or <code>@example.org</code>, which also covers
+subdomains). Each list holds up to 200 entries. You can add to <strong>Never draft for</strong>
+straight from Outlook, see <a href="#dont-draft-for-this-sender">Don't draft for this sender</a>.</p>
+<p>Then the model decides whether a reply is needed. It skips newsletters, FYIs, mail
+where you are only on CC and nothing is asked of you, and thank-you notes that close
+a conversation. A draft is saved only when its confidence reaches <strong>Minimum
+confidence</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Model</td>
+<td><code>opus</code> (the latest Opus)</td>
+</tr>
+<tr>
+<td>Effort</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>Daily limit</td>
+<td>30 Claude calls</td>
+</tr>
+<tr>
+<td>Minimum confidence</td>
+<td>0.6</td>
+</tr>
+<tr>
+<td>Ignore mail older than</td>
+<td>2 days</td>
+</tr>
+<tr>
+<td>Only when I'm in To or CC</td>
+<td>on</td>
+</tr>
+<tr>
+<td>Update weekly (writing style)</td>
+<td>on</td>
+</tr>
+<tr>
+<td>Update or remove my AI drafts when a thread moves on</td>
+<td>on</td>
+</tr>
+<tr>
+<td>Offer meeting times when an email asks for a meeting</td>
+<td>on</td>
+</tr>
+<tr>
+<td>Number of times to offer</td>
+<td>5 (1 to 10)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="limits-and-backoff">Limits and backoff<a class="headerlink" href="#limits-and-backoff" title="Permanent link">&para;</a></h3>
+<ul>
+<li>At the <strong>Daily limit</strong>, Clippy stops and continues the next day. The Activity
+  window shows <code>AI drafts: daily limit of 30 reached. I'll continue tomorrow.</code></li>
+<li>When Claude's usage limit is reached, Clippy waits until the reset time if it
+  knows it, otherwise an hour.</li>
+<li>After other failures it retries after 1, 2, 4, 8, 16, 32 and then 60 minutes, and
+  gives up on a single email after 3 failed attempts.</li>
+<li>Nothing happens while indexing is paused or Outlook isn't running.</li>
+</ul>
+<h3 id="emails-clippy-decides-not-to-draft">Emails Clippy decides not to draft<a class="headerlink" href="#emails-clippy-decides-not-to-draft" title="Permanent link">&para;</a></h3>
+<p>An email is <strong>decided once</strong>. When Claude says no reply is needed, or isn't
+confident enough, that email is not looked at again. Only emails whose Claude call
+<strong>failed</strong> are retried, up to 3 attempts.</p>
+<p>When Claude is not confident enough, the Activity window shows a line, with the time
+the email was received and no subject, sender or text:</p>
+<blockquote>
+<p>AI drafts: no draft for the email received 2026-11-13 14:05: Claude's confidence
+0.55 is below your minimum of 0.60. To draft it anyway, select it in Outlook and
+use "Draft a reply to the selected email" in the tray menu, or lower Minimum
+confidence in Settings → AI drafts.</p>
+</blockquote>
+<p>To get a draft for that email, select it in Outlook and use
+<a href="#draft-one-reply-now"><strong>Draft a reply to the selected email</strong></a>, which skips the
+confidence check. Lowering <strong>Minimum confidence</strong> only affects mail that arrives
+afterwards; mail that was already decided is not reconsidered. The summary line
+after a pass counts these emails separately, for example
+<code>AI drafts: 1 drafted, 2 low confidence (1.8 s)</code>, and the log shows the highest
+confidence seen against your minimum.</p>
+<h3 id="shared-mailboxes">Shared mailboxes<a class="headerlink" href="#shared-mailboxes" title="Permanent link">&para;</a></h3>
+<p>Under <strong>Mailboxes</strong> in the tab, <strong>My mailbox</strong> is always on while AI drafts are on.
+Each <a href="../indexing/#shared-mailboxes">shared mailbox</a> you index has its own checkbox,
+off by default. Drafts for a shared mailbox use your own writing style.</p>
+<h3 id="dont-draft-for-this-sender">Don't draft for this sender<a class="headerlink" href="#dont-draft-for-this-sender" title="Permanent link">&para;</a></h3>
+<p>Since version 0.1.1 you can stop drafts for a sender without opening Settings. Select
+an email from that sender in Outlook, then use one of two items in the tray's <strong>AI
+drafts</strong> submenu:</p>
+<ul>
+<li><strong>Don't draft for this sender</strong> adds the sender's address to <strong>Never draft for</strong>,
+  with no dialog.</li>
+<li><strong>Don't draft for this sender's domain…</strong> adds the domain after a confirmation,
+  <code>Never draft replies to anyone at &lt;domain&gt;?</code>, with <strong>Add</strong> and <strong>Cancel</strong> (the
+  default). A domain entry also covers its subdomains.</li>
+</ul>
+<p>They need no consent, because nothing is sent. They work on the email you selected, in
+your mailbox or an enabled shared mailbox, and are greyed out while Outlook isn't
+running, while AI drafts services aren't available and while a rescan runs. The new
+entry applies to the next email Clippy looks at. Balloons:</p>
+<table>
+<thead>
+<tr>
+<th>Balloon</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>I won't draft replies to &lt;address&gt; any more. You can undo this in Settings → AI drafts.</code> (<code>…to anyone at &lt;domain&gt;…</code> for a domain)</td>
+<td>It was added</td>
+</tr>
+<tr>
+<td><code>I couldn't find that sender's email address.</code></td>
+<td>The email has no usable address</td>
+</tr>
+<tr>
+<td><code>That's your own address.</code></td>
+<td>The sender is you or your mailbox</td>
+</tr>
+<tr>
+<td><code>That's your own organization's domain. To stop drafting for all internal mail, add it in Settings → AI drafts.</code></td>
+<td>The domain item on your own domain, or a parent or subdomain of it</td>
+</tr>
+<tr>
+<td><code>&lt;address or domain&gt; is already on "Never draft for".</code></td>
+<td>An existing entry already covers it (a domain entry covers its addresses)</td>
+</tr>
+<tr>
+<td><code>"Never draft for" already has 200 entries. Remove some in Settings → AI drafts.</code></td>
+<td>The list is full</td>
+</tr>
+<tr>
+<td><code>Select one email in Outlook first.</code> or <code>That email isn't in your mailbox or an enabled shared mailbox.</code></td>
+<td>Nothing, several emails or an email from a mailbox that isn't on is selected</td>
+</tr>
+<tr>
+<td><code>Clippy doesn't know your email address yet. Start Outlook, wait for the first sync, then try again.</code></td>
+<td>Clippy needs your address to avoid blocking you. Nothing is added</td>
+</tr>
+<tr>
+<td><code>It looks like Outlook isn't running. I'll wait — or right-click me and pick Start Outlook.</code></td>
+<td>Outlook closed while you clicked</td>
+</tr>
+</tbody>
+</table>
+<p>For the domain item, the own-domain, "already" and "full" checks run <strong>before</strong> the
+confirmation question, so you are not asked about something that would be refused. The
+entry is checked again when it is saved. If the settings can't be saved, a balloon shows
+the reason.</p>
+<p>Activity shows <code>AI drafts: added an entry to "Never draft for" (&lt;n&gt; entries).</code> (<code>(1
+entry)</code> for the first one) without the address.</p>
+<p><strong>To undo:</strong> open Settings, <strong>AI drafts</strong>, and delete the line (the address or the
+domain) from <strong>Never draft for</strong>, then press OK. Clippy drafts for that sender again from
+the next email on. There is no undo balloon or Activity action; the list in Settings is
+the only place. Drafts that already exist for that sender are left as they are. If
+Settings is open at the time, the addition is kept when you press OK, unless you also
+edited the <strong>Never draft for</strong> box in that window.</p>
+<h3 id="draft-one-reply-now">Draft one reply now<a class="headerlink" href="#draft-one-reply-now" title="Permanent link">&para;</a></h3>
+<p>Select one email in Outlook and choose <strong>Draft a reply to the selected email</strong> from
+the tray's <strong>AI drafts</strong> menu. This works even when automatic drafting is off, still
+needs your consent and a ready Claude, and counts toward the daily limit. It skips
+the rules and the confidence check, because you asked for it. When the draft is saved,
+a balloon says <code>It looks like you want a reply. It's in your Drafts folder.</code> Drafts
+made this way are never re-checked later: see <a href="#outdated-drafts">Outdated drafts</a>.</p>
+<h2 id="outdated-drafts">Outdated drafts<a class="headerlink" href="#outdated-drafts" title="Permanent link">&para;</a></h2>
+<p>Replies change. Say Clippy drafted a reply to a group email, and later someone in
+the same thread writes to another person. Clippy rightly drafts nothing for that new
+message, but the earlier draft may now be pointless. Since version 0.1.0 Clippy
+re-checks its own drafts when a newer message arrives in their thread, and then does
+one of three things:</p>
+<ul>
+<li><strong>Keep</strong> the draft, because it still fits.</li>
+<li><strong>Replace</strong> it with a new draft that takes the whole thread into account.</li>
+<li><strong>Remove</strong> it, because you no longer need to reply. "Remove" means <strong>moving it to
+  Deleted Items</strong>, where you can still find it. Nothing is permanently deleted and
+  Deleted Items is never emptied.</li>
+</ul>
+<p>If the model is unsure whether a draft is outdated, it keeps it. A replace or remove
+also needs the model's confidence to reach <strong>Minimum confidence</strong>; otherwise the draft
+stays as it is.</p>
+<p><strong>Which drafts.</strong> Only drafts that Clippy made through automatic drafting or a
+<a href="#rescan-emails-from-the-last-24-hours">rescan</a>, and only up to 14 days after they
+were created. Drafts from <strong>Draft a reply to the selected email</strong>, drafts made by
+<a href="../tools/#reply_draft"><code>reply_draft</code></a>, meeting notes, and AI drafts made before
+version 0.1.0 are never touched.</p>
+<p><strong>When.</strong> At the start of each automatic pass, when a message newer than the one the
+draft answers has reached your Inbox (or a folder under it) in the same thread. It
+counts whoever the message is from and whoever it is addressed to, including mail
+that isn't for you and mailing-list mail. Each re-check is one Claude call and counts
+toward the <strong>Daily limit</strong>. At most 10 drafts per mailbox are re-checked in one pass,
+and only the newest draft of a thread.</p>
+<p><strong>When Clippy leaves a draft alone for good.</strong> Before it moves or replaces anything,
+Clippy checks the draft again. It acts only if all of these are true:</p>
+<ul>
+<li>the draft carries Clippy's own AI marker (<code>ClippyDraft = ai</code>);</li>
+<li>it is <strong>unchanged</strong> since Clippy saved it. Clippy compares a fingerprint of the
+  subject, recipients, text, categories, importance, sensitivity, sending account and
+  attachment names, so any edit you make, even one letter, counts;</li>
+<li>it is <strong>unsent</strong> and still in your <strong>Drafts</strong> folder;</li>
+<li>it is <strong>not open</strong> in a window (or as an inline reply in the reading pane);</li>
+<li><strong>you haven't replied</strong> in the thread, and you haven't sent the draft itself.</li>
+</ul>
+<p>If you edited the draft, Clippy never touches it again and adds no note to it. If the
+draft is open, Clippy tries again at the next pass. If it was sent, moved or deleted,
+or you answered the thread yourself, it is left alone. When a replace happens, the new
+draft is <strong>saved first</strong>, and only then is the old one moved. If the old draft was
+changed or opened in between, it stays in Drafts next to the new one, and the Activity
+window says so.</p>
+<p><strong>What you see in the Activity window</strong> (the subject is shortened to 80 characters):</p>
+<ul>
+<li><code>AI reply draft updated (the thread moved on): &lt;subject&gt;. The old draft is in Deleted Items.</code></li>
+<li><code>AI reply draft updated (the thread moved on): &lt;subject&gt;. The old draft is still in Drafts because it was changed or is open.</code></li>
+<li><code>Outdated AI reply draft moved to Deleted Items (no reply needed any more): &lt;subject&gt;</code></li>
+<li><code>AI drafts: an outdated draft couldn't be moved to Deleted Items. It's still in Drafts.</code></li>
+</ul>
+<p>The summary line after a pass adds <code>updated</code>, <code>moved to Deleted Items</code> and <code>kept</code>
+counts, and the tray balloon counts new and updated drafts together.</p>
+<p><strong>Turning it off.</strong> Clear <strong>Update or remove my AI drafts when a thread moves on</strong> in
+Settings, <strong>AI drafts</strong>. Clippy then never re-checks, replaces or moves a draft.</p>
+<h3 id="worked-example">Worked example<a class="headerlink" href="#worked-example" title="Permanent link">&para;</a></h3>
+<p>Dana Example sends a group email to you, Sam Sample and Lee Example, at
+<code>dana@example.org</code>: "Who is coming skiing on Saturday? Please say yes or no." On
+Thursday, Clippy's automatic pass drafts your reply: "Yes, count me in." You don't
+open it. On Friday, Lee replies to everyone: "Sam, can you bring the roof rack?" That
+message is for Sam, so Clippy drafts nothing for it. But the next pass notices that a
+newer message arrived in the thread where Clippy has an unsent draft of its own. It
+checks that the draft is unedited, still in Drafts, closed, and that you haven't
+replied. Then it asks Claude, which sees the draft and the whole thread. Claude
+answers that nothing is asked of you any more, and with enough confidence Clippy
+moves the draft to Deleted Items. The Activity window shows: <code>Outdated AI reply draft
+moved to Deleted Items (no reply needed any more): Re:: Skiing on Saturday</code>. Had Lee
+instead asked you a new question, Claude would answer "replace", and Clippy would save
+a fresh draft first and then move the old one.</p>
+<h2 id="rescan-emails-from-the-last-24-hours">Rescan emails from the last 24 hours<a class="headerlink" href="#rescan-emails-from-the-last-24-hours" title="Permanent link">&para;</a></h2>
+<p>In the tray, <strong>AI drafts</strong>, <strong>Rescan emails from the last 24 hours…</strong> runs the
+drafting workflow once over the last day of mail, so you can watch it work. Use it to
+catch up after Claude was unavailable, or after you changed the rules.</p>
+<ul>
+<li>It needs your consent, a ready Claude and a running Outlook, like <strong>Draft a reply
+  to the selected email</strong>. It works while <strong>Draft replies automatically</strong> is off.</li>
+<li>It covers your own mailbox and the shared mailboxes you turned on. It takes Inbox
+  mail from the last 24 hours, <strong>oldest first</strong>, ignoring the "newer than I turned it
+  on" and age settings and the rule that each email is decided only once. The other
+  rules still apply, and an email that already has a Clippy draft is skipped.</li>
+<li>Before it starts, a dialog titled <strong>Rescan the last 24 hours?</strong> shows how many
+  emails will be looked at and how many Claude calls are left today, for example:
+  <code>Clippy will go through 12 emails from the last 24 hours, oldest first, and draft a
+  reply where one is needed. Each email is one Claude call: up to 12 calls, and 25 of
+  today's 30 are left. The rescan stops at the daily limit. Outdated Clippy drafts in
+  those threads may be replaced or moved to Deleted Items. Nothing is sent.</code> (The
+  sentence about outdated drafts appears only while that setting is on.) Buttons:
+  <strong>Rescan</strong> and <strong>Cancel</strong> (the default). With no emails to look at, or no calls
+  left today, you get a short balloon instead.</li>
+<li>If a thread already has an open draft of Clippy's, and a later email in it is
+  being rescanned, the rescan <a href="#outdated-drafts">re-checks that draft</a> instead of
+  drafting again.</li>
+<li>While it runs, the tray item reads <strong>Cancel rescan (3/12)</strong>. Cancel stops before
+  the next email and cancels a call in progress. An email whose answer has already
+  arrived is finished first, so nothing is left half done. <strong>Draft a reply to the
+  selected email</strong> is disabled meanwhile, and no automatic pass runs alongside.</li>
+<li>Every call counts toward the <strong>Daily limit</strong>, and the rescan stops when it is
+  reached.</li>
+<li>At the end, a summary appears in Activity and as a balloon (click it to open
+  Drafts), for example: <code>Rescan: 12 emails, 3 drafts, 1 outdated draft moved to
+  Deleted Items, 8 no reply needed (94 s)</code>.</li>
+<li>It can stop early, with <code>Rescan stopped (&lt;reason&gt;) after 5 of 12 emails: ...</code>. The
+  reasons are: <code>cancelled</code>, <code>daily limit of 30 reached</code>, <code>Claude's usage limit was
+  reached</code>, <code>Claude isn't signed in</code>, <code>Outlook isn't running</code> and <code>3 Claude calls
+  failed in a row</code>.</li>
+</ul>
+<p>Drafts made by a rescan are tracked like automatic ones, so a later newer message can
+make them obsolete too.</p>
+<h2 id="meeting-times">Meeting times<a class="headerlink" href="#meeting-times" title="Permanent link">&para;</a></h2>
+<p>When an email asks for or suggests a meeting or a call, the draft can offer concrete
+times from your calendar. <strong>Clippy computes them, not the model.</strong> The model only
+says that a meeting was asked for (and, if the email says so, how long it should be
+and in which time frame), and writes a short lead-in sentence in your style followed
+by a <code>[[meeting_times]]</code> placeholder. After the model has answered, Clippy reads
+Outlook free/busy and replaces the placeholder with the options. The model never
+sees or types a time, and your calendar is never sent to Claude.</p>
+<p>Example, for a sender in Europe:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>1. Tue 11/18  10:00–11:00 PT  (19:00–20:00 CET)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>2. Wed 11/19  14:00–15:00 PT  (23:00–00:00 CET)
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>Outside European office hours:
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>3. Thu 11/20  08:00–09:00 PT  (17:00–18:00 CET)
+</code></pre></div>
+<p>Each option is one line, so you can delete the ones that don't suit before you send.
+The draft looks like this in Outlook: one option per line, with the columns kept
+aligned.</p>
+<p><strong>Who is checked.</strong> You, the sender, and, when the reply is a reply to all, everyone
+in To and CC (at most 10 other people, the sender first). People whose free/busy
+can't be read, for example people outside your organization, are left out of the
+check, so confirm with them yourself.</p>
+<p><strong>When and how long.</strong> From the start of the next day (or the earliest date the
+email names, if later) for 10 days, or until the latest date the email names, and
+never more than 60 days ahead. The length comes from the email and is 60 minutes
+when it doesn't say. Working hours, business days and whether tentative counts as
+busy come from <a href="../settings/#scheduling">Settings, Scheduling</a>.</p>
+<p><strong>Ranking.</strong> The options are ranked by your calendar: times right before or after
+one of your meetings first (within 15 minutes, on the same day), then times next to
+a tentative meeting, then the rest, each group in date order. Free/busy can't tell a
+meeting from other busy time such as a focus block, so "next to a meeting" means
+"next to busy time". Within each free block, options start in 30-minute steps (plus one that ends exactly
+when the block ends), and they never overlap each other. At most <strong>Number of times to offer</strong> options are shown, both lists together.</p>
+<p><strong>Senders in Europe.</strong> For a sender who looks European, each option also shows the
+time in Central European time, always written <strong>CET</strong>, also in summer, when the
+actual offset is CEST. Options between 08:00 and 18:00 CET come first. If there
+aren't enough, the others follow in a second list headed
+<code>Outside European office hours:</code>. When the email is in another language, the model
+translates that heading. If you are in the CET zone yourself, or Windows has no
+Central European time zone, the CET part and the second list are left out.</p>
+<p>Whether a sender is in Europe is guessed from two things: the time-zone offset in
+the email's <code>Date</code> header, and the country at the end of the sender's address (for
+example <code>.de</code>, <code>.fr</code>, <code>.eu</code>, <code>.co.uk</code>).</p>
+<table>
+<thead>
+<tr>
+<th><code>Date</code> offset</th>
+<th>European country address (<code>.de</code>, <code>.fr</code>, ...)</th>
+<th>Other country address (<code>.za</code>, <code>.jp</code>, ...)</th>
+<th><code>.com</code>, <code>.org</code>, <code>.edu</code>, ...</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>+0100</code>, <code>+0200</code></td>
+<td>Europe</td>
+<td>not Europe</td>
+<td>Europe</td>
+</tr>
+<tr>
+<td><code>+0000</code>, <code>+0300</code></td>
+<td>Europe</td>
+<td>not Europe</td>
+<td>not Europe</td>
+</tr>
+<tr>
+<td>anything else</td>
+<td>not Europe</td>
+<td>not Europe</td>
+<td>not Europe</td>
+</tr>
+<tr>
+<td>none</td>
+<td>Europe</td>
+<td>not Europe</td>
+<td>not Europe</td>
+</tr>
+</tbody>
+</table>
+<p>This is a guess and can be wrong:</p>
+<ul>
+<li>Mail from inside your own Exchange organization has no such header, so only the
+  address is used.</li>
+<li>A European sender with a <code>.com</code> address in winter UK or Portugal time (<code>+0000</code>) or
+  eastern summer time (<code>+0300</code>) isn't detected.</li>
+<li><code>by</code>, <code>ru</code>, <code>tr</code>, <code>ge</code>, <code>am</code>, <code>az</code> and <code>kz</code> addresses aren't counted as European.</li>
+<li>A sender's mail program can write any offset.</li>
+</ul>
+<p>If the guess is wrong, delete the CET part and the second list by hand, or ask Claude
+Code for times yourself (see <a href="#the-meeting-times-section-of-the-skill">the skill</a>).</p>
+<p><strong>When Clippy can't offer times.</strong> The draft is still created, with a highlighted
+placeholder for you to fill in:</p>
+<table>
+<thead>
+<tr>
+<th>Placeholder</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>[[add meeting times: no free time found between 2026-11-15 and 2026-11-25]]</code></td>
+<td>Nobody is free in that range. Check by hand</td>
+</tr>
+<tr>
+<td><code>[[add meeting times: Clippy couldn't read your calendar]]</code></td>
+<td>Your free/busy couldn't be read, for example Outlook was busy</td>
+</tr>
+</tbody>
+</table>
+<p>When the sender proposes a specific time, the model doesn't accept or decline it. It
+leaves a placeholder such as <code>[[check whether Tue 3 pm works]]</code> and you still get
+the options. Like all placeholders, check these before sending.</p>
+<p><strong>Settings</strong> (Settings, <strong>AI drafts</strong>):</p>
+<ul>
+<li><strong>Offer meeting times when an email asks for a meeting</strong>: on by default. When off,
+  drafts contain no meeting times and your calendar is not read.</li>
+<li><strong>Number of times to offer</strong>: 1 to 10, default 5.</li>
+</ul>
+<p>This works in automatic passes and in <strong>Draft a reply to the selected email</strong>.</p>
+<h2 id="facts-about-you">Facts about you<a class="headerlink" href="#facts-about-you" title="Permanent link">&para;</a></h2>
+<p>Clippy can give Claude a short file of facts about you, so that a draft uses your real
+Zoom link, office hours or standard answer instead of a placeholder like <code>[[Zoom link]]</code>.
+The same file can also say <strong>how you want replies written</strong>.</p>
+<h3 id="where-the-file-is">Where the file is<a class="headerlink" href="#where-the-file-is" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>%USERPROFILE%\.claude\skills\my-email-context\SKILL.md
+</code></pre></div>
+<p>It is a second Claude Code <strong>skill</strong>, next to your writing-style skill. Because of
+that, your interactive Claude Code sessions read it too when they write email for you.
+Clippy keeps no other copy: the file is the only source, and it is read fresh for every
+draft, so a change applies to the next draft.</p>
+<h3 id="how-the-file-is-created">How the file is created<a class="headerlink" href="#how-the-file-is-created" title="Permanent link">&para;</a></h3>
+<p>Clippy creates the template <strong>once</strong>, and never overwrites a file that exists:</p>
+<ul>
+<li>The first time you have given <a href="#consent-and-what-is-sent">consent</a> and Clippy knows
+  your name from Outlook. If Outlook isn't running yet, Clippy waits, so the template
+  never says "the user" just because Outlook was closed.</li>
+<li>When you choose <strong>Edit my facts…</strong> in the tray and the file is missing. This needs no
+  consent, because nothing is sent. If your name isn't known yet, the template says
+  "the user".</li>
+</ul>
+<p>Clippy remembers that it created the template (a small file <code>facts-state.json</code> in
+<code>%APPDATA%\ClippysRevenge\my-email-style</code>). If you delete the file yourself, Clippy
+does not bring it back on its own. <strong>Edit my facts…</strong> creates it again.</p>
+<h3 id="the-template">The template<a class="headerlink" href="#the-template" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>---
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>name: my-email-context
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>description: "Facts about Ann Example for writing their email: role and team, meeting links, office hours, standard answers, who people are, and how they want replies written. Use when drafting or replying to email as Ann Example."
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>---
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>&lt;!-- Facts about you, for Clippy's Revenge and Claude Code. Clippy adds what you write here to every AI draft request it sends to Claude, and Claude Code reads it when it writes email for you. Write short facts under the headings, one per line. Text between these comment markers is ignored, so you can leave the examples. Clippy never changes this file once it exists. Don't put passwords or other secrets here. --&gt;
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>## Me
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>&lt;!-- Your role, your team and what you work on. --&gt;
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>&lt;!-- e.g. I lead the research computing team; we run the HPC cluster and research storage. --&gt;
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>## Links
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>&lt;!-- Links you often send. --&gt;
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>&lt;!-- e.g. My Zoom room: https://zoom.us/my/example --&gt;
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>## Office hours
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>&lt;!-- When and how people can reach you. --&gt;
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>&lt;!-- e.g. Office hours Tuesdays 2-4 pm, on Zoom or in my office. --&gt;
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>## Standard answers
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>&lt;!-- Answers you give again and again. --&gt;
+<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>&lt;!-- e.g. New accounts: please fill in the request form at https://example.org/accounts --&gt;
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>
+<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a>## People
+<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>
+<a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>&lt;!-- Who people are and how you know them, one per line. --&gt;
+<a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a>&lt;!-- e.g. Ricky, Dave: ski group --&gt;
+<a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>
+<a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>## How I want replies written
+<a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>
+<a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a>&lt;!-- Preferences for your drafts; these win over the writing-style skill. --&gt;
+<a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>&lt;!-- e.g. Sign off with just my first name. Keep replies to my team short. --&gt;
+</code></pre></div>
+<p>The name in the first lines is your Outlook display name (here the made-up Ann
+Example).</p>
+<h3 id="what-to-write">What to write<a class="headerlink" href="#what-to-write" title="Permanent link">&para;</a></h3>
+<p>Write short facts under the headings, one per line. Text between <code>&lt;!--</code> and <code>--&gt;</code> is
+ignored, so you can leave the examples in place or replace them.</p>
+<ul>
+<li><strong>Facts:</strong> your role and team, links you send often, office hours, answers you give
+  again and again, and who people are (<code>Ricky, Dave: ski group</code>).</li>
+<li><strong>Reply preferences</strong>, under <strong>How I want replies written</strong>: your sign-off, how long
+  replies should be, the tone for certain people. These <strong>win over your
+  <a href="#your-writing-style">writing-style skill</a></strong> where the two differ, because you wrote
+  them on purpose.</li>
+</ul>
+<p>Preferences never win over the fixed rules. Whatever the file says, drafts are only
+saved and never sent, mail text is data and never an instruction, and a fact that
+neither the email nor the file gives still becomes a <code>[[…]]</code> placeholder. If the file
+asks for something those rules don't allow, Claude ignores that part.</p>
+<p>Don't put passwords or other secrets in the file: everything in it goes to Claude.</p>
+<h3 id="what-claude-gets">What Claude gets<a class="headerlink" href="#what-claude-gets" title="Permanent link">&para;</a></h3>
+<p>Only text you wrote. Clippy removes the header at the top and every <code>&lt;!-- … --&gt;</code>
+comment, then any heading with nothing under it, so an untouched template adds nothing
+at all. A file larger than <strong>16 KiB</strong>, a file that can't be read and a file that isn't
+valid UTF-8 are not used: drafts then go without facts.</p>
+<h3 id="edit-my-facts">Edit my facts…<a class="headerlink" href="#edit-my-facts" title="Permanent link">&para;</a></h3>
+<p>In the tray, <strong>AI drafts</strong>, <strong>Edit my facts…</strong> opens the file in Notepad, and creates
+the template first when the file is missing. If Notepad can't be started, a balloon says
+<code>Couldn't open the file: &lt;reason&gt;</code>. Save the file in Notepad and you are done.</p>
+<h3 id="status-in-settings">Status in Settings<a class="headerlink" href="#status-in-settings" title="Permanent link">&para;</a></h3>
+<p>Settings, <strong>AI drafts</strong> shows a line under the check boxes:</p>
+<table>
+<thead>
+<tr>
+<th>Line</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Facts about you: filled in</code></td>
+<td>The file has text of yours. It goes with every draft</td>
+</tr>
+<tr>
+<td><code>Facts about you: template only</code></td>
+<td>The file exists but holds only the untouched template, so nothing is added</td>
+</tr>
+<tr>
+<td><code>Facts about you: not found</code></td>
+<td>The file is missing, too large, unreadable or not UTF-8. Use <strong>Edit my facts…</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="activity-messages">Activity messages<a class="headerlink" href="#activity-messages" title="Permanent link">&para;</a></h3>
+<p>Clippy tells you when the file goes away or comes back, once per change and never with
+its content: <code>Facts about you: my-email-context SKILL.md not found or unreadable — drafts go without it. Use "Edit my facts…" in the AI drafts menu.</code>
+and <code>Facts about you: using my-email-context SKILL.md again.</code> See
+<a href="../activity/#facts-about-you">Activity</a>.</p>
+<h3 id="worked-example_1">Worked example<a class="headerlink" href="#worked-example_1" title="Permanent link">&para;</a></h3>
+<p>Ann puts these lines in her file:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>## Links
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>My Zoom room: https://zoom.example.org/my/ann
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>## People
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>Ricky, Dave: ski group
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>## How I want replies written
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>Sign off with just my first name.
+</code></pre></div>
+<p>Ricky writes: "Can we do a quick call about the Saturday bus?" The draft offers her Zoom
+link instead of <code>[[Zoom link]]</code>, knows Ricky from the ski group, and signs off <code>Ann</code>.
+A question the file doesn't answer, such as the bus departure time, still gets a
+placeholder such as <code>[[bus time]]</code>.</p>
+<h2 id="related-earlier-mail">Related earlier mail<a class="headerlink" href="#related-earlier-mail" title="Permanent link">&para;</a></h2>
+<p>For better replies, Clippy can add a few earlier emails that may relate to the one it is
+answering. The setting is <strong>Include related earlier emails</strong> in Settings, <strong>AI drafts</strong>,
+<strong>on by default</strong>. It uses only your local index, so it adds no Claude call and no
+Outlook read.</p>
+<h3 id="what-is-picked">What is picked<a class="headerlink" href="#what-is-picked" title="Permanent link">&para;</a></h3>
+<p>For the email being answered, Clippy looks in <strong>the same mailbox</strong> (never another one)
+at mail from the <strong>last 12 months</strong>, in two ways:</p>
+<ul>
+<li><strong>Topic:</strong> emails whose subject or body match the main words of this email's subject.
+  Short and common words are ignored. If the subject has too few words, frequent words
+  from the start of the text fill in.</li>
+<li><strong>People:</strong> emails from the same sender, and your own <strong>Sent Items</strong> to that sender
+  (To or CC). This is skipped when the sender is you.</li>
+</ul>
+<p>It scores them (a topic match counts most, then a people match, then newer is better),
+keeps <strong>at most 5</strong>, and shows them oldest first. If a Sent Items email to that person
+exists, it is guaranteed a place, so Claude can see how you answered before.</p>
+<p>Left out: the email itself and everything in its thread, mail in <strong>Drafts</strong> and
+<strong>Deleted Items</strong> (also when Outlook shows them under another name, see
+<a href="#drafts-and-deleted-items-in-other-languages">Drafts and Deleted Items in other languages</a>),
+copies of the same message in other folders, and anything newer than the email. Of
+several emails in one thread only the best one is kept, and duplicates are dropped.</p>
+<h3 id="what-goes-to-claude">What goes to Claude<a class="headerlink" href="#what-goes-to-claude" title="Permanent link">&para;</a></h3>
+<p>Only the <strong>own text</strong> of each email (quoted history and signatures cut, attachment names
+left out), with sender, recipients, date, folder and subject. Each email is cut to 800
+characters, and the whole block holds at most <strong>4,000 characters</strong> of message text.
+Claude is told that these emails are data, may be outdated, and are to be used only for
+facts and tone that clearly apply. They are never stored or logged. If the lookup
+fails, the draft is made without them.</p>
+<h3 id="the-one-time-notice">The one-time notice<a class="headerlink" href="#the-one-time-notice" title="Permanent link">&para;</a></h3>
+<p>If you gave consent before this feature existed (v0.1.0 or earlier), Clippy tells you
+once, with a balloon and an Activity entry:
+<code>AI drafts now also send up to 5 related earlier emails from your mailbox to Claude, to write better replies. You can turn this off in Settings → AI drafts.</code>
+New consents already include it in the consent text. Untick <strong>Include related earlier
+emails</strong> to send none.</p>
+<h2 id="attachments-and-shared-files">Attachments and shared files<a class="headerlink" href="#attachments-and-shared-files" title="Permanent link">&para;</a></h2>
+<p>A reply often depends on a file: the budget in the spreadsheet, the contract PDF, the
+plan someone linked. Since version 0.1.1, Clippy reads the <strong>text</strong> of those files when
+it builds a draft request and sends it to Claude with the email. The model can then
+refer to a file by name ("the attached budget.xlsx", "the shared Plan.docx") and use
+what it says. This applies to every kind of draft: automatic, <strong>Draft a reply to the
+selected email</strong>, <a href="#outdated-drafts">outdated-draft</a> re-checks and
+<a href="#rescan-emails-from-the-last-24-hours">rescans</a>. It adds <strong>no</strong> extra Claude call.</p>
+<p>It is a setting, <strong>on by default</strong>: <strong>Read attachments and synced shared files for
+drafts</strong> in Settings, <strong>AI drafts</strong>. See <a href="#turning-it-off-and-the-one-time-notice">Turning it off</a>.</p>
+<h3 id="what-is-read">What is read<a class="headerlink" href="#what-is-read" title="Permanent link">&para;</a></h3>
+<p>For the email being answered, and for the earlier messages of its thread:</p>
+<ul>
+<li><strong>Attachments.</strong> Every attachment that is not an inline picture (such as a signature
+  logo). For the email itself, all of them. For earlier messages, Clippy looks at the
+  newest 50 messages of the thread in your mailbox's index, at or before the email.</li>
+<li><strong>Attached emails</strong> (an Outlook message attached to another message). Their subject,
+  sender, date, attachment names and body (at most 20,000 characters) are read. Their
+  own attachments are not. An attached email without a file name is named
+  <code>&lt;subject&gt;.msg</code>.</li>
+<li><strong>Shared files.</strong> Links in the text each person wrote to OneDrive or SharePoint, and Outlook
+  "cloud attachments" (the share links Outlook adds when you attach a OneDrive file).
+  At most 10 links per message. See <a href="#shared-files-onedrive-and-sharepoint">Shared files</a>.</li>
+<li>Skipped without reading: <strong>images</strong> (<code>png</code>, <code>jpg</code> and so on, only the name is
+  listed), and any file type in the table below that Clippy can't read.</li>
+</ul>
+<p>Earlier messages in the <strong>Deleted Items</strong> folder are never used: you threw them away.
+Messages in <strong>Drafts</strong> are used, because a draft you are writing can carry the file
+being discussed. Clippy's own earlier draft is not used when it re-checks that draft.
+Earlier files are read from Outlook again for each draft, so a later reply in the same
+thread that mentions an earlier attachment still sees it. If the earlier message is no
+longer in your mailbox, or the attachment is no longer on it, that item is skipped.</p>
+<h3 id="formats">Formats<a class="headerlink" href="#formats" title="Permanent link">&para;</a></h3>
+<p>The format is chosen by the file extension and confirmed by the first bytes of the
+file. A file that doesn't match is treated as damaged. Nothing is opened in another
+program, executed or rendered. Macros, embedded objects, linked content and fields are
+never read.</p>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Extensions</th>
+<th>What is read</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PDF</td>
+<td><code>pdf</code></td>
+<td>Text of the first <strong>30 pages</strong>. No scans: a PDF without text is reported as maybe a scan (no OCR). A PDF that needs a password is skipped</td>
+</tr>
+<tr>
+<td>Word</td>
+<td><code>docx</code>, <code>docm</code>, <code>dotx</code></td>
+<td>Paragraphs and tables (cells separated by tabs). Not headers, footnotes or comments</td>
+</tr>
+<tr>
+<td>Excel</td>
+<td><code>xlsx</code>, <code>xlsm</code>, <code>xltx</code></td>
+<td>The first <strong>5 sheets</strong>, up to <strong>200 rows</strong> and <strong>30 columns</strong> each, as tab-separated lines under the sheet name. Cells are cut at 200 characters. Dates show as <code>yyyy-MM-dd</code> (<code>yyyy-MM-dd HH:mm</code> when the cell has a time). Formulas show their last calculated value</td>
+</tr>
+<tr>
+<td>PowerPoint</td>
+<td><code>pptx</code>, <code>pptm</code>, <code>ppsx</code></td>
+<td>The first <strong>60 slides</strong>: the text of each slide, then its speaker notes</td>
+</tr>
+<tr>
+<td>Text</td>
+<td><code>txt</code>, <code>text</code>, <code>csv</code>, <code>tsv</code>, <code>md</code>, <code>markdown</code>, <code>log</code>, <code>json</code>, <code>xml</code>, <code>ics</code>, <code>vcf</code></td>
+<td>The first 1 MiB. A file with binary content is reported as damaged</td>
+</tr>
+<tr>
+<td>Web page</td>
+<td><code>html</code>, <code>htm</code></td>
+<td>The visible text of the first 1 MiB. Scripts and styles are dropped</td>
+</tr>
+<tr>
+<td>Saved email</td>
+<td><code>eml</code></td>
+<td>Subject, sender, date and the text part</td>
+</tr>
+<tr>
+<td>Outlook message</td>
+<td><code>msg</code> and attached emails</td>
+<td>Read through Outlook itself, as described above</td>
+</tr>
+<tr>
+<td>Not read</td>
+<td><code>doc</code>, <code>dot</code>, <code>xls</code>, <code>xlt</code>, <code>xlsb</code>, <code>ppt</code>, <code>pps</code>, <code>rtf</code>, <code>odt</code>, <code>ods</code>, <code>odp</code>, <code>pages</code>, <code>numbers</code>, <code>key</code>, <code>zip</code>, <code>7z</code>, <code>rar</code></td>
+<td>Skipped, with a yellow note. Save as <code>docx</code>, <code>xlsx</code> or <code>pdf</code> to have it read</td>
+</tr>
+<tr>
+<td>Anything else</td>
+<td></td>
+<td>Skipped, no note</td>
+</tr>
+</tbody>
+</table>
+<p>An encrypted Word, Excel or PowerPoint file is skipped as password-protected.</p>
+<h3 id="limits">Limits<a class="headerlink" href="#limits" title="Permanent link">&para;</a></h3>
+<p>These limits are fixed. There is no setting for them.</p>
+<table>
+<thead>
+<tr>
+<th>Limit</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>File size</td>
+<td>25 MB per file. A larger file is skipped without being read</td>
+</tr>
+<tr>
+<td>Text per file</td>
+<td>20,000 characters. A longer file is cut and marked as only partly read</td>
+</tr>
+<tr>
+<td>Text per draft</td>
+<td>40,000 characters for all files together</td>
+</tr>
+<tr>
+<td>Files per draft</td>
+<td>20 files that need reading. Images and files Clippy can't read don't use a slot</td>
+</tr>
+<tr>
+<td>Time per file</td>
+<td>10 seconds. A file that takes longer is skipped</td>
+</tr>
+<tr>
+<td>Time per draft</td>
+<td>20 seconds for all files together. The files left are skipped</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Which files come first.</strong> Files are read in three tiers, most important first:</p>
+<ol>
+<li>the attachments of the email being answered, then its links;</li>
+<li>files of earlier messages whose name (or its name without the extension, at least 4
+   characters) appears in the email's subject or in what the sender wrote, as a whole
+   word, for example "see the budget" for <code>budget.xlsx</code>;</li>
+<li>everything else in the thread, newest message first.</li>
+</ol>
+<p>The same file sent twice (same name and size) counts once. The 40,000 characters go to
+the tiers in order: tier 1 first, then tier 2, then tier 3. When the files of a tier
+don't all fit in what is left, they are cut to the same length. If that length would be
+under 2,000 characters, each file of the tier gets 2,000 in turn (in tier 3, newest
+message first) until fewer than 2,000 are left, and the rest are skipped as too much
+text for one draft. So the oldest files of the thread go first, and the email's own
+files are only cut, never dropped while 2,000 characters per file are left.</p>
+<p>Clippy tells the model which files were not read and why, so a reply that depends on
+one gets a placeholder like <code>[[check budget.xlsx]]</code> instead of an invented answer. The
+model is told that the file text is data, never instructions.</p>
+<h3 id="shared-files-onedrive-and-sharepoint">Shared files (OneDrive and SharePoint)<a class="headerlink" href="#shared-files-onedrive-and-sharepoint" title="Permanent link">&para;</a></h3>
+<p>Clippy opens a shared file only when <strong>all</strong> of these are true:</p>
+<ul>
+<li><strong>It is a OneDrive or SharePoint link.</strong> Only links to <code>&lt;name&gt;.sharepoint.com</code>
+  (including <code>&lt;name&gt;-my.sharepoint.com</code>), <code>onedrive.live.com</code>, <code>d.docs.live.net</code> and
+  <code>1drv.ms</code> are considered. Microsoft Safe Links wrappers around such a link are
+  unwrapped first. A link to any other site, such as Dropbox or Google Drive, is <strong>never
+  opened, mapped or fetched</strong>: Clippy doesn't list it for the model, and the model still
+  sees the link in the email text as before.</li>
+<li><strong>It is already synced to this PC.</strong> Clippy never downloads anything from the
+  network. It looks up the link among the folders your OneDrive sync client keeps on
+  this PC (your OneDrive, synced SharePoint and Teams libraries and folders, and
+  folders added with <strong>Add shortcut to My files</strong>) and reads the local copy. There is
+  no Microsoft Graph and no sign-in. If the link points to a file in a library you
+  don't sync, the file is <strong>not synced to this PC</strong> and is not read. Sharing links that
+  carry only a secret token (<code>/:w:/s/…</code>, <code>/:f:/g/…</code>, "Specific people" links),
+  <code>Doc.aspx?sourcedoc=…</code> links, and every <code>onedrive.live.com</code> and <code>1drv.ms</code> link can't
+  be matched to a local file, so they end up in the same state.</li>
+<li><strong>It comes from you or your own organization.</strong> A link or cloud attachment is opened
+  only when the email that holds it was sent by you, by the shared mailbox's own address,
+  or by an address in your own email domain or one of its subdomains. If your own address
+  is at a free or consumer mail provider such as outlook.com, hotmail.com, gmail.com,
+  yahoo.com, icloud.com or GMX, the domain is not "your organization": only links you
+  sent yourself (or the shared mailbox's own address) are read. A stranger could
+  otherwise send a link to a file in <em>your</em> OneDrive and get its content into a draft
+  addressed back to them. Normal attachments are always read, whoever sent them.</li>
+<li><strong>Only the text each person wrote.</strong> Links are taken from the part each sender
+  wrote themselves. Links in quoted replies (including lines starting with <code>&gt;</code>), in
+  forwarded mail or in signatures are ignored, because they belong to someone else.</li>
+</ul>
+<p><strong>Files On-Demand.</strong> If your OneDrive keeps the file "online only", opening it makes
+<strong>your own OneDrive client</strong> download it, with its own sign-in. Clippy itself makes no
+network request. The size check happens first, and the download time counts against the
+10 and 20 second limits. A file that doesn't arrive in time is skipped as too slow.
+Files-on-demand placeholders are not treated as shortcuts or links, so they are allowed.</p>
+<p>Clippy reads only through the normal Windows file path rules (<a href="../security/#file-access">file
+access</a>): it never follows a shortcut or junction out of the
+synced folder.</p>
+<h3 id="the-yellow-notes">The yellow notes<a class="headerlink" href="#the-yellow-notes" title="Permanent link">&para;</a></h3>
+<p>If Clippy couldn't read a file that you would expect it to read, the draft gets a
+yellow-highlighted line at the top, just under the <a href="#the-reason-line">reason line</a>, in
+the same style. The notes are Clippy's own text, not the model's. They are for the
+email's own files and for earlier files that the email mentions by name (tiers 1 and
+2), never for the rest of the thread. File names are cleaned, links in them are shown as
+<code>[link]</code>, and a name is cut at 80 characters.</p>
+<table>
+<thead>
+<tr>
+<th>Note</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Clippy: Couldn't read the shared file &lt;name&gt; (not synced to this PC).</code></td>
+<td>The link or cloud attachment doesn't match a file in your synced OneDrive/SharePoint folders, or the file isn't there</td>
+</tr>
+<tr>
+<td><code>Clippy: Couldn't read the shared file &lt;name&gt; (Clippy only opens shared files from people in your organization).</code></td>
+<td>The email came from outside your organization</td>
+</tr>
+<tr>
+<td><code>Clippy: Couldn't read &lt;name&gt; (the earlier email is no longer in your mailbox).</code></td>
+<td>The message with that file was deleted or archived. Only for a file the email mentions</td>
+</tr>
+<tr>
+<td><code>Clippy: Couldn't read &lt;name&gt; (it's password-protected).</code></td>
+<td>An encrypted PDF or Office file</td>
+</tr>
+<tr>
+<td><code>Clippy: Couldn't read &lt;name&gt; (larger than 25 MB).</code></td>
+<td>Over the size limit</td>
+</tr>
+<tr>
+<td><code>Clippy: Couldn't read &lt;name&gt; (no text in it, maybe a scan).</code></td>
+<td>A PDF with no text</td>
+</tr>
+<tr>
+<td><code>Clippy: Couldn't read &lt;name&gt; (Clippy can't read .&lt;ext&gt; files).</code></td>
+<td>One of the <a href="#formats">formats it can't read</a>, such as <code>.doc</code>, <code>.xls</code>, <code>.rtf</code> or <code>.zip</code></td>
+</tr>
+<tr>
+<td><code>Clippy: Couldn't read &lt;name&gt; (the file seems damaged).</code></td>
+<td>A corrupt file, a file whose content doesn't match its type, or a read that failed</td>
+</tr>
+<tr>
+<td><code>Clippy: Couldn't read &lt;name&gt; (it took too long).</code></td>
+<td>A time limit was hit. While one PDF that took too long is still being processed, other PDFs are skipped with this note too</td>
+</tr>
+<tr>
+<td><code>Clippy: Couldn't read &lt;name&gt; (too much attachment text for one draft).</code></td>
+<td>The file had no share of the 40,000 characters or was over the 20 files</td>
+</tr>
+<tr>
+<td><code>Clippy: Read only the start of &lt;name&gt; (it's long).</code></td>
+<td>The file was cut by the page, row, slide or character limits, or by the draft total</td>
+</tr>
+</tbody>
+</table>
+<p>At most <strong>5</strong> notes are shown. More are replaced by one line,
+<code>Clippy: &lt;n&gt; more files couldn't be read fully.</code> (<code>1 more file couldn't be read fully.</code>
+for one). The same note is shown once. Images, file types Clippy has no note for, and
+links to sites other than OneDrive and SharePoint get <strong>no note</strong>. Like the reason
+line, the notes are part of the draft as Clippy saved it: <strong>delete them before
+sending</strong>, and deleting them counts as editing the draft, so Clippy leaves that draft
+alone afterwards. When Clippy re-checks a draft it shows the model neither the reason
+line nor the notes. The notes appear whether or not the reason line is on.</p>
+<h3 id="what-you-see-in-activity">What you see in Activity<a class="headerlink" href="#what-you-see-in-activity" title="Permanent link">&para;</a></h3>
+<p>When any file was considered, the <code>Draft</code> event gets a suffix:
+<code>AI reply draft created: Re:: Budget (attachments: 3 read, 1 not read)</code>. "Read"
+includes files read only in part. Activity and the log hold <strong>counts only</strong>: never a
+file name, a link, a path, a reason or any text.</p>
+<h3 id="privacy">Privacy<a class="headerlink" href="#privacy" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The text goes to Claude (through your Claude Code or API key) for <strong>that one draft</strong>,
+  the same way the email text does. Anything an attachment contains, such as personal
+  data, goes with it. That is why consent mentions it.</li>
+<li>The text is <strong>never stored</strong> by Clippy: not in the index, the settings, the logs or
+  the Activity window, and there is no cache. The same attachment is read again for the
+  next draft in a thread. Attachment contents are still never indexed, only the file
+  names.</li>
+<li>To read an Outlook attachment, Clippy saves a copy for a moment in a private folder,
+  <code>%LOCALAPPDATA%\ClippysRevenge\ai-files\</code>, that only your Windows user can use. The
+  copy is read into memory and deleted at once. Whatever is left (for example after a
+  crash) is deleted when Clippy starts. Synced files are read in place and not copied.</li>
+<li>Nothing is ever sent, moved or deleted in your mailbox by this. Clippy doesn't
+  display, save or change the mail and attached emails it opens.</li>
+<li>A draft that used attachment text is <strong>not</strong> used for
+  <a href="#learning-from-how-you-edit-drafts">learning from your edits</a>: Clippy doesn't keep
+  its text at all, so file text can't end up in your writing style.</li>
+</ul>
+<h3 id="turning-it-off-and-the-one-time-notice">Turning it off, and the one-time notice<a class="headerlink" href="#turning-it-off-and-the-one-time-notice" title="Permanent link">&para;</a></h3>
+<p>Untick <strong>Read attachments and synced shared files for drafts</strong> in Settings, <strong>AI
+drafts</strong>, to stop reading files. Drafts then carry attachment names only, as in version
+0.1.0. Nothing about attachments is then asked of Outlook, the index or the registry.</p>
+<p>If you gave consent before version 0.1.1, you are not asked again. Instead, once, at
+the first pass after the update with the setting on, an Activity entry and a balloon say:</p>
+<blockquote>
+<p>AI drafts now also read attachments and shared files synced to this PC, and send their text to Claude, to write better replies. You can turn this off in Settings → AI drafts.</p>
+</blockquote>
+<p>New consents already name it in the <a href="#consent-and-what-is-sent">consent text</a>.</p>
+<h3 id="token-tally">Token tally<a class="headerlink" href="#token-tally" title="Permanent link">&para;</a></h3>
+<p>Longer requests cost more of your Claude plan or API budget, so Clippy shows what
+today's AI calls used. While you have given consent, a line like this is shown:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Today: 18 AI calls, ~210k tokens (in 190k / out 20k)
+</code></pre></div>
+<ul>
+<li><strong>Where:</strong> the first, greyed-out line of the tray's <strong>AI drafts</strong> submenu (refreshed
+  when you open it) and under the state line in the <a href="../activity/">Activity window</a>.</li>
+<li><strong>What it counts:</strong> every Claude call of the day (since midnight, your time): automatic
+  drafts, manual drafts, re-checks, rescans and writing-style updates, whether or not a
+  draft came out of it. <code>in</code> is the input tokens including cached ones, <code>out</code> is the
+  output, and the <code>~</code> number is their sum. Calls that never started or were refused
+  (usage limit reached, not signed in, Claude Code missing) aren't counted.</li>
+<li><strong>Forms:</strong> <code>Today: no AI calls</code>; <code>Today: 3 AI calls, tokens unknown</code> when Claude
+  reported no token numbers; and <code>…, 2 without token data</code> added when only some calls
+  lack them. Large numbers are rounded: <code>1.2k</code>, <code>210k</code>, <code>1.2M</code>.</li>
+<li><strong>What is stored:</strong> only counts, in your own mailbox's index, kept for 30 days. No
+  prompt, answer or mail text. The tally is separate from <strong>Daily limit</strong> (style
+  updates are shown in it but don't count toward the limit). The log line after a pass
+  also ends in <code>, tokens in &lt;n&gt; out &lt;n&gt;</code>.</li>
+</ul>
+<p>This is different from the <code>Today: &lt;n&gt; of &lt;cap&gt; Claude calls, &lt;d&gt; drafts</code> line in
+Settings, which counts calls against your daily limit.</p>
+<h3 id="drafts-and-deleted-items-in-other-languages">Drafts and Deleted Items in other languages<a class="headerlink" href="#drafts-and-deleted-items-in-other-languages" title="Permanent link">&para;</a></h3>
+<p>Clippy skips mail in <strong>Drafts</strong> and <strong>Deleted Items</strong> when it picks related emails and
+earlier files. Since version 0.1.1 it recognizes these two folders by their Outlook
+role, so it also works when Outlook shows them under a translated name. Folders that
+Clippy indexed <strong>before</strong> version 0.1.1 under their translated name keep their old
+entries until you add the folder again or press <strong>Rebuild index…</strong>. The old entries
+stay marked with the translated name, so the exclusion doesn't apply to them.</p>
+<h2 id="the-reason-line">The reason line<a class="headerlink" href="#the-reason-line" title="Permanent link">&para;</a></h2>
+<p>Every AI draft starts with a yellow-highlighted line that says why Clippy drafted it, for
+example:</p>
+<blockquote>
+<p><span style="background-color:#ffff00">Clippy: Ricky asked about the Saturday bus; this answers that.</span></p>
+</blockquote>
+<ul>
+<li>Claude writes it as one short sentence in the language of the reply: what the email
+  asks and what the draft answers. It is <strong>at most 160 characters</strong>; a longer one is cut
+  with <code>…</code>.</li>
+<li>Links never appear in it. A web address, <code>mailto:</code> or <code>www.</code> text is shown as
+  <code>[link]</code>, because the line carries Clippy's authority and a malicious email must not
+  be able to put a link there.</li>
+<li>The setting is <strong>Start each draft with a highlighted note on why it was drafted</strong> in
+  Settings, <strong>AI drafts</strong>, <strong>on by default</strong>. When off, no line is asked for or added.</li>
+<li>It is added above the meeting times and the reply text, in new drafts, manual drafts,
+  replaced drafts and rescans. If Clippy couldn't read a file, its
+  <a href="#the-yellow-notes">yellow notes</a> follow right below it.</li>
+</ul>
+<p><strong>Delete the line before you send.</strong> It is meant for you only. If you forget and send
+it, Clippy strips such a <code>Clippy:</code> line from your own sent mail whenever it later shows
+that mail to Claude (earlier messages in a thread, related emails, and the samples for
+your writing style), so it doesn't learn it as part of your style. Mail from other people
+is never changed.</p>
+<p><strong>Deleting the line counts as editing the draft.</strong> Clippy's check for outdated drafts
+only touches a draft that is exactly as Clippy saved it. Once you remove the line (or
+change anything else), Clippy leaves that draft alone: it won't replace it or move it to
+Deleted Items. See <a href="#outdated-drafts">Outdated drafts</a>.</p>
+<h2 id="your-writing-style">Your writing style<a class="headerlink" href="#your-writing-style" title="Permanent link">&para;</a></h2>
+<p>Clippy learns your style from your own sent mail and keeps it in a Claude Code
+<strong>skill</strong> file, <code>my-email-style</code>.</p>
+<ul>
+<li>It samples up to 200 emails from the last 12 months of your Sent Items, a mix of
+  internal and external, short and long, newest first, at most 3 per recipient, each
+  cut at 1,500 characters.</li>
+<li>It uses only <strong>your own text</strong>. Quoted history and signatures are cut, and
+  automatic replies and meeting responses are left out.</li>
+<li><strong>Mail Clippy drafted for you is excluded</strong> from the samples, even after you edited
+  and sent it. So are replies to mail that Clippy drafted an answer for, so the style
+  doesn't learn from its own output. How you <em>edited</em> those drafts is used separately,
+  as described in <a href="#learning-from-how-you-edit-drafts">Learning from how you edit drafts</a>.</li>
+<li>Email addresses, links and phone numbers are replaced by <code>&lt;email&gt;</code>, <code>&lt;link&gt;</code> and
+  <code>&lt;phone&gt;</code> before anything is sent to Claude, and again in Claude's answer.</li>
+<li>It needs at least 20 suitable sent emails.</li>
+<li>Clippy writes the file's header. Claude writes only the body: greetings and
+  sign-offs, tone, length, formatting habits, phrases you use and avoid, and a few
+  short examples.</li>
+</ul>
+<p><strong>Where the files are</strong></p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>%USERPROFILE%\.claude\skills\my-email-style\SKILL.md</code></td>
+<td>The skill. Your copy to read and edit</td>
+</tr>
+<tr>
+<td><code>%APPDATA%\ClippysRevenge\my-email-style\SKILL.md</code></td>
+<td>Clippy's own copy of what it last wrote</td>
+</tr>
+</tbody>
+</table>
+<p>The drafting prompt uses the file in <code>.claude\skills</code>, so your edits count.</p>
+<p><strong>Your edits are never overwritten automatically.</strong> If you changed the file (or you
+wrote a <code>my-email-style</code> skill yourself before), Clippy leaves it alone. <strong>Update
+weekly</strong> then does nothing, and the Activity window says <code>writing style not updated:
+you edited it. Use Regenerate in Settings to replace it.</code> <strong>Regenerate</strong> asks <code>You
+edited your writing style skill. Replace your edits with a new version?</code> with
+<strong>Replace</strong> and <strong>Keep mine</strong> (the default).</p>
+<p><strong>Refresh.</strong> With <strong>Update weekly</strong> on, Clippy creates the skill before the first
+drafting pass if there isn't one, and then refreshes it at most once every 7 days
+when at least 20 new sent emails have appeared.</p>
+<p><strong>The first skill is built as soon as your Sent Items are indexed.</strong> The style comes
+from Clippy's index, so Clippy indexes <strong>Sent Items first</strong>, before the Inbox, and
+waits until that is complete. On the first run, drafting then starts and builds the
+first skill right away, without waiting for the Inbox backlog. Until then, automatic
+drafting doesn't build a style from a half-indexed Sent Items. If the first attempt
+finds too few sent emails or fails, the next automatic attempt is 24 hours later;
+<strong>Regenerate</strong> in Settings doesn't wait for any of this.</p>
+<p><strong>Where the style comes from (<code>StyleSource</code>).</strong> Every draft, whether automatic,
+manual, rescan or re-check, uses one of three sources, in this order:</p>
+<ol>
+<li><strong>Your file</strong>: <code>%USERPROFILE%\.claude\skills\my-email-style\SKILL.md</code>, if it can
+   be read and is at most 64 KiB. This is the normal case, and your edits count.</li>
+<li><strong>Clippy's own copy</strong> in <code>%APPDATA%\ClippysRevenge</code>, if your file is missing or
+   unreadable. The Activity window says <code>Writing style: your SKILL.md is missing or
+   unreadable, so drafts use Clippy's saved copy. Regenerate it from AI drafts, or
+   fix the file.</code></li>
+<li><strong>None</strong>: drafts use "write plainly, briefly and politely". The Activity window
+   says <code>Writing style: SKILL.md not found or unreadable — drafts use no style
+   guide. Regenerate it from AI drafts.</code></li>
+</ol>
+<p>These messages appear when the source <strong>changes</strong>, not for every draft. When your file
+works again you see <code>Writing style: using your SKILL.md again.</code> Style generation doesn't count
+toward the daily limit. In Settings you also have <strong>View</strong> (read-only), <strong>Regenerate</strong>
+(runs now and takes a few minutes) and <strong>Open in editor</strong>. The status reads
+<code>Generated 2026-11-13 from 200 sent emails</code>, <code>Edited by you</code> or <code>Not generated yet</code>.</p>
+<h3 id="the-meeting-times-section-of-the-skill">The meeting-times section of the skill<a class="headerlink" href="#the-meeting-times-section-of-the-skill" title="Permanent link">&para;</a></h3>
+<p>The end of <code>SKILL.md</code> always has a section, <strong>Offering meeting times</strong>, written by
+Clippy between the markers <code>&lt;!-- clippy:meeting-times v2 --&gt;</code> and
+<code>&lt;!-- /clippy:meeting-times --&gt;</code>. It teaches your <strong>interactive</strong> Claude Code
+sessions the same habit: to get times from <a href="../tools/#find_free_times"><code>find_free_times</code></a>
+instead of making them up, to paste its <code>offer_text</code> unchanged, one option per line,
+and to set <code>offer_cet</code> when writing to someone in Europe. It also says to leave the
+options in the ranked order and to say that you will suggest times if none are found.
+When you pick one of the offered times (for example "make the invite for option 2"),
+the session is to call <a href="../tools/#create_meeting_draft"><code>create_meeting_draft</code></a> with
+<code>reply_to_id</code> set to the email that asked for the meeting, and never to create an
+invite unless you ask. A short paragraph on how <strong>you</strong> usually
+introduce meeting options is taken from your own sent mail.</p>
+<ul>
+<li>A <strong>new or regenerated</strong> skill always gets the section.</li>
+<li>A skill with no section, or with an older version of it (<code>v1</code>), gets the current
+  section automatically, once, when Clippy starts, with no Claude call, as long as
+  <strong>you haven't edited the file</strong>. The Activity window then shows <code>writing style: added
+  how to offer meeting times</code>.</li>
+<li>If you <strong>edited</strong> the skill, or wrote a <code>my-email-style</code> skill yourself, Clippy
+  doesn't touch it. <strong>Regenerate</strong> replaces it, including the new section.</li>
+<li>Changing anything inside the section counts as editing the file, like any other
+  change.</li>
+<li>The AI drafting prompt leaves the section out. It is meant for Claude Code sessions
+  with tools, not for drafting.</li>
+</ul>
+<div class="admonition warning">
+<p class="admonition-title">Security note: this skill is also loaded by Claude Code</p>
+<p><code>%USERPROFILE%\.claude\skills\my-email-style\SKILL.md</code> is a <em>user-level Claude
+Code skill</em>. That means your <strong>interactive</strong> Claude Code sessions, the ones with
+tools, can load it. It is the one place where text derived from mail reaches a
+Claude session that has tools. The file is model output based on your sent mail,
+so treat it with care.</p>
+<p>What limits the risk: only your own text is sampled (quoted mail from other
+people is cut), addresses, links and phone numbers are removed from the samples
+and from the result, the prompt treats the samples as data and never as
+instructions, and Clippy writes the file header itself.</p>
+<p>You stay in control: <strong>View</strong> or <strong>Open in editor</strong> shows the file, you can edit
+it, and you can delete <code>%USERPROFILE%\.claude\skills\my-email-style</code> at any time.
+Clippy then falls back to its own copy in <code>%APPDATA%\ClippysRevenge</code> and, if you
+delete that too, to the plain style "write plainly, briefly and politely" until
+you press <strong>Regenerate</strong>. If you don't want the skill visible to your Claude Code
+sessions, delete the folder in <code>.claude\skills</code> after each update.</p>
+</div>
+<h2 id="learning-from-how-you-edit-drafts">Learning from how you edit drafts<a class="headerlink" href="#learning-from-how-you-edit-drafts" title="Permanent link">&para;</a></h2>
+<p>Clippy's drafts are a starting point: you shorten an opening, drop a phrase, change a
+sign-off, and send. Since version 0.1.1 Clippy can notice those changes and feed them
+into your <a href="#your-writing-style">writing style</a>, so later drafts need fewer edits. It
+costs <strong>no extra Claude call</strong>: the edits are given to the writing-style update that
+already runs once a week. Nothing is read from, or changed in, the mail you sent.</p>
+<p>The setting is <strong>Learn from how I edit Clippy's drafts</strong>, in Settings, <strong>AI drafts</strong>,
+<strong>Writing style</strong> group, <strong>on by default</strong>.</p>
+<h3 id="what-clippy-records-when-it-saves-a-draft">What Clippy records when it saves a draft<a class="headerlink" href="#what-clippy-records-when-it-saves-a-draft" title="Permanent link">&para;</a></h3>
+<p>Each time Clippy saves an AI draft (an automatic draft, <strong>Draft a reply to the selected
+email</strong>, a <a href="#rescan-emails-from-the-last-24-hours">rescan</a> or a replacement in the
+<a href="#outdated-drafts">outdated-draft check</a>), it keeps a copy of the draft's text in its
+own local index:</p>
+<ul>
+<li>Only <strong>the reply text</strong>: what Claude wrote, including any
+  <a href="#meeting-times">meeting times</a> Clippy offered in it (the text is taken just before
+  the draft is saved). The yellow <a href="#the-reason-line">reason line</a>, the yellow
+  <a href="#the-yellow-notes">notes</a> and your signature are left out. So deleting or changing
+  an offered time before you send counts as an edit. The style update is told to
+  ignore one-off content such as dates, so this doesn't change your style.</li>
+<li>Addresses, links and phone numbers are replaced by <code>&lt;email&gt;</code>, <code>&lt;link&gt;</code> and <code>&lt;phone&gt;</code>,
+  and the text is cut to <strong>1,500 characters</strong>.</li>
+<li>A copy is kept only when the setting is on, the email has an internet message id (so
+  the sent reply can be matched later) and the draft was <strong>not</strong> built with attachment
+  text. A draft that used the text of an attachment or a synced file is never kept, so
+  file contents can't reach your writing style. A draft where every attachment was
+  skipped (nothing read) still counts.</li>
+<li>Drafts made with the <code>reply_draft</code> tool are never recorded. An outdated-draft check that keeps or removes a draft saves nothing new.</li>
+<li>A draft for a shared mailbox you turned on is recorded in your own mailbox's index.</li>
+</ul>
+<p>If a copy can't be saved, the draft itself is not affected. The log says only that
+<code>AI drafts: couldn't record a draft's text (&lt;exception type&gt;).</code></p>
+<h3 id="how-clippy-finds-what-you-sent">How Clippy finds what you sent<a class="headerlink" href="#how-clippy-finds-what-you-sent" title="Permanent link">&para;</a></h3>
+<p>After each sync of your own mailbox, and at most <strong>every 5 minutes</strong>, Clippy looks at
+the mail in your index that you sent in the last 30 days (up to 500 per run, newest
+first). It compares only the index; it asks Outlook nothing. A sent message is
+matched to a recorded draft when:</p>
+<ul>
+<li>it is in Sent Items (or a folder below it) and still carries Clippy's <code>ai</code> marker
+  (Outlook keeps it when a draft is sent),</li>
+<li>its "in reply to" id equals the internet message id of the email the draft answered, and</li>
+<li>the draft was recorded before the message was sent.</li>
+</ul>
+<p>Each sent reply is matched with the draft it came from. A recorded draft for that email
+that you never sent (for example one that Clippy replaced) loses its text. A reply that
+you wrote from scratch has no marker and is never matched. Sent mail without any
+recorded draft (for example, from before version 0.1.1, or when the draft used
+attachment text) is simply ignored.</p>
+<h3 id="sent-unchanged-or-edited">Sent unchanged, or edited<a class="headerlink" href="#sent-unchanged-or-edited" title="Permanent link">&para;</a></h3>
+<p>Clippy prepares your sent text the same way as the draft (your own text only, without
+the quoted email, your signature and any <code>Clippy:</code> line you forgot to delete; then
+redaction and the 1,500-character cut). It splits both texts into words and
+punctuation marks and measures what they share. The <strong>similarity</strong> is a number from 0
+to 1:</p>
+<ul>
+<li><strong>0.98 or more</strong>: <em>sent unchanged</em> (or nearly: one word in about 50). Clippy keeps
+  only the numbers (similarity and lengths), no text.</li>
+<li><strong>Less than 0.98</strong>: <em>edited</em>. Clippy keeps both texts, the draft and what you sent.</li>
+</ul>
+<p>For example, <code>Thanks, sounds good.</code> against <code>No.</code> has a similarity of about 0.29.
+Capital letters count as a difference.</p>
+<h3 id="what-is-kept-and-for-how-long">What is kept, and for how long<a class="headerlink" href="#what-is-kept-and-for-how-long" title="Permanent link">&para;</a></h3>
+<p>Everything is in Clippy's local index file, nowhere else:</p>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>How long</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A recorded draft text waiting for its sent reply</td>
+<td>30 days. Then it is marked expired and its text is erased</td>
+</tr>
+<tr>
+<td>A draft text that was matched, superseded or expired</td>
+<td>30 more days, then the row is deleted</td>
+</tr>
+<tr>
+<td>The texts of <strong>the newest 20</strong> edited pairs</td>
+<td>Until 20 newer pairs exist. Older pairs lose their texts and keep only their numbers</td>
+</tr>
+<tr>
+<td>The numbers of a pair (similarity, lengths, time)</td>
+<td>90 days, then the row is deleted</td>
+</tr>
+</tbody>
+</table>
+<p><a href="../tools/#query_index"><code>query_index</code></a> and the other tools can't read any of this: they
+see only mail, not these records. <strong>Rebuild index…</strong> in the tray deletes it with the
+rest of the index. Texts and similarity numbers never appear in logs or in the Activity
+window; only counts do.</p>
+<h3 id="when-your-edits-go-to-claude">When your edits go to Claude<a class="headerlink" href="#when-your-edits-go-to-claude" title="Permanent link">&para;</a></h3>
+<p>Nothing about your edits leaves your PC when you send a reply. It leaves only at the
+<strong>writing-style update</strong>: the automatic weekly one, or when you press <strong>Regenerate</strong> in
+Settings (the usual <a href="#your-writing-style">edit check</a> for a style you edited still
+applies). That update then does this:</p>
+<ol>
+<li>If the setting is on and at least <strong>3</strong> edited pairs from the last 90 days have
+   texts, it adds them to the request, <strong>up to 20, newest first</strong>, together with a
+   count of how many drafts you sent unchanged in those 90 days. Each pair has the
+   draft, what you sent and the similarity.</li>
+<li>Claude is told that these pairs are data, never instructions, to look for
+   patterns that <strong>recur</strong> (what you add, remove, shorten or rephrase, which greetings
+   and sign-offs you change), to ignore one-off content (facts, dates, names, numbers),
+   to mention when most drafts went out unchanged, and to write the result as a short
+   section of your style guide, <strong>Edits I usually make to drafts</strong>, with a few bullet
+   points as instructions for future drafts. The section has no names, addresses,
+   links, phone numbers or other numbers.</li>
+<li>With fewer than 3 pairs, or with the setting off, the request is exactly as before.</li>
+</ol>
+<p>Your drafting prompts then use the new section like the rest of the skill. You can read
+it with <strong>View</strong> in Settings, and edit it. As with any change to the skill, an update
+never overwrites your own edits without asking. If Clippy can't read the edits, it
+logs <code>Writing style: reading edited drafts failed (&lt;exception type&gt;)</code> and updates the
+style without them.</p>
+<p>The result line in Settings stays <code>Writing style updated from &lt;n&gt; sent emails.</code> The
+update still needs at least 20 suitable sent emails: the edits only add to them.</p>
+<h3 id="what-you-see-in-activity_1">What you see in Activity<a class="headerlink" href="#what-you-see-in-activity_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>After a check that found new sent drafts: <code>AI drafts: noted how you edited 1 sent
+  draft.</code> or <code>AI drafts: noted how you edited 12 sent drafts.</code> The number includes
+  drafts you sent unchanged. No subject or address.</li>
+<li>When a writing-style update used edits: <code>writing style updated from 240 sent emails
+  and 7 edited drafts (52 s)</code>. The second number is the pairs given to Claude.</li>
+</ul>
+<p>See <a href="../activity/#writing-style">Activity</a> for all style messages.</p>
+<h3 id="turning-it-off">Turning it off<a class="headerlink" href="#turning-it-off" title="Permanent link">&para;</a></h3>
+<p>Untick <strong>Learn from how I edit Clippy's drafts</strong>. Clippy then stops recording draft
+texts, stops matching sent mail, and leaves the edits out of the next style update. It
+<strong>doesn't delete</strong> what it already holds: those rows age out as described above, or
+disappear at once when you press <strong>Rebuild index…</strong>. A style section that was already
+written stays in your skill until the next style update replaces the skill.</p>
+<h3 id="notice-for-existing-users">Notice for existing users<a class="headerlink" href="#notice-for-existing-users" title="Permanent link">&para;</a></h3>
+<p>New consents already name this in the <a href="#consent-and-what-is-sent">consent text</a>. If you
+gave consent before version 0.1.1, you are not asked again. Instead, once, at the first
+AI draft Clippy saves after the update with the setting on (before any edit can be
+recorded, so before anything can reach Claude), an Activity entry and a balloon say:</p>
+<blockquote>
+<p>AI drafts now learn from how you edit Clippy's drafts before sending. The next writing-style update sends up to 20 of your edited replies (addresses, links and phone numbers removed) to Claude. You can turn this off in Settings → AI drafts.</p>
+</blockquote>
+<h3 id="privacy-in-short">Privacy in short<a class="headerlink" href="#privacy-in-short" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Stored only in your local index, as redacted own text, capped and purged as above.
+  Never in settings, logs, Activity, or any tool result.</li>
+<li>Leaves your PC only inside the writing-style update, up to 20 pairs, redacted.</li>
+<li>No Outlook call is involved and nothing in your mailbox changes.</li>
+<li>The model still has no tools. See also <a href="../security/#ai-drafts-data-flow">Security</a>.</li>
+</ul>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<p>The status line under <strong>Use</strong> and the Activity window tell you what is wrong. Fix it,
+then press <strong>Check</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>✗ Claude Code wasn't found. Install it from https://claude.com/claude-code, sign in once in a terminal, then press Check.</code></td>
+<td>Install Claude Code, or set <strong>Claude Code path (optional)</strong> to <code>claude.exe</code> or <code>cli.js</code>. A <code>.cmd</code>, <code>.bat</code> or <code>.ps1</code> shim isn't supported</td>
+</tr>
+<tr>
+<td><code>✗ Claude Code &lt;version&gt; is too old for AI drafts. Run "claude update", then press Check.</code></td>
+<td>Run <code>claude update</code> in a terminal</td>
+</tr>
+<tr>
+<td><code>✗ Claude Code is installed but not signed in. Open a terminal, run claude and sign in, then press Check.</code></td>
+<td>Run <code>claude</code> and sign in yourself. Clippy can't do it</td>
+</tr>
+<tr>
+<td><code>✗ Claude Code didn't answer (version). Press Check to try again.</code>, also with <code>help</code> or <code>auth status</code></td>
+<td>Press <strong>Check</strong> again. If it repeats, run <code>claude --version</code> in a terminal</td>
+</tr>
+<tr>
+<td><code>✗ The check didn't finish. Press Check to try again.</code></td>
+<td>Something unexpected went wrong during the check. Press <strong>Check</strong> again</td>
+</tr>
+<tr>
+<td><code>✓ Claude Code &lt;version&gt; · signed in (...)</code> plus <code>· update Claude Code for best results</code></td>
+<td>Works. Updating lets Clippy keep your own CLAUDE.md, hooks and plugins out of drafting calls</td>
+</tr>
+<tr>
+<td><code>✗ No API key saved.</code></td>
+<td>Paste your key and press <strong>Save key</strong></td>
+</tr>
+<tr>
+<td><code>✗ The API key was rejected (HTTP 401).</code></td>
+<td>The key is wrong or revoked. Save a new one</td>
+</tr>
+<tr>
+<td><code>✗ The model "&lt;model&gt;" isn't available with this key.</code></td>
+<td>Change <strong>Model</strong></td>
+</tr>
+<tr>
+<td><code>✗ api.anthropic.com didn't answer.</code></td>
+<td>Check your network and try again</td>
+</tr>
+<tr>
+<td><code>AI drafts: Claude isn't signed in</code> (Activity, error state)</td>
+<td>Sign in again in a terminal, then press <strong>Check</strong>. Drafting resumes</td>
+</tr>
+<tr>
+<td><code>AI drafts: Claude's usage limit was reached. I'll try again at 14:05.</code></td>
+<td>Wait. It retries by itself</td>
+</tr>
+<tr>
+<td><code>AI drafts: a Claude call failed (&lt;kind&gt;). I'll try again in 4 min.</code></td>
+<td>Usually temporary. If it keeps failing, press <strong>Check</strong></td>
+</tr>
+<tr>
+<td><code>AI drafts: daily limit of 30 reached. I'll continue tomorrow.</code></td>
+<td>Raise <strong>Daily limit</strong> or wait</td>
+</tr>
+<tr>
+<td><code>Rescan stopped (...) after 5 of 12 emails: ...</code></td>
+<td>See <a href="#rescan-emails-from-the-last-24-hours">Rescan</a> for the reasons. Fix the cause and rescan again</td>
+</tr>
+<tr>
+<td><code>AI drafts: an outdated draft couldn't be moved to Deleted Items. It's still in Drafts.</code></td>
+<td>Clippy couldn't open that mailbox's Deleted Items. Delete the old draft yourself if you want</td>
+</tr>
+<tr>
+<td><code>AI drafts: no draft for the email received ...: Claude's confidence 0.55 is below your minimum of 0.60.</code></td>
+<td>Draft it by hand from the tray, or lower <strong>Minimum confidence</strong>. See <a href="#emails-clippy-decides-not-to-draft">Emails Clippy decides not to draft</a></td>
+</tr>
+<tr>
+<td><code>Clippy: Couldn't read the shared file &lt;name&gt; (not synced to this PC).</code> or another yellow <code>Couldn't read …</code> note at the top of a draft</td>
+<td>Clippy couldn't read a file. See <a href="#the-yellow-notes">The yellow notes</a> and <a href="../faq/#why-couldnt-clippy-read-my-shared-file">Why couldn't Clippy read my shared file?</a></td>
+</tr>
+<tr>
+<td><code>[[check budget.xlsx]]</code> in a draft</td>
+<td>The model was told the file wasn't read and left a placeholder. Open the file yourself</td>
+</tr>
+<tr>
+<td><code>[[add meeting times: ...]]</code> in a draft</td>
+<td>Clippy couldn't offer times. See <a href="#meeting-times">Meeting times</a></td>
+</tr>
+<tr>
+<td><code>AI drafts: a reply draft couldn't be saved in Outlook. I'll try again later.</code></td>
+<td>Check that Outlook is running and Drafts is available</td>
+</tr>
+<tr>
+<td><code>Select one email in Outlook first.</code></td>
+<td>Manual draft: select one email</td>
+</tr>
+<tr>
+<td><code>That email isn't in your mailbox or an enabled shared mailbox.</code></td>
+<td>Manual draft: turn the shared mailbox on first</td>
+</tr>
+<tr>
+<td><code>That mailbox isn't indexed yet.</code></td>
+<td>Manual draft: wait until the shared mailbox's first backfill is done</td>
+</tr>
+<tr>
+<td><code>Claude isn't ready: ...</code></td>
+<td>Manual draft or rescan: fix the status shown, then try again</td>
+</tr>
+<tr>
+<td><code>Today's AI draft limit (30) is used up.</code></td>
+<td>Manual draft or rescan: raise <strong>Daily limit</strong> or wait until tomorrow</td>
+</tr>
+<tr>
+<td><code>I couldn't draft that reply: ...</code></td>
+<td>The reason follows, for example Claude's usage limit, or that Outlook isn't running</td>
+</tr>
+<tr>
+<td><code>I couldn't start the rescan: ...</code></td>
+<td>The reason follows. Fix it and rescan again</td>
+</tr>
+<tr>
+<td><code>Couldn't change AI drafts: ...</code></td>
+<td>A tray item couldn't save the settings. The reason follows</td>
+</tr>
+<tr>
+<td><code>AI drafts need the email index, which couldn't be opened. Check the tray icon for the reason.</code></td>
+<td>The index failed to open. See <a href="../troubleshooting/">Troubleshooting</a></td>
+</tr>
+<tr>
+<td><code>Clippy doesn't know your email address yet. Start Outlook, wait for the first sync, then try again.</code></td>
+<td>Needed to write the style. Start Outlook and let it sync</td>
+</tr>
+<tr>
+<td><code>Only 12 sent emails found. Clippy needs 20.</code></td>
+<td>Not enough sent mail to learn from yet</td>
+</tr>
+<tr>
+<td><code>There is no writing style skill yet. Press Regenerate to create one.</code></td>
+<td>Press <strong>Regenerate</strong></td>
+</tr>
+</tbody>
+</table>
+<p>If an email gets no draft, the usual reasons are: it arrived before you turned AI
+drafts on, it is older than the age limit, it matched a <a href="#rules">rule</a>, or Claude
+decided no reply was needed or wasn't confident enough (the Activity window says so
+in the second case).</p>
+<p>Logs and the Activity window never contain mail text, prompts, the style skill,
+attachment text, attachment file names or links, or Claude's answers.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-circle-arrow-up" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4M12 16V8"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../calendar/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Calendar and meetings">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Calendar and meetings
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../security/" class="md-footer__link md-footer__link--next" aria-label="Next: Security model">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Security model
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog" role="status" aria-atomic="true">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      
+      
+        
+        
+      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":["content.code.copy","content.tabs.link","navigation.footer","navigation.instant","navigation.sections","navigation.tabs","navigation.top","navigation.tracking","search.highlight","toc.follow"],"redirect":null,"search":"../assets/javascripts/workers/search.719e0d91.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","clipboard.error":"Could not copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.3cb411a8.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2680 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Your classic Outlook as a local MCP server for Claude Code. No cloud, no Graph, no OAuth.">
+      
+      
+      
+        <link rel="canonical" href="https://dirkpetersen.github.io/clippys-revenge/faq/">
+      
+      
+      
+        <link rel="prev" href="../troubleshooting/">
+      
+      
+        <link rel="next" href="../changelog/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/logo.svg">
+      <meta name="generator" content="zensical-0.1.1">
+    
+    
+      
+        <title>FAQ - Clippy's Revenge</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.ebb7f775.min.css">
+      
+        
+          
+        
+        <link rel="stylesheet" href="../assets/stylesheets/modern/palette.b60ce83d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-hidden="true"></label>
+    <div data-md-component="skip">
+      <a href="#__skip" class="md-skip">
+        Skip to content
+      </a>
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="./.." title="Clippy&#x27;s Revenge" class="md-header__button md-logo" aria-label="Clippy's Revenge" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="Clippy's Revenge">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+      <span class="md-visually-hidden">Navigation</span>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Clippy's Revenge
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              FAQ
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-sun-moon" viewBox="0 0 24 24"><path d="M12 2v2M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715M16 12a4 4 0 0 0-4-4M19 5l-1.256 1.256M20 12h2"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-moon" viewBox="0 0 24 24"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+          <span class="md-visually-hidden">Search</span>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+        <a href="https://github.com/dirkpetersen/clippys-revenge" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.3.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M216.5 362.5c-66-8-112.5-55.5-112.5-117 0-25 9-52 24-70-6.5-16.5-5.5-51.5 2-66 20-2.5 47 8 63 22.5 19-6 39-9 63.5-9s44.5 3 62.5 8.5c15.5-14 43-24.5 63-22 7 13.5 8 48.5 1.5 65.5 16 19 24.5 44.5 24.5 70.5 0 61.5-46.5 108-113.5 116.5 17 11 28.5 35 28.5 62.5v52c0 15 12.5 23.5 27.5 17.5C441 459.5 512 369 512 257 512 115.5 397 0 255.5 0S0 115.5 0 257c0 111 70.5 203 165.5 237.5 13.5 5 26.5-4 26.5-17.5v-40c-7 3-16 5-24 5-33 0-52.5-18-66.5-51.5-5.5-13.5-11.5-21.5-23-23-6-.5-8-3-8-6 0-6 10-10.5 20-10.5 14.5 0 27 9 40 27.5 10 14.5 20.5 21 33 21s20.5-4.5 32-16c8.5-8.5 15-16 21-21"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dirkpetersen/clippys-revenge
+  </div>
+</a>
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="./.." class="md-tabs__link">
+        
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+      
+    
+    
+    
+      <li class="md-tabs__item">
+        <a href="../install/" class="md-tabs__link">
+          
+  
+  Get started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+      
+    
+    
+    
+      <li class="md-tabs__item">
+        <a href="../tools/" class="md-tabs__link">
+          
+  
+  Use
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+      
+    
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../security/" class="md-tabs__link">
+          
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="./.." title="Clippy&#x27;s Revenge" class="md-nav__button md-logo" aria-label="Clippy's Revenge" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="Clippy's Revenge">
+
+    </a>
+    Clippy's Revenge
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dirkpetersen/clippys-revenge" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.3.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M216.5 362.5c-66-8-112.5-55.5-112.5-117 0-25 9-52 24-70-6.5-16.5-5.5-51.5 2-66 20-2.5 47 8 63 22.5 19-6 39-9 63.5-9s44.5 3 62.5 8.5c15.5-14 43-24.5 63-22 7 13.5 8 48.5 1.5 65.5 16 19 24.5 44.5 24.5 70.5 0 61.5-46.5 108-113.5 116.5 17 11 28.5 35 28.5 62.5v52c0 15 12.5 23.5 27.5 17.5C441 459.5 512 369 512 257 512 115.5 397 0 255.5 0S0 115.5 0 257c0 111 70.5 203 165.5 237.5 13.5 5 26.5-4 26.5-17.5v-40c-7 3-16 5-24 5-33 0-52.5-18-66.5-51.5-5.5-13.5-11.5-21.5-23-23-6-.5-8-3-8-6 0-6 10-10.5 20-10.5 14.5 0 27 9 40 27.5 10 14.5 20.5 21 33 21s20.5-4.5 32-16c8.5-8.5 15-16 21-21"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dirkpetersen/clippys-revenge
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="./.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Home
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Get started
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        
+          <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_2">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  Get started
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Install
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Connect Claude Code
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../updates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Updates
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Use
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        
+          <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_3">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  Use
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Tools reference
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tray/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Tray menu
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Settings
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../activity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Activity window
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../indexing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Indexing and search
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../calendar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Calendar and meetings
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ai-drafts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  AI drafts
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Reference
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        
+          <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+            <label class="md-nav__title" for="__nav_4">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  Reference
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Security model
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Troubleshooting
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  FAQ
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  FAQ
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#does-it-work-with-the-new-outlook" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does it work with the new Outlook?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-it-work-with-imap-or-pop-accounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does it work with IMAP or POP accounts?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-it-send-email" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can it send email?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-cant-clippy-send-a-meeting-invite" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why can't Clippy send a meeting invite?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-the-yellow-number-on-the-tray-icon" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What is the yellow number on the tray icon?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-it-delete-or-move-my-mail" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can it delete or move my mail?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-did-a-draft-go-to-deleted-items" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why did a draft go to Deleted Items?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-does-rescan-emails-from-the-last-24-hours-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What does "Rescan emails from the last 24 hours" do?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-isnt-my-writing-style-used-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why isn't my writing style used yet?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-claude-model-does-it-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Which Claude model does it use?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-can-i-see-what-clippy-did" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Where can I see what Clippy did?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-do-reply-subjects-start-with-re" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why do reply subjects start with "Re::"?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-it-write-replies-for-me" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can it write replies for me?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#will-the-ai-draft-offer-meeting-times" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Will the AI draft offer meeting times?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-does-a-meeting-time-say-cet-in-summer" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why does a meeting time say CET in summer?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-did-a-draft-come-out-without-a-cet-time-for-a-sender-in-europe" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why did a draft come out without a CET time for a sender in Europe?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#an-email-got-no-draft-and-the-activity-window-says-low-confidence-what-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        An email got no draft and the Activity window says "low confidence". What now?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-ai-drafting-send-my-mail-to-anthropic" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does AI drafting send my mail to Anthropic?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-clippy-learn-from-how-i-edit-its-drafts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Clippy learn from how I edit its drafts?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-do-i-make-clippy-forget-how-i-edited-its-drafts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How do I make Clippy forget how I edited its drafts?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-does-activity-say-noted-how-you-edited-3-sent-drafts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why does Activity say "noted how you edited 3 sent drafts"?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-clippy-read-my-attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Clippy read my attachments?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-couldnt-clippy-read-my-shared-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why couldn't Clippy read my shared file?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-does-clippy-keep-the-attachment-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Where does Clippy keep the attachment text?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-the-today-tokens-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What is the "Today: … tokens" line?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-do-i-stop-drafts-for-one-sender" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How do I stop drafts for one sender?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-clippy-work-in-a-non-english-outlook" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Clippy work in a non-English Outlook?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-i-tell-the-ai-drafts-my-zoom-link-or-how-i-like-to-sign-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can I tell the AI drafts my Zoom link or how I like to sign off?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-claude-see-my-older-emails-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Claude see my older emails too?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-the-yellow-line-at-the-top-of-an-ai-draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What is the yellow line at the top of an AI draft?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-clippy-sign-in-to-claude-or-read-my-claude-login" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Clippy sign in to Claude or read my Claude login?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-didnt-a-mail-get-a-draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why didn't a mail get a draft?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#is-the-writing-style-file-safe" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Is the writing-style file safe?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-my-mail-go-to-the-cloud" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does my mail go to the cloud?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#do-i-need-an-app-registration-or-admin-consent" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Do I need an app registration or admin consent?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-claude-answer-who-emails-me-the-most-or-how-much-mail-do-i-get-per-month" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can Claude answer "who emails me the most?" or "how much mail do I get per month?"
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-claude-run-its-own-searches-with-sql" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can Claude run its own searches with SQL?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-outlook-have-to-be-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Outlook have to be running?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-claude-code-in-wsl-use-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can Claude Code in WSL use it?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-other-computers-or-web-pages-reach-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can other computers or web pages reach it?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-far-back-does-search-go" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How far back does search go?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#are-attachments-searchable" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Are attachments searchable?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-does-it-save-attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Where does it save attachments?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-do-downloaded-files-go-when-claude-uses-a-download-link" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Where do downloaded files go when Claude uses a download link?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-do-i-get-an-attachment-into-wsl" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How do I get an attachment into WSL?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#curl-says-401-when-claude-downloads-an-attachment" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        curl says 401 when Claude downloads an attachment
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#curl-says-404-when-claude-downloads-an-attachment" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        curl says 404 when Claude downloads an attachment
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-i-download-the-same-link-twice" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can I download the same link twice?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-does-claude-say-the-attachment-is-too-big-for-a-link" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why does Claude say the attachment is too big for a link?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-i-use-a-shared-mailbox" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can I use a shared mailbox?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-it-start-with-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does it start with Windows?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-do-i-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How do I update?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-do-i-turn-updates-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How do I turn updates off?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-clippy-send-anything-to-github" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Clippy send anything to GitHub?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-do-i-uninstall" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How do I uninstall?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-does-smartscreen-warn-me" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why does SmartScreen warn me?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-are-the-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Where are the logs?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Changelog
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#does-it-work-with-the-new-outlook" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does it work with the new Outlook?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-it-work-with-imap-or-pop-accounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does it work with IMAP or POP accounts?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-it-send-email" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can it send email?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-cant-clippy-send-a-meeting-invite" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why can't Clippy send a meeting invite?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-the-yellow-number-on-the-tray-icon" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What is the yellow number on the tray icon?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-it-delete-or-move-my-mail" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can it delete or move my mail?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-did-a-draft-go-to-deleted-items" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why did a draft go to Deleted Items?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-does-rescan-emails-from-the-last-24-hours-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What does "Rescan emails from the last 24 hours" do?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-isnt-my-writing-style-used-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why isn't my writing style used yet?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-claude-model-does-it-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Which Claude model does it use?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-can-i-see-what-clippy-did" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Where can I see what Clippy did?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-do-reply-subjects-start-with-re" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why do reply subjects start with "Re::"?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-it-write-replies-for-me" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can it write replies for me?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#will-the-ai-draft-offer-meeting-times" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Will the AI draft offer meeting times?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-does-a-meeting-time-say-cet-in-summer" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why does a meeting time say CET in summer?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-did-a-draft-come-out-without-a-cet-time-for-a-sender-in-europe" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why did a draft come out without a CET time for a sender in Europe?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#an-email-got-no-draft-and-the-activity-window-says-low-confidence-what-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        An email got no draft and the Activity window says "low confidence". What now?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-ai-drafting-send-my-mail-to-anthropic" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does AI drafting send my mail to Anthropic?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-clippy-learn-from-how-i-edit-its-drafts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Clippy learn from how I edit its drafts?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-do-i-make-clippy-forget-how-i-edited-its-drafts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How do I make Clippy forget how I edited its drafts?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-does-activity-say-noted-how-you-edited-3-sent-drafts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why does Activity say "noted how you edited 3 sent drafts"?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-clippy-read-my-attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Clippy read my attachments?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-couldnt-clippy-read-my-shared-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why couldn't Clippy read my shared file?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-does-clippy-keep-the-attachment-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Where does Clippy keep the attachment text?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-the-today-tokens-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What is the "Today: … tokens" line?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-do-i-stop-drafts-for-one-sender" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How do I stop drafts for one sender?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-clippy-work-in-a-non-english-outlook" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Clippy work in a non-English Outlook?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-i-tell-the-ai-drafts-my-zoom-link-or-how-i-like-to-sign-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can I tell the AI drafts my Zoom link or how I like to sign off?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-claude-see-my-older-emails-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Claude see my older emails too?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-the-yellow-line-at-the-top-of-an-ai-draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What is the yellow line at the top of an AI draft?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-clippy-sign-in-to-claude-or-read-my-claude-login" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Clippy sign in to Claude or read my Claude login?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-didnt-a-mail-get-a-draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why didn't a mail get a draft?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#is-the-writing-style-file-safe" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Is the writing-style file safe?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-my-mail-go-to-the-cloud" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does my mail go to the cloud?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#do-i-need-an-app-registration-or-admin-consent" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Do I need an app registration or admin consent?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-claude-answer-who-emails-me-the-most-or-how-much-mail-do-i-get-per-month" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can Claude answer "who emails me the most?" or "how much mail do I get per month?"
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-claude-run-its-own-searches-with-sql" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can Claude run its own searches with SQL?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-outlook-have-to-be-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Outlook have to be running?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-claude-code-in-wsl-use-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can Claude Code in WSL use it?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-other-computers-or-web-pages-reach-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can other computers or web pages reach it?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-far-back-does-search-go" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How far back does search go?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#are-attachments-searchable" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Are attachments searchable?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-does-it-save-attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Where does it save attachments?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-do-downloaded-files-go-when-claude-uses-a-download-link" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Where do downloaded files go when Claude uses a download link?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-do-i-get-an-attachment-into-wsl" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How do I get an attachment into WSL?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#curl-says-401-when-claude-downloads-an-attachment" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        curl says 401 when Claude downloads an attachment
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#curl-says-404-when-claude-downloads-an-attachment" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        curl says 404 when Claude downloads an attachment
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-i-download-the-same-link-twice" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can I download the same link twice?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-does-claude-say-the-attachment-is-too-big-for-a-link" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why does Claude say the attachment is too big for a link?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#can-i-use-a-shared-mailbox" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Can I use a shared mailbox?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-it-start-with-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does it start with Windows?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-do-i-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How do I update?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-do-i-turn-updates-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How do I turn updates off?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#does-clippy-send-anything-to-github" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Does Clippy send anything to GitHub?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-do-i-uninstall" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        How do I uninstall?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-does-smartscreen-warn-me" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Why does SmartScreen warn me?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-are-the-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Where are the logs?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                <a id="__skip" tabindex="-1"></a>
+                
+                  
+
+  
+  
+
+
+<h1 id="faq">FAQ<a class="headerlink" href="#faq" title="Permanent link">&para;</a></h1>
+<h2 id="does-it-work-with-the-new-outlook">Does it work with the new Outlook?<a class="headerlink" href="#does-it-work-with-the-new-outlook" title="Permanent link">&para;</a></h2>
+<p>No. It needs <strong>classic Outlook</strong>, because it drives Outlook through COM. The new
+Outlook has no COM interface.</p>
+<h2 id="does-it-work-with-imap-or-pop-accounts">Does it work with IMAP or POP accounts?<a class="headerlink" href="#does-it-work-with-imap-or-pop-accounts" title="Permanent link">&para;</a></h2>
+<p>Not supported. An Exchange or Microsoft 365 mailbox is required.</p>
+<h2 id="can-it-send-email">Can it send email?<a class="headerlink" href="#can-it-send-email" title="Permanent link">&para;</a></h2>
+<p>No. Clippy never sends anything, neither mail nor meetings, with or without AI. It has
+no send function at all, and the code is checked for this on every build. It saves
+drafts and you send them from Outlook. Meeting invites are saved unsent in your
+calendar too. See <a href="../calendar/#meeting-drafts">Meeting drafts</a> and
+<a href="../security/#what-it-never-does">Security</a>.</p>
+<h2 id="why-cant-clippy-send-a-meeting-invite">Why can't Clippy send a meeting invite?<a class="headerlink" href="#why-cant-clippy-send-a-meeting-invite" title="Permanent link">&para;</a></h2>
+<p>Outlook's object model can't add a Teams or Zoom link, and you would add one by hand
+anyway. So Clippy saves the meeting unsent, marks it with the orange category
+<strong>Clippy draft invite</strong>, and lists it under <strong>Draft invites</strong> in the tray. You open
+it, add the link and send it. Clippy then removes its category.</p>
+<h2 id="what-is-the-yellow-number-on-the-tray-icon">What is the yellow number on the tray icon?<a class="headerlink" href="#what-is-the-yellow-number-on-the-tray-icon" title="Permanent link">&para;</a></h2>
+<p>The <a href="../tray/#attention-badge">attention badge</a>. It counts meeting drafts waiting for
+you to add a link and send them. It disappears when you have sent them all.</p>
+<h2 id="can-it-delete-or-move-my-mail">Can it delete or move my mail?<a class="headerlink" href="#can-it-delete-or-move-my-mail" title="Permanent link">&para;</a></h2>
+<p>No. It never deletes email, never empties Deleted Items and never moves your mail.
+There is one narrow exception, and it only concerns Clippy's own drafts: see the next
+question. Removing rows from Clippy's own search index is not touching mail.</p>
+<h2 id="why-did-a-draft-go-to-deleted-items">Why did a draft go to Deleted Items?<a class="headerlink" href="#why-did-a-draft-go-to-deleted-items" title="Permanent link">&para;</a></h2>
+<p>Only an AI draft that Clippy wrote itself can go there. When a newer message arrives in
+the same thread, Clippy re-checks its earlier draft. If no reply is needed any more, or
+a better one was written, Clippy moves the old draft to <strong>Deleted Items</strong> (from where
+you can drag it back). It does this only when you haven't edited it, opened it or sent
+it, and the Activity window records it. Nothing is ever deleted for good. You can turn
+it off with <strong>Update or remove my AI drafts when a thread moves on</strong> in Settings, AI
+drafts. See <a href="../ai-drafts/#outdated-drafts">Outdated drafts</a>.</p>
+<h2 id="what-does-rescan-emails-from-the-last-24-hours-do">What does "Rescan emails from the last 24 hours" do?<a class="headerlink" href="#what-does-rescan-emails-from-the-last-24-hours-do" title="Permanent link">&para;</a></h2>
+<p>It is in the tray, under <strong>AI drafts</strong>. It goes through the last day of mail, oldest
+first, drafts replies where one is needed and re-checks Clippy's own drafts in those
+threads. It asks first, showing how many Claude calls it may use, and stops at your
+daily limit. Click <strong>Cancel rescan</strong> to stop it. It works even when automatic drafting
+is off. See <a href="../ai-drafts/#rescan-emails-from-the-last-24-hours">Rescan</a> and the
+<a href="../tray/#ai-drafts">tray menu</a>.</p>
+<h2 id="why-isnt-my-writing-style-used-yet">Why isn't my writing style used yet?<a class="headerlink" href="#why-isnt-my-writing-style-used-yet" title="Permanent link">&para;</a></h2>
+<p>The first writing-style skill is built from your <strong>Sent Items</strong>. Clippy indexes Sent
+Items before the Inbox and builds the skill as soon as they are done, so you don't have
+to wait for the whole first backfill. Until then, drafts have no personal style. See
+<a href="../ai-drafts/#your-writing-style">Your writing style</a>.</p>
+<h2 id="which-claude-model-does-it-use">Which Claude model does it use?<a class="headerlink" href="#which-claude-model-does-it-use" title="Permanent link">&para;</a></h2>
+<p>By default the <strong>latest Opus</strong>: the model setting is <code>opus</code>, which always means the
+newest Opus. You can type <code>sonnet</code> or <code>haiku</code> the same way, or a full model name. See
+<a href="../settings/#ai-drafts">Settings</a>.</p>
+<h2 id="where-can-i-see-what-clippy-did">Where can I see what Clippy did?<a class="headerlink" href="#where-can-i-see-what-clippy-did" title="Permanent link">&para;</a></h2>
+<p>In the <a href="../activity/">Activity window</a>: double-click the tray icon. It lists syncs, tool
+calls, drafts and updates for the current session, without mail text.</p>
+<h2 id="why-do-reply-subjects-start-with-re">Why do reply subjects start with "Re::"?<a class="headerlink" href="#why-do-reply-subjects-start-with-re" title="Permanent link">&para;</a></h2>
+<p>It is intentional. Reply drafts always start with <code>Re::</code> (double colon).</p>
+<h2 id="can-it-write-replies-for-me">Can it write replies for me?<a class="headerlink" href="#can-it-write-replies-for-me" title="Permanent link">&para;</a></h2>
+<p>Yes, if you turn on <a href="../ai-drafts/">AI drafts</a>. Clippy then asks Claude to draft
+replies to new mail in your style and saves them in Drafts. It never sends them. It
+is off by default and asks for your consent first.</p>
+<h2 id="will-the-ai-draft-offer-meeting-times">Will the AI draft offer meeting times?<a class="headerlink" href="#will-the-ai-draft-offer-meeting-times" title="Permanent link">&para;</a></h2>
+<p>Yes, when an email asks for a meeting and <strong>Offer meeting times when an email asks
+for a meeting</strong> is on (the default). Clippy picks the times from your calendar itself,
+the model never sees them, and each option is its own line that you can delete. For
+senders in Europe it adds the time in CET. See <a href="../ai-drafts/#meeting-times">Meeting times</a>.</p>
+<h2 id="why-does-a-meeting-time-say-cet-in-summer">Why does a meeting time say CET in summer?<a class="headerlink" href="#why-does-a-meeting-time-say-cet-in-summer" title="Permanent link">&para;</a></h2>
+<p>The label is always "CET" for Central European time, also while Europe is on summer
+time. The time itself uses the real offset (+02:00 in summer), so the number is right.</p>
+<h2 id="why-did-a-draft-come-out-without-a-cet-time-for-a-sender-in-europe">Why did a draft come out without a CET time for a sender in Europe?<a class="headerlink" href="#why-did-a-draft-come-out-without-a-cet-time-for-a-sender-in-europe" title="Permanent link">&para;</a></h2>
+<p>Clippy guesses where the sender is from the <code>Date</code> header and the address ending, and
+can miss, for example for a <code>.com</code> address in winter UK time. See
+<a href="../ai-drafts/#meeting-times">Senders in Europe</a>. You can add or delete the CET part
+by hand.</p>
+<h2 id="an-email-got-no-draft-and-the-activity-window-says-low-confidence-what-now">An email got no draft and the Activity window says "low confidence". What now?<a class="headerlink" href="#an-email-got-no-draft-and-the-activity-window-says-low-confidence-what-now" title="Permanent link">&para;</a></h2>
+<p>Claude wasn't sure enough that a reply was needed, below your <strong>Minimum confidence</strong>.
+Such an email is decided once and not retried. To get a draft anyway, select the email
+in Outlook and use <strong>Draft a reply to the selected email</strong> in the tray menu. See
+<a href="../ai-drafts/#emails-clippy-decides-not-to-draft">Emails Clippy decides not to draft</a>.</p>
+<h2 id="does-ai-drafting-send-my-mail-to-anthropic">Does AI drafting send my mail to Anthropic?<a class="headerlink" href="#does-ai-drafting-send-my-mail-to-anthropic" title="Permanent link">&para;</a></h2>
+<p>Yes, while it is on: the email being answered, thread excerpts, up to 5 related
+earlier emails, attachment names, the extracted text of attachments and of synced shared
+files (unless you turn that off), your facts file and your style guide go to Claude
+through your own Claude Code (or your API key). Once a week, with the writing-style
+update, samples of your sent mail go too, and up to 20 pairs of an AI draft and what you
+sent after editing it (unless you turn that off). Files themselves and images never do.
+See <a href="../ai-drafts/#consent-and-what-is-sent">what is sent</a>.</p>
+<h2 id="does-clippy-learn-from-how-i-edit-its-drafts">Does Clippy learn from how I edit its drafts?<a class="headerlink" href="#does-clippy-learn-from-how-i-edit-its-drafts" title="Permanent link">&para;</a></h2>
+<p>Yes, since version 0.1.1, unless you turn it off. When you send a reply that began as
+an AI draft, Clippy notes what you changed. It keeps a redacted copy of the draft and of
+what you sent in its local index (at most 1,500 characters each, the newest 20 edited
+pairs, deleted after 30 to 90 days). Nothing leaves your PC then. At the next
+writing-style update (weekly, or <strong>Regenerate</strong>), if there are at least 3 pairs, up to 20
+are sent to Claude, which adds an "Edits I usually make to drafts" section to your style.
+Drafts that used attachment text are never kept. Untick <strong>Learn from how I edit
+Clippy's drafts</strong> in Settings, <strong>AI drafts</strong>, to stop it. See
+<a href="../ai-drafts/#learning-from-how-you-edit-drafts">Learning from how you edit drafts</a>.</p>
+<h2 id="how-do-i-make-clippy-forget-how-i-edited-its-drafts">How do I make Clippy forget how I edited its drafts?<a class="headerlink" href="#how-do-i-make-clippy-forget-how-i-edited-its-drafts" title="Permanent link">&para;</a></h2>
+<p>Turn off <strong>Learn from how I edit Clippy's drafts</strong> in Settings, <strong>AI drafts</strong>: nothing
+more is recorded or sent. That doesn't erase what is already stored; it ages out within 90
+days. To erase it now, use <strong>Rebuild index…</strong> in the tray and choose <strong>My mailbox</strong> or <strong>All mailboxes</strong>
+(it deletes the index file that holds the records). Then press <strong>Regenerate</strong> in Settings to write a style without
+the "Edits I usually make to drafts" section.</p>
+<h2 id="why-does-activity-say-noted-how-you-edited-3-sent-drafts">Why does Activity say "noted how you edited 3 sent drafts"?<a class="headerlink" href="#why-does-activity-say-noted-how-you-edited-3-sent-drafts" title="Permanent link">&para;</a></h2>
+<p>Clippy looked at your recently sent mail, found replies that started as its AI drafts and
+compared them with the drafts. It says how many it noted, including drafts you sent
+unchanged. See <a href="../activity/#learning-from-your-edits">Activity</a>.</p>
+<h2 id="does-clippy-read-my-attachments">Does Clippy read my attachments?<a class="headerlink" href="#does-clippy-read-my-attachments" title="Permanent link">&para;</a></h2>
+<p>For AI drafts, yes, since v0.1.1 and unless you turn it off. It reads the text of PDF,
+Word, Excel, PowerPoint, text, HTML and <code>.eml</code> attachments (and attached emails) of the
+email and its thread, and of OneDrive/SharePoint files linked in them that are synced to
+your PC, and sends that text to Claude for that one draft. It is never stored or
+indexed. Images are not read. See
+<a href="../ai-drafts/#attachments-and-shared-files">Attachments and shared files</a>, and
+<a href="../settings/#ai-drafts">Settings</a> to turn it off.</p>
+<h2 id="why-couldnt-clippy-read-my-shared-file">Why couldn't Clippy read my shared file?<a class="headerlink" href="#why-couldnt-clippy-read-my-shared-file" title="Permanent link">&para;</a></h2>
+<p>When Clippy can't read a file from a link or cloud attachment, the draft starts with a
+yellow note, for example <code>Clippy: Couldn't read the shared file Plan.docx (not synced to
+this PC).</code> The reasons:</p>
+<ul>
+<li><strong>Not synced to this PC.</strong> Clippy never downloads from the network. It reads only the
+  copy that your OneDrive sync client already keeps on this PC. The file must be in your
+  OneDrive, a synced SharePoint or Teams library or folder, or a folder you added with
+  <strong>Add shortcut to My files</strong>. Sync the library (in SharePoint, <strong>Sync</strong>) or add the
+  shortcut, then rescan or draft the reply again. "Specific people" and other secret-token
+  sharing links, <code>Doc.aspx?sourcedoc=…</code> links, and <code>1drv.ms</code> and <code>onedrive.live.com</code>
+  links can't be matched to a local file even when it is synced.</li>
+<li><strong>Not from your organization.</strong> The note says <code>Clippy only opens shared files from
+  people in your organization</code>. Clippy opens a shared link only when the email came from
+  you or from your own email domain (or a subdomain), so that outsiders can't make it
+  put a file from your OneDrive into a draft. If your own address is at a free or
+  consumer mail provider such as outlook.com, hotmail.com, gmail.com, yahoo.com,
+  icloud.com or GMX, only links you sent yourself (or the shared mailbox's own address)
+  are read. Links are taken only from the text each person wrote: links in quoted
+  replies or forwarded mail are ignored. Attached files are read whoever sent them.</li>
+<li><strong>Not a OneDrive or SharePoint link.</strong> Dropbox, Google Drive and other links are never
+  opened. There is no note for these.</li>
+<li><strong>The file is too slow.</strong> An online-only file is downloaded by OneDrive when Clippy opens
+  it. If that takes longer than 10 seconds (or the draft's 20 seconds), the note says
+  <code>it took too long</code>. While one PDF that took too long is still being processed,
+  other PDFs are skipped with the same note until it finishes.</li>
+<li><strong>The file itself.</strong> <code>password-protected</code>, <code>larger than 25 MB</code>, <code>no text in it, maybe a
+  scan</code> (Clippy has no OCR), <code>the file seems damaged</code>, or <code>Clippy can't read .&lt;ext&gt;
+  files</code> for formats such as <code>.doc</code>, <code>.xls</code>, <code>.rtf</code> and <code>.zip</code>.</li>
+<li><strong>The setting is off.</strong> If <strong>Read attachments and synced shared files for drafts</strong> is
+  unticked, no files are read and there are no notes.</li>
+</ul>
+<p>Notes are shown only for files of the email itself and for earlier files the email
+mentions by name. More about the notes, with their exact texts, is in
+<a href="../ai-drafts/#the-yellow-notes">The yellow notes</a>.</p>
+<h2 id="where-does-clippy-keep-the-attachment-text">Where does Clippy keep the attachment text?<a class="headerlink" href="#where-does-clippy-keep-the-attachment-text" title="Permanent link">&para;</a></h2>
+<p>Nowhere. It is read into memory for one draft request and then dropped. The next draft
+in the same thread reads the file again. Outlook attachments pass through a private
+folder, <code>%LOCALAPPDATA%\ClippysRevenge\ai-files\</code>, for a moment and are deleted at once
+(and at start-up, if one was left). See <a href="../security/#attachment-text-and-shared-files">Security</a>.</p>
+<h2 id="what-is-the-today-tokens-line">What is the "Today: … tokens" line?<a class="headerlink" href="#what-is-the-today-tokens-line" title="Permanent link">&para;</a></h2>
+<p>A tally of today's Claude calls and the tokens they used, shown while AI drafts consent
+exists: at the top of the tray's <strong>AI drafts</strong> menu and in the Activity window. For
+example <code>Today: 18 AI calls, ~210k tokens (in 190k / out 20k)</code>. It counts drafts,
+re-checks, rescans and style updates, not calls that never started. Only counts are
+stored (30 days). See <a href="../ai-drafts/#token-tally">Token tally</a>.</p>
+<h2 id="how-do-i-stop-drafts-for-one-sender">How do I stop drafts for one sender?<a class="headerlink" href="#how-do-i-stop-drafts-for-one-sender" title="Permanent link">&para;</a></h2>
+<p>Select an email from them in Outlook and use <strong>Don't draft for this sender</strong> (or <strong>…this
+sender's domain…</strong>) in the tray's <strong>AI drafts</strong> menu. To undo, delete the line in
+Settings, AI drafts, <strong>Never draft for</strong>. See
+<a href="../ai-drafts/#dont-draft-for-this-sender">Don't draft for this sender</a>.</p>
+<h2 id="does-clippy-work-in-a-non-english-outlook">Does Clippy work in a non-English Outlook?<a class="headerlink" href="#does-clippy-work-in-a-non-english-outlook" title="Permanent link">&para;</a></h2>
+<p>Yes. Since v0.1.1 Clippy recognizes the Drafts and Deleted Items folders by their role,
+so they are skipped for related mail and earlier attachments whatever Outlook calls them.
+A folder indexed before v0.1.1 under its translated name keeps its old entries until you
+add the folder again or use <strong>Rebuild index…</strong>. See
+<a href="../ai-drafts/#drafts-and-deleted-items-in-other-languages">Drafts and Deleted Items in other languages</a>.</p>
+<p>To cut quoted history from mail, Clippy recognizes the reply headers Outlook writes in
+English, German, French, Spanish, Dutch, Italian, Swedish, Polish and Japanese (for
+example <code>From:</code>/<code>Von:</code>/<code>Från:</code>/<code>差出人:</code> blocks and "On … wrote:" lines). In other
+languages more of the quoted text may reach Claude as part of an email.</p>
+<h2 id="can-i-tell-the-ai-drafts-my-zoom-link-or-how-i-like-to-sign-off">Can I tell the AI drafts my Zoom link or how I like to sign off?<a class="headerlink" href="#can-i-tell-the-ai-drafts-my-zoom-link-or-how-i-like-to-sign-off" title="Permanent link">&para;</a></h2>
+<p>Yes. Use <strong>Edit my facts…</strong> in the tray, under <strong>AI drafts</strong>. It opens a file with
+headings for your role, links, office hours, standard answers, people and <strong>How I want
+replies written</strong>. Whatever you write there is used in every draft, and your reply
+preferences win over the writing style. See <a href="../ai-drafts/#facts-about-you">Facts about you</a>.</p>
+<h2 id="does-claude-see-my-older-emails-too">Does Claude see my older emails too?<a class="headerlink" href="#does-claude-see-my-older-emails-too" title="Permanent link">&para;</a></h2>
+<p>A few. With <strong>Include related earlier emails</strong> on (the default), each draft request
+carries up to 5 earlier emails from the same mailbox that match the topic or the
+sender, including your own replies to that person, so the draft fits the history. You
+can turn it off in Settings, AI drafts. See
+<a href="../ai-drafts/#related-earlier-mail">Related earlier mail</a>.</p>
+<h2 id="what-is-the-yellow-line-at-the-top-of-an-ai-draft">What is the yellow line at the top of an AI draft?<a class="headerlink" href="#what-is-the-yellow-line-at-the-top-of-an-ai-draft" title="Permanent link">&para;</a></h2>
+<p>The reason line: one sentence starting <code>Clippy:</code> that says why the draft was written.
+Delete it before you send. Deleting it counts as editing the draft, so Clippy won't
+replace or move that draft later. You can turn the line off in Settings, AI drafts. See
+<a href="../ai-drafts/#the-reason-line">The reason line</a>.</p>
+<h2 id="does-clippy-sign-in-to-claude-or-read-my-claude-login">Does Clippy sign in to Claude or read my Claude login?<a class="headerlink" href="#does-clippy-sign-in-to-claude-or-read-my-claude-login" title="Permanent link">&para;</a></h2>
+<p>No. You sign in to Claude Code yourself in a terminal, and Clippy only asks it
+whether you are signed in. It never reads Claude Code's stored credentials.</p>
+<h2 id="why-didnt-a-mail-get-a-draft">Why didn't a mail get a draft?<a class="headerlink" href="#why-didnt-a-mail-get-a-draft" title="Permanent link">&para;</a></h2>
+<p>It may have arrived before you turned AI drafts on, be older than the age limit, be a
+newsletter or automatic mail, match a never-draft rule, or not need a reply. See
+<a href="../ai-drafts/#rules">Rules</a>.</p>
+<h2 id="is-the-writing-style-file-safe">Is the writing-style file safe?<a class="headerlink" href="#is-the-writing-style-file-safe" title="Permanent link">&para;</a></h2>
+<p>It is a Claude Code skill in <code>%USERPROFILE%\.claude\skills\my-email-style</code>, so your
+interactive Claude Code sessions can load it. Review, edit or delete it any time. See
+the <a href="../ai-drafts/#your-writing-style">security note</a>.</p>
+<h2 id="does-my-mail-go-to-the-cloud">Does my mail go to the cloud?<a class="headerlink" href="#does-my-mail-go-to-the-cloud" title="Permanent link">&para;</a></h2>
+<p>Clippy has no cloud component. It runs on your PC and listens on <code>127.0.0.1</code>.
+What Claude Code then sends to its model is the text of the mail it reads, so
+treat that as you would any use of an AI assistant with your mail. The optional
+<a href="../ai-drafts/">AI drafts</a> feature also sends mail to Claude, with your consent.</p>
+<h2 id="do-i-need-an-app-registration-or-admin-consent">Do I need an app registration or admin consent?<a class="headerlink" href="#do-i-need-an-app-registration-or-admin-consent" title="Permanent link">&para;</a></h2>
+<p>No. There is no Graph API, Entra app registration or OAuth. If Outlook can open
+the mail, Clippy can use it.</p>
+<h2 id="can-claude-answer-who-emails-me-the-most-or-how-much-mail-do-i-get-per-month">Can Claude answer "who emails me the most?" or "how much mail do I get per month?"<a class="headerlink" href="#can-claude-answer-who-emails-me-the-most-or-how-much-mail-do-i-get-per-month" title="Permanent link">&para;</a></h2>
+<p>Yes, in one call. Ask in plain language, for example "top 10 people who emailed me in
+the last year, with counts" or "mail per month since January". Claude uses
+<a href="../tools/#email_stats"><code>email_stats</code></a>, which counts mail in the local index by
+sender, sender domain, recipient, folder, month, week, weekday or hour. It returns
+counts and names, never mail text, and works while Outlook is closed.</p>
+<h2 id="can-claude-run-its-own-searches-with-sql">Can Claude run its own searches with SQL?<a class="headerlink" href="#can-claude-run-its-own-searches-with-sql" title="Permanent link">&para;</a></h2>
+<p>Yes, with <a href="../tools/#query_index"><code>query_index</code></a>: one read-only <code>SELECT</code> over three
+views of the index, including full-text search with snippets. Nothing can be changed
+and nothing outside those views can be read. See
+<a href="../security/#statistics-and-sql-queries">Security</a>.</p>
+<h2 id="does-outlook-have-to-be-running">Does Outlook have to be running?<a class="headerlink" href="#does-outlook-have-to-be-running" title="Permanent link">&para;</a></h2>
+<p>For indexing, yes. Clippy never starts Outlook on its own. Searching the existing
+index works while Outlook is closed. Tools that read live from Outlook (full
+messages not yet indexed, attachments, drafts, calendar) need it running.</p>
+<h2 id="can-claude-code-in-wsl-use-it">Can Claude Code in WSL use it?<a class="headerlink" href="#can-claude-code-in-wsl-use-it" title="Permanent link">&para;</a></h2>
+<p>Yes, with WSL's mirrored networking. See <a href="../connect/#from-wsl">Connect Claude Code</a>.</p>
+<h2 id="can-other-computers-or-web-pages-reach-it">Can other computers or web pages reach it?<a class="headerlink" href="#can-other-computers-or-web-pages-reach-it" title="Permanent link">&para;</a></h2>
+<p>No. It binds to <code>127.0.0.1</code> only, requires a token, and rejects any request that
+has an <code>Origin</code> header.</p>
+<h2 id="how-far-back-does-search-go">How far back does search go?<a class="headerlink" href="#how-far-back-does-search-go" title="Permanent link">&para;</a></h2>
+<p>12 months by default. Change it in Settings, Index (1 to 120 months).</p>
+<h2 id="are-attachments-searchable">Are attachments searchable?<a class="headerlink" href="#are-attachments-searchable" title="Permanent link">&para;</a></h2>
+<p>Attachment <strong>file names</strong> are searchable. Their contents are never indexed. To read
+an attachment, Claude saves it with <a href="../tools/#get_attachment"><code>get_attachment</code></a> (or,
+from WSL, fetches it with <a href="../tools/#attachment_link"><code>attachment_link</code></a>) and reads
+the file.</p>
+<h2 id="where-does-it-save-attachments">Where does it save attachments?<a class="headerlink" href="#where-does-it-save-attachments" title="Permanent link">&para;</a></h2>
+<p><code>%USERPROFILE%\Downloads\Clippy's Revenge</code> by default. Claude can only save to
+allowed folders, which you control in Settings, General.</p>
+<h2 id="where-do-downloaded-files-go-when-claude-uses-a-download-link">Where do downloaded files go when Claude uses a download link?<a class="headerlink" href="#where-do-downloaded-files-go-when-claude-uses-a-download-link" title="Permanent link">&para;</a></h2>
+<p>Into the folder where Claude Code ran the <code>curl</code> command, for example your WSL
+project folder. With <a href="../tools/#attachment_link"><code>attachment_link</code></a>, Clippy makes a
+one-time link and the shell downloads the file itself. Clippy keeps a private copy
+in <code>%LOCALAPPDATA%\ClippysRevenge\links\</code> only until the download ends or 10 minutes
+pass, then deletes it. That folder is normally empty.</p>
+<h2 id="how-do-i-get-an-attachment-into-wsl">How do I get an attachment into WSL?<a class="headerlink" href="#how-do-i-get-an-attachment-into-wsl" title="Permanent link">&para;</a></h2>
+<p>Ask Claude Code to fetch it. It uses <code>attachment_link</code> and runs the <code>curl</code> command it
+gets back. You need <code>CLIPPY_TOKEN</code> set in WSL once: see
+<a href="../connect/#set-clippy_token-for-downloads">Set CLIPPY_TOKEN</a>.</p>
+<h2 id="curl-says-401-when-claude-downloads-an-attachment">curl says 401 when Claude downloads an attachment<a class="headerlink" href="#curl-says-401-when-claude-downloads-an-attachment" title="Permanent link">&para;</a></h2>
+<p>The shell doesn't have your token, or has an old one. Open <strong>Settings, Connection</strong>,
+press <strong>Copy WSL token line</strong> and put the line in <code>~/.bashrc</code> in WSL, then
+<code>source ~/.bashrc</code>. After <strong>Regenerate auth token</strong> you must do this again. A
+<code>401</code> does not use up the link, so the same command works once the token is right
+(if the 10 minutes haven't passed).</p>
+<h2 id="curl-says-404-when-claude-downloads-an-attachment">curl says 404 when Claude downloads an attachment<a class="headerlink" href="#curl-says-404-when-claude-downloads-an-attachment" title="Permanent link">&para;</a></h2>
+<p>The link is single use and lasts 10 minutes. A <code>404</code> means it was already used,
+has expired, was never made, or Clippy was restarted (which clears all links).
+Ask Claude for a new link. The link names the port it was made on, so after a port
+change old links no longer work either.</p>
+<h2 id="can-i-download-the-same-link-twice">Can I download the same link twice?<a class="headerlink" href="#can-i-download-the-same-link-twice" title="Permanent link">&para;</a></h2>
+<p>No. Each link works once. Ask Claude for a new one.</p>
+<h2 id="why-does-claude-say-the-attachment-is-too-big-for-a-link">Why does Claude say the attachment is too big for a link?<a class="headerlink" href="#why-does-claude-say-the-attachment-is-too-big-for-a-link" title="Permanent link">&para;</a></h2>
+<p>Links handle files up to 100 MB, with at most 10 open links, 200 MB open in total and
+20 links per 10 minutes. For a bigger file, Claude uses
+<a href="../tools/#get_attachment"><code>get_attachment</code></a> to save it on the Windows side. See the
+<a href="../tools/#attachment_link-limits">limits</a>.</p>
+<h2 id="can-i-use-a-shared-mailbox">Can I use a shared mailbox?<a class="headerlink" href="#can-i-use-a-shared-mailbox" title="Permanent link">&para;</a></h2>
+<p>Yes. Check it under tray, <strong>Shared mailboxes</strong>. See
+<a href="../indexing/#shared-mailboxes">Shared mailboxes</a>.</p>
+<h2 id="does-it-start-with-windows">Does it start with Windows?<a class="headerlink" href="#does-it-start-with-windows" title="Permanent link">&para;</a></h2>
+<p>Yes by default. Turn it off with the <strong>Start with Windows</strong> item in the tray menu.</p>
+<h2 id="how-do-i-update">How do I update?<a class="headerlink" href="#how-do-i-update" title="Permanent link">&para;</a></h2>
+<p>By default Clippy checks GitHub once a week and installs a newer version at its
+next start. To update at once, open <strong>About Clippy's Revenge…</strong> in the tray and
+press <strong>Update now</strong>, or run the install one-liner again. See
+<a href="../updates/">Updates</a> and <a href="../install/">Install</a>.</p>
+<h2 id="how-do-i-turn-updates-off">How do I turn updates off?<a class="headerlink" href="#how-do-i-turn-updates-off" title="Permanent link">&para;</a></h2>
+<p>Settings, General, <strong>Updates</strong>: choose <strong>Don't check</strong> (no automatic checks) or
+<strong>Only tell me</strong> (a balloon, no download). See <a href="../updates/#turn-updates-off">Updates</a>.</p>
+<h2 id="does-clippy-send-anything-to-github">Does Clippy send anything to GitHub?<a class="headerlink" href="#does-clippy-send-anything-to-github" title="Permanent link">&para;</a></h2>
+<p>Only the weekly update check and the download, as plain requests that carry just
+the version number. No mail, no settings, no telemetry. See
+<a href="../updates/#what-is-sent-to-github">what is sent</a>.</p>
+<h2 id="how-do-i-uninstall">How do I uninstall?<a class="headerlink" href="#how-do-i-uninstall" title="Permanent link">&para;</a></h2>
+<p>See <a href="../install/#uninstall">Uninstall</a>.</p>
+<h2 id="why-does-smartscreen-warn-me">Why does SmartScreen warn me?<a class="headerlink" href="#why-does-smartscreen-warn-me" title="Permanent link">&para;</a></h2>
+<p>The exe is not code-signed yet. The installer verifies its checksum.</p>
+<h2 id="where-are-the-logs">Where are the logs?<a class="headerlink" href="#where-are-the-logs" title="Permanent link">&para;</a></h2>
+<p><code>%LOCALAPPDATA%\ClippysRevenge\logs</code>. Use the tray's <strong>Open log folder</strong>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-circle-arrow-up" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4M12 16V8"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../troubleshooting/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Troubleshooting">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Troubleshooting
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../changelog/" class="md-footer__link md-footer__link--next" aria-label="Next: Changelog">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Changelog
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog" role="status" aria-atomic="true">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      
+      
+        
+        
+      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":["content.code.copy","content.tabs.link","navigation.footer","navigation.instant","navigation.sections","navigation.tabs","navigation.top","navigation.tracking","search.highlight","toc.follow"],"redirect":null,"search":"../assets/javascripts/workers/search.719e0d91.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","clipboard.error":"Could not copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.3cb411a8.min.js"></script>
+      
+    
+  </body>
+</html>

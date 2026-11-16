@@ -1,0 +1,2962 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Your classic Outlook as a local MCP server for Claude Code. No cloud, no Graph, no OAuth.">
+      
+      
+      
+        <link rel="canonical" href="https://dirkpetersen.github.io/clippys-revenge/tools/">
+      
+      
+      
+        <link rel="prev" href="../updates/">
+      
+      
+        <link rel="next" href="../tray/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/logo.svg">
+      <meta name="generator" content="zensical-0.1.1">
+    
+    
+      
+        <title>Tools reference - Clippy's Revenge</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.ebb7f775.min.css">
+      
+        
+          
+        
+        <link rel="stylesheet" href="../assets/stylesheets/modern/palette.b60ce83d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-hidden="true"></label>
+    <div data-md-component="skip">
+      <a href="#__skip" class="md-skip">
+        Skip to content
+      </a>
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="./.." title="Clippy&#x27;s Revenge" class="md-header__button md-logo" aria-label="Clippy's Revenge" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="Clippy's Revenge">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+      <span class="md-visually-hidden">Navigation</span>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Clippy's Revenge
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Tools reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-sun-moon" viewBox="0 0 24 24"><path d="M12 2v2M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715M16 12a4 4 0 0 0-4-4M19 5l-1.256 1.256M20 12h2"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-moon" viewBox="0 0 24 24"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+          <span class="md-visually-hidden">Search</span>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+        <a href="https://github.com/dirkpetersen/clippys-revenge" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.3.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M216.5 362.5c-66-8-112.5-55.5-112.5-117 0-25 9-52 24-70-6.5-16.5-5.5-51.5 2-66 20-2.5 47 8 63 22.5 19-6 39-9 63.5-9s44.5 3 62.5 8.5c15.5-14 43-24.5 63-22 7 13.5 8 48.5 1.5 65.5 16 19 24.5 44.5 24.5 70.5 0 61.5-46.5 108-113.5 116.5 17 11 28.5 35 28.5 62.5v52c0 15 12.5 23.5 27.5 17.5C441 459.5 512 369 512 257 512 115.5 397 0 255.5 0S0 115.5 0 257c0 111 70.5 203 165.5 237.5 13.5 5 26.5-4 26.5-17.5v-40c-7 3-16 5-24 5-33 0-52.5-18-66.5-51.5-5.5-13.5-11.5-21.5-23-23-6-.5-8-3-8-6 0-6 10-10.5 20-10.5 14.5 0 27 9 40 27.5 10 14.5 20.5 21 33 21s20.5-4.5 32-16c8.5-8.5 15-16 21-21"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dirkpetersen/clippys-revenge
+  </div>
+</a>
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="./.." class="md-tabs__link">
+        
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+      
+    
+    
+    
+      <li class="md-tabs__item">
+        <a href="../install/" class="md-tabs__link">
+          
+  
+  Get started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+      
+    
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="././" class="md-tabs__link">
+          
+  
+  Use
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+      
+    
+    
+    
+      <li class="md-tabs__item">
+        <a href="../security/" class="md-tabs__link">
+          
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="./.." title="Clippy&#x27;s Revenge" class="md-nav__button md-logo" aria-label="Clippy's Revenge" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="Clippy's Revenge">
+
+    </a>
+    Clippy's Revenge
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dirkpetersen/clippys-revenge" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.3.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M216.5 362.5c-66-8-112.5-55.5-112.5-117 0-25 9-52 24-70-6.5-16.5-5.5-51.5 2-66 20-2.5 47 8 63 22.5 19-6 39-9 63.5-9s44.5 3 62.5 8.5c15.5-14 43-24.5 63-22 7 13.5 8 48.5 1.5 65.5 16 19 24.5 44.5 24.5 70.5 0 61.5-46.5 108-113.5 116.5 17 11 28.5 35 28.5 62.5v52c0 15 12.5 23.5 27.5 17.5C441 459.5 512 369 512 257 512 115.5 397 0 255.5 0S0 115.5 0 257c0 111 70.5 203 165.5 237.5 13.5 5 26.5-4 26.5-17.5v-40c-7 3-16 5-24 5-33 0-52.5-18-66.5-51.5-5.5-13.5-11.5-21.5-23-23-6-.5-8-3-8-6 0-6 10-10.5 20-10.5 14.5 0 27 9 40 27.5 10 14.5 20.5 21 33 21s20.5-4.5 32-16c8.5-8.5 15-16 21-21"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dirkpetersen/clippys-revenge
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="./.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Home
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Get started
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        
+          <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_2">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  Get started
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Install
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Connect Claude Code
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../updates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Updates
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Use
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        
+          <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+            <label class="md-nav__title" for="__nav_3">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  Use
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+                  
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Tools reference
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Tools reference
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-tools-can-and-cant-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What the tools can and can't do
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Common conventions
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-mail" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Reading mail
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reading mail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#search_emails" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        search_emails
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_message" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        get_message
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#index_status" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        index_status
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#email_stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        email_stats
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query_index" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        query_index
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Attachments
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attachments">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get_attachment" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        get_attachment
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#save_attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        save_attachments
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#attachment_link" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        attachment_link
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="attachment_link">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#attachment_link-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        attachment_link limits
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#drafts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Drafts
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Drafts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#create_draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        create_draft
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reply_draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        reply_draft
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calendar" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Calendar
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Calendar">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list_events" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        list_events
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#find_free_times" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        find_free_times
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#create_meeting_draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        create_meeting_draft
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#errors-claude-may-see" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Errors Claude may see
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tray/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Tray menu
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Settings
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../activity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Activity window
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../indexing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Indexing and search
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../calendar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Calendar and meetings
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ai-drafts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  AI drafts
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Reference
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        
+          <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_4">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  Reference
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Security model
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Troubleshooting
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  FAQ
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Changelog
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-tools-can-and-cant-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        What the tools can and can't do
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Common conventions
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-mail" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Reading mail
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reading mail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#search_emails" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        search_emails
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_message" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        get_message
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#index_status" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        index_status
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#email_stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        email_stats
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query_index" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        query_index
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Attachments
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attachments">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get_attachment" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        get_attachment
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#save_attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        save_attachments
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#attachment_link" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        attachment_link
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="attachment_link">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#attachment_link-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        attachment_link limits
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#drafts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Drafts
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Drafts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#create_draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        create_draft
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reply_draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        reply_draft
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calendar" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Calendar
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Calendar">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list_events" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        list_events
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#find_free_times" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        find_free_times
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#create_meeting_draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        create_meeting_draft
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#errors-claude-may-see" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Errors Claude may see
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                <a id="__skip" tabindex="-1"></a>
+                
+                  
+
+  
+  
+
+
+<h1 id="tools-reference">Tools reference<a class="headerlink" href="#tools-reference" title="Permanent link">&para;</a></h1>
+<p>Clippy's Revenge gives Claude Code thirteen tools. You normally don't call them
+yourself: you ask Claude in plain language and it picks the right tool. This page
+lists every tool and its parameters, which is useful when you want to know what
+Claude can and can't do.</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#search_emails"><code>search_emails</code></a></td>
+<td>Search the local index</td>
+</tr>
+<tr>
+<td><a href="#get_message"><code>get_message</code></a></td>
+<td>Read one email in full</td>
+</tr>
+<tr>
+<td><a href="#get_attachment"><code>get_attachment</code></a></td>
+<td>Save one attachment to disk</td>
+</tr>
+<tr>
+<td><a href="#save_attachments"><code>save_attachments</code></a></td>
+<td>Save attachments of all emails matching a search</td>
+</tr>
+<tr>
+<td><a href="#attachment_link"><code>attachment_link</code></a></td>
+<td>Make a one-time download link for one attachment, for WSL or another shell</td>
+</tr>
+<tr>
+<td><a href="#create_draft"><code>create_draft</code></a></td>
+<td>Save a new email draft</td>
+</tr>
+<tr>
+<td><a href="#reply_draft"><code>reply_draft</code></a></td>
+<td>Save a reply draft</td>
+</tr>
+<tr>
+<td><a href="#list_events"><code>list_events</code></a></td>
+<td>List calendar events</td>
+</tr>
+<tr>
+<td><a href="#find_free_times"><code>find_free_times</code></a></td>
+<td>Suggest meeting times from free/busy</td>
+</tr>
+<tr>
+<td><a href="#create_meeting_draft"><code>create_meeting_draft</code></a></td>
+<td>Save a meeting unsent in your calendar. Nothing is sent</td>
+</tr>
+<tr>
+<td><a href="#index_status"><code>index_status</code></a></td>
+<td>Show index and sync state</td>
+</tr>
+<tr>
+<td><a href="#email_stats"><code>email_stats</code></a></td>
+<td>Count mail by sender, domain, folder or time</td>
+</tr>
+<tr>
+<td><a href="#query_index"><code>query_index</code></a></td>
+<td>Run one read-only SELECT over the index</td>
+</tr>
+</tbody>
+</table>
+<p>There is no <code>send_meeting_invite</code> tool. Older versions had one; it was replaced by
+<code>create_meeting_draft</code>, which never sends.</p>
+<h2 id="what-the-tools-can-and-cant-do">What the tools can and can't do<a class="headerlink" href="#what-the-tools-can-and-cant-do" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Nothing is ever sent.</strong> Clippy has no send function. Mail tools only
+  <strong>save drafts</strong> in your Drafts folder, and the meeting tool only <strong>saves a
+  meeting unsent</strong> in your calendar. You review and send both in Outlook.</li>
+<li><strong>Nothing is deleted.</strong> No tool deletes or moves your mail. The only mail Clippy
+  ever moves is an outdated AI draft of its own, and that is not a tool: see
+  <a href="../ai-drafts/#outdated-drafts">Outdated drafts</a>.</li>
+<li><strong>Read-only tools.</strong> <code>search_emails</code>, <code>get_message</code>, <code>index_status</code>,
+  <code>email_stats</code>, <code>query_index</code>, <code>list_events</code> and <code>find_free_times</code> change nothing.
+  <code>get_attachment</code> and <code>save_attachments</code> write files to disk, only inside the
+  <a href="../security/#file-access">allowed folders</a>. <code>attachment_link</code> also creates a file,
+  but only a short-lived private copy for a <a href="#attachment_link">download link</a>.
+  <code>create_draft</code>, <code>reply_draft</code> and
+  <code>create_meeting_draft</code> create items in Outlook.</li>
+<li><strong>Which tools need Outlook running.</strong> <code>search_emails</code>, <code>email_stats</code>,
+  <code>query_index</code> and <code>index_status</code> use the local index and work while Outlook is
+  busy or closed. <code>get_message</code> falls back to Outlook for mail that isn't indexed.
+  Attachments, drafts, <code>list_events</code>, <code>find_free_times</code> and <code>create_meeting_draft</code>
+  always need Outlook.</li>
+</ul>
+<h2 id="common-conventions">Common conventions<a class="headerlink" href="#common-conventions" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><code>mailbox</code></strong>: empty means your own mailbox. An SMTP address means that
+  <a href="../indexing/#shared-mailboxes">shared mailbox</a>, which must be enabled in the
+  tray. Search tools (<code>search_emails</code>, <code>email_stats</code>, <code>query_index</code>,
+  <code>save_attachments</code>) also accept <code>all</code>. Tools that take an <code>id</code> find the mailbox
+  from the id.</li>
+<li><strong>Dates</strong>: ISO date (<code>2026-03-01</code>) or date-time (<code>2026-03-01T14:30</code>), in local
+  time. A space may replace the <code>T</code>, seconds are optional, and a date-time ending
+  in <code>Z</code>, <code>+hh:mm</code> or <code>-hh:mm</code> is honored. A date-only end date includes the whole
+  day.</li>
+<li><strong>Numbers out of range</strong>: <code>limit</code>, <code>offset</code>, <code>top</code>, <code>max_rows</code>, <code>days_ahead</code> and
+  <code>max_suggestions</code> are moved into their range without an error. <code>days</code>
+  (<code>list_events</code>), <code>duration_minutes</code>, <code>earliest_hour</code> and <code>latest_hour</code> give an
+  error instead.</li>
+<li><strong>Recipients</strong>: <code>"Last, First &lt;address&gt;; other-address"</code>. Separate
+  people with <code>;</code>, never <code>,</code>, because names are often written "Last, First".</li>
+<li><strong>File paths</strong>: every path must be inside an allowed folder. See
+  <a href="../security/#file-access">file access</a>. Relative paths resolve under the
+  attachment folder (see <a href="../settings/">Settings</a>). A refused path returns an error
+  that names the allowed folders, and is recorded in <a href="../activity/">Activity</a>.</li>
+<li><strong>Errors</strong>: tools return a message that tells Claude what to fix. The most
+  common ones are in <a href="#errors-claude-may-see">Errors Claude may see</a>.</li>
+</ul>
+<h2 id="reading-mail">Reading mail<a class="headerlink" href="#reading-mail" title="Permanent link">&para;</a></h2>
+<h3 id="search_emails">search_emails<a class="headerlink" href="#search_emails" title="Permanent link">&para;</a></h3>
+<p>Searches the local index. It is fast and works while Outlook is busy. All filters
+are optional and combine with AND. Results are newest first. Only synced mail is
+indexed; use <a href="#index_status"><code>index_status</code></a> to check coverage.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>query</code></td>
+<td>string</td>
+<td>Free text over subject, body, sender, recipients and attachment file names. Words are ANDed. Use <code>OR</code> between words for alternatives, <code>"quotes"</code> for a phrase, and a trailing <code>*</code> for a prefix.</td>
+</tr>
+<tr>
+<td><code>sender</code></td>
+<td>string</td>
+<td>Substring of the sender's name or email address</td>
+</tr>
+<tr>
+<td><code>recipient</code></td>
+<td>string</td>
+<td>Substring of To or CC. Also accepts a list like <code>Name &lt;address&gt;; other-address</code>, which matches mail involving any of them</td>
+</tr>
+<tr>
+<td><code>subject</code></td>
+<td>string</td>
+<td>Substring of the subject</td>
+</tr>
+<tr>
+<td><code>date_from</code></td>
+<td>string</td>
+<td>Earliest date, inclusive</td>
+</tr>
+<tr>
+<td><code>date_to</code></td>
+<td>string</td>
+<td>Latest date, inclusive</td>
+</tr>
+<tr>
+<td><code>folder</code></td>
+<td>string</td>
+<td><code>inbox</code>, <code>sent</code> (or <code>sent items</code>), or another indexed folder path such as <code>Inbox\Projects</code> (not case-sensitive, <code>/</code> works as well as <code>\</code>). Subfolders are not included. Empty means all folders</td>
+</tr>
+<tr>
+<td><code>has_attachment</code></td>
+<td>bool</td>
+<td>true: only mail with real (non-inline) attachments; false: only mail without</td>
+</tr>
+<tr>
+<td><code>attachment_name</code></td>
+<td>string</td>
+<td>Substring of any attachment file name (inline images included)</td>
+</tr>
+<tr>
+<td><code>attachment_ext</code></td>
+<td>string</td>
+<td>Exact attachment extension, with or without the dot (<code>pdf</code> or <code>.pdf</code>)</td>
+</tr>
+<tr>
+<td><code>unread</code></td>
+<td>bool</td>
+<td>true: only unread; false: only read</td>
+</tr>
+<tr>
+<td><code>mailbox</code></td>
+<td>string</td>
+<td>Empty, a shared mailbox address, or <code>all</code></td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>int</td>
+<td>Maximum results, 1 to 200 (default 50)</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>int</td>
+<td>Results to skip, for paging (default 0)</td>
+</tr>
+</tbody>
+</table>
+<p>The text filters (<code>sender</code>, <code>recipient</code>, <code>subject</code>, <code>attachment_name</code>) ignore
+upper and lower case. A blank text filter means no filter. A <code>recipient</code> that
+contains <code>;</code> or <code>&lt;</code> is read as a list of people (up to 50 of them are used).
+Outlook's default folders keep their English names in the index (<code>Inbox</code>,
+<code>Sent Items</code>, <code>Drafts</code>, <code>Deleted Items</code>), also when Outlook shows them in another
+language.</p>
+<p>Each result has <code>id</code>, <code>mailbox</code>, <code>folder</code>, <code>date</code> (local time), <code>from</code>,
+<code>sender_email</code>, <code>to</code>, <code>subject</code>, <code>has_attachments</code>, <code>attachments[]</code> (<code>position</code>,
+<code>filename</code>, <code>size</code>, <code>inline</code>) and <code>snippet</code>. With <code>query</code>, the snippet shows the matching
+words between <code>**</code>; otherwise it is the start of the body. Pass a result's <code>id</code> to
+<code>get_message</code> to read the body.</p>
+<p>Errors: a date that can't be read gives <code>date_from "&lt;text&gt;" is not a valid date. Use
+an ISO date like 2026-03-01 or a date-time like 2026-03-01T14:30 (local time).</code></p>
+<details class="example">
+<summary>Example request</summary>
+<p>"Find unread mail from accounting with a PDF attached since 1 March."</p>
+<p>Claude calls <code>search_emails</code> with <code>sender="accounting"</code>, <code>unread=true</code>,
+<code>attachment_ext="pdf"</code>, <code>date_from="2026-03-01"</code>.</p>
+</details>
+<h3 id="get_message">get_message<a class="headerlink" href="#get_message" title="Permanent link">&para;</a></h3>
+<p>Returns one email in full: headers, complete body and attachment list. It reads
+the index first. If the email isn't indexed yet, it reads it live from Outlook,
+which needs Outlook to be running.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>string, required</td>
+<td>The id of an email, as returned by <code>search_emails</code></td>
+</tr>
+</tbody>
+</table>
+<p>The result has <code>id</code>, <code>mailbox</code>, <code>folder</code>, <code>date</code>, <code>from</code>, <code>sender_email</code>, <code>to</code>, <code>cc</code>,
+<code>subject</code>, <code>unread</code>, <code>has_attachments</code>, <code>attachments[]</code>, <code>internet_message_id</code>,
+<code>body</code> and <code>source</code> (<code>index</code> or <code>outlook</code>). A very long email is stored cut at
+2,000,000 characters and ends with the line <code>[Clippy indexed only the first
+2,000,000 characters of this email.]</code>. If Outlook has to be asked and isn't running,
+the error is <code>Outlook is not running. Ask the user to start Outlook (tray → Start
+Outlook) and try again.</code></p>
+<h3 id="index_status">index_status<a class="headerlink" href="#index_status" title="Permanent link">&para;</a></h3>
+<p>Shows the state of the local index: per-mailbox counts, oldest and newest indexed
+mail, last sync and whether the first backfill is complete. It also says whether
+Outlook is running and what Clippy is doing right now. Use it to explain why a
+search found nothing, or to check indexing progress.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mailbox</code></td>
+<td>string</td>
+<td>Optional shared mailbox address. Empty means all configured mailboxes</td>
+</tr>
+</tbody>
+</table>
+<p>The result has <code>state</code> (what Clippy is doing: <code>Idle</code>, <code>Serving</code>, <code>Drafting</code>,
+<code>Paused</code>, <code>Purging</code>, <code>Syncing</code>, <code>Backfilling</code>, <code>OutlookUnavailable</code> or <code>Error</code>),
+<code>progress</code> (text such as <code>Inbox (2025-11 → now) 1240/8000</code>, or null when there is
+nothing to report),
+<code>outlook_running</code> (true, false, or null before the first attempt) and <code>mailboxes[]</code>.
+Each mailbox has <code>mailbox</code>, <code>total_emails</code>, <code>folders</code> (count per folder),
+<code>oldest</code>, <code>newest</code>, <code>db_size_bytes</code>, <code>last_sync</code> and <code>backfill_complete</code>.</p>
+<h3 id="email_stats">email_stats<a class="headerlink" href="#email_stats" title="Permanent link">&para;</a></h3>
+<p>Counts emails in the local index, grouped, in one call. Use it for questions such
+as "top 10 people who emailed me last year" or "how much mail do I get per month".
+It returns <strong>counts and names only, never mail text</strong>. It is read-only and fast,
+because the counting runs inside the index.</p>
+<p>All the filters of <a href="#search_emails"><code>search_emails</code></a> work here (<code>query</code>, <code>sender</code>,
+<code>recipient</code>, <code>subject</code>, <code>date_from</code>, <code>date_to</code>, <code>folder</code>, <code>has_attachment</code>,
+<code>attachment_name</code>, <code>attachment_ext</code>, <code>unread</code>, <code>mailbox</code>), with the same meaning.
+There is no <code>limit</code> or <code>offset</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>group_by</code></td>
+<td>string, required</td>
+<td>What to group by. See the table below</td>
+</tr>
+<tr>
+<td><code>top</code></td>
+<td>int</td>
+<td>Number of groups to return, 1 to 200 (default 10)</td>
+</tr>
+<tr>
+<td><code>order</code></td>
+<td>string</td>
+<td><code>count</code>: largest groups first (default). <code>key</code>: by key, chronological for <code>month</code>, <code>week</code> and <code>hour</code>, Mon to Sun for <code>weekday</code></td>
+</tr>
+<tr>
+<td><code>include_cc</code></td>
+<td>bool</td>
+<td>For <code>recipient</code> and <code>recipient_domain</code>: also count CC addresses (default true)</td>
+</tr>
+<tr>
+<td><code>mailbox</code></td>
+<td>string</td>
+<td>Empty, a shared mailbox address, or <code>all</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>group_by</code> values</strong></p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Key</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sender</code></td>
+<td>The sender's email address, lower case. <code>name</code> is the display name in the newest email of the group</td>
+</tr>
+<tr>
+<td><code>sender_domain</code></td>
+<td>The part of the sender address after the <code>@</code></td>
+</tr>
+<tr>
+<td><code>recipient</code></td>
+<td>Each To address, plus each CC address when <code>include_cc</code> is true. An address counts once per email. <code>name</code> is the display name seen in the newest email</td>
+</tr>
+<tr>
+<td><code>recipient_domain</code></td>
+<td>The same, by domain. A domain counts once per email</td>
+</tr>
+<tr>
+<td><code>folder</code></td>
+<td>The folder path</td>
+</tr>
+<tr>
+<td><code>month</code></td>
+<td><code>yyyy-MM</code></td>
+</tr>
+<tr>
+<td><code>week</code></td>
+<td>ISO week, <code>yyyy-Www</code></td>
+</tr>
+<tr>
+<td><code>weekday</code></td>
+<td><code>Mon</code> to <code>Sun</code></td>
+</tr>
+<tr>
+<td><code>hour</code></td>
+<td><code>00</code> to <code>23</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>month</code>, <code>week</code>, <code>weekday</code> and <code>hour</code> use your Windows time zone. <code>(unknown)</code> is
+the group for senders with no valid address. Recipients with no valid address are
+skipped, so <code>recipient</code> and <code>recipient_domain</code> have no <code>(unknown)</code> group. Any other <code>group_by</code> value returns an error that lists the
+valid ones.</p>
+<p>The result is <code>group_by</code>, <code>mailbox</code>, <code>total</code> (matching emails, not recipient
+entries), <code>distinct</code> (number of groups), <code>truncated</code> (true when there are more
+groups than <code>top</code>) and <code>rows</code>. Each row has <code>key</code>, <code>count</code>, <code>first</code> and <code>last</code> (the
+dates of the oldest and newest email in the group, local time with offset), and
+<code>name</code> for <code>sender</code> and <code>recipient</code>.</p>
+<p>With <code>mailbox="all"</code>, the counts of every enabled mailbox are added together by
+key. An email that is in two mailboxes counts twice.</p>
+<details class="example">
+<summary>Example requests</summary>
+<p>"Who emailed me most in the last year? Top 10 with counts."</p>
+<p>Claude calls <code>email_stats</code> with <code>group_by="sender"</code>, <code>folder="inbox"</code>,
+<code>date_from</code> one year ago.</p>
+<p>"How much mail do I get per month?" is <code>group_by="month"</code>, <code>order="key"</code>.
+"Who do I write to most?" is <code>group_by="recipient"</code>, <code>folder="sent"</code>.
+"Which companies send me the most mail?" is <code>group_by="sender_domain"</code>.</p>
+</details>
+<p>For joins, snippets or any other question that grouping can't answer, use
+<a href="#query_index"><code>query_index</code></a>.</p>
+<h3 id="query_index">query_index<a class="headerlink" href="#query_index" title="Permanent link">&para;</a></h3>
+<p>Runs <strong>one read-only SQLite <code>SELECT</code></strong> over the local email index. Use it for
+questions the other tools can't answer in one call: joins, custom grouping and
+full-text search with snippets. For plain counts, <a href="#email_stats"><code>email_stats</code></a> is
+simpler. It works while Outlook is busy or closed, and only synced mail is indexed.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sql</code></td>
+<td>string, required</td>
+<td>One <code>SELECT</code> (<code>WITH</code> and <code>VALUES</code> also work). Write values into the SQL; <code>?</code> parameters are not supported</td>
+</tr>
+<tr>
+<td><code>mailbox</code></td>
+<td>string</td>
+<td>Empty, a shared mailbox address, or <code>all</code></td>
+</tr>
+<tr>
+<td><code>max_rows</code></td>
+<td>int</td>
+<td>Maximum rows returned, 1 to 1000 (default 200)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Views.</strong> The query sees exactly these three views, which hold the same data that
+<code>search_emails</code> and <code>get_message</code> return.</p>
+<table>
+<thead>
+<tr>
+<th>View</th>
+<th>Columns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mail</code></td>
+<td><code>id</code> (the id that <code>get_message</code> takes), <code>doc</code> (join key), <code>mailbox</code> (empty for your own), <code>folder</code>, <code>date</code> (local time, <code>yyyy-MM-ddTHH:mm:ss</code>), <code>unix_time</code> (UTC seconds), <code>sender_name</code>, <code>sender_email</code>, <code>to_addrs</code>, <code>cc_addrs</code> (<code>Name &lt;email&gt;; ...</code>), <code>subject</code>, <code>topic</code> (conversation topic), <code>body</code> (plain text), <code>unread</code> (0 or 1), <code>has_attachments</code> (0 or 1, not counting inline images), <code>attachment_names</code> (one file name per line)</td>
+</tr>
+<tr>
+<td><code>mail_fts</code></td>
+<td>The full-text index: <code>mail_fts</code> (use it with <code>MATCH</code>, <code>snippet()</code>, <code>highlight()</code>), <code>rank</code>, <code>doc</code>, <code>subject</code>, <code>body</code>, <code>sender_name</code>, <code>sender_email</code>, <code>to_addrs</code>, <code>cc_addrs</code>, <code>attachment_names</code>. Join to <code>mail</code> on <code>doc</code></td>
+</tr>
+<tr>
+<td><code>mail_attachments</code></td>
+<td><code>doc</code>, <code>position</code>, <code>filename</code>, <code>size</code>, <code>is_inline</code> (0 or 1). Only file names are indexed, never attachment content</td>
+</tr>
+</tbody>
+</table>
+<p>For full-text search, filter with <code>WHERE mail_fts MATCH '...'</code> (FTS5 syntax: words
+are ANDed, <code>OR</code>, <code>NOT</code>, <code>"a phrase"</code>, <code>prefix*</code>, <code>column:word</code>) and sort with
+<code>ORDER BY rank</code> (best first). <code>snippet(mail_fts, n, ...)</code> and
+<code>highlight(mail_fts, n, ...)</code> take a column number: 0 subject, 1 body, 2 sender
+name, 3 sender email, 4 To, 5 CC, 6 attachment names. <code>bm25(mail_fts)</code> also works.</p>
+<p><strong>Limits</strong></p>
+<ul>
+<li>One statement only. <code>PRAGMA</code>, <code>ATTACH</code>, every write and every other table are
+  refused, with an error that names what was not allowed.</li>
+<li>10 seconds in total, at most 1000 rows (<code>max_rows</code>), at most 100 columns, long
+  text cells cut at 2,000 characters, and about 1,000,000 characters of results in
+  total. The SQL itself may be at most 20,000 characters. On a large mailbox add a
+  <code>LIMIT</code> and a date or folder filter.</li>
+<li>With <code>mailbox="all"</code> each mailbox is queried separately and the rows are joined
+  with a leading <code>mailbox</code> column. Counts and other aggregates are therefore
+  <strong>per mailbox</strong>; use <code>email_stats</code> for counts merged across mailboxes.</li>
+</ul>
+<p>The result has <code>columns</code>, <code>rows</code> (numbers stay numbers, empty values are <code>null</code>),
+<code>row_count</code>, <code>truncated</code>, <code>truncated_cells</code> (how many cells were cut) and
+<code>elapsed_ms</code>. When it stops early it also gives <code>truncated_reason</code>: <code>max_rows</code> (the
+row limit was reached) or <code>size</code> (the next row would pass the total size limit).</p>
+<details class="example">
+<summary>Example queries</summary>
+<p>Top senders in your Inbox in the last year:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">sender_email</span><span class="p">,</span><span class="w"> </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">mail</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">folder</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'Inbox'</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">unix_time</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">strftime</span><span class="p">(</span><span class="s1">'%s'</span><span class="p">,</span><span class="s1">'now'</span><span class="p">,</span><span class="s1">'-1 year'</span><span class="p">)</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">sender_email</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="k">DESC</span><span class="w"> </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">10</span>
+</code></pre></div>
+<p>Mail per month:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">substr</span><span class="p">(</span><span class="nb">date</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">7</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="k">month</span><span class="p">,</span><span class="w"> </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">mail</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="k">month</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="k">month</span>
+</code></pre></div>
+<p>Full-text search with snippets:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="nb">date</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">subject</span><span class="p">,</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">       </span><span class="n">snippet</span><span class="p">(</span><span class="n">mail_fts</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="s1">'**'</span><span class="p">,</span><span class="w"> </span><span class="s1">'**'</span><span class="p">,</span><span class="w"> </span><span class="s1">'…'</span><span class="p">,</span><span class="w"> </span><span class="mi">12</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">hit</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="k">FROM</span><span class="w"> </span><span class="n">mail_fts</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">mail</span><span class="w"> </span><span class="n">m</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">doc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mail_fts</span><span class="p">.</span><span class="n">doc</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">mail_fts</span><span class="w"> </span><span class="k">MATCH</span><span class="w"> </span><span class="s1">'budget AND 2026'</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">rank</span><span class="w"> </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">20</span>
+</code></pre></div>
+<p>PDF attachments by sender:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">sender_email</span><span class="p">,</span><span class="w"> </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">n</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">FROM</span><span class="w"> </span><span class="n">mail_attachments</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">mail</span><span class="w"> </span><span class="n">m</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">doc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">doc</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="k">WHERE</span><span class="w"> </span><span class="k">lower</span><span class="p">(</span><span class="n">a</span><span class="p">.</span><span class="n">filename</span><span class="p">)</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="s1">'%.pdf'</span><span class="w"> </span><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="k">DESC</span><span class="w"> </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">20</span>
+</code></pre></div>
+</details>
+<div class="admonition note">
+<p class="admonition-title">Read-only, by several layers</p>
+<p>The query runs on a read-only connection to the index with writing switched
+off, and every table and column access is checked. Only the three views above
+can be read, not sync state, settings or anything else in the database. See
+<a href="../security/#statistics-and-sql-queries">Security</a>.</p>
+</div>
+<p>The main <code>query_index</code> errors:</p>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Message (shortened)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Empty <code>sql</code></td>
+<td><code>sql is required: one SELECT over the views mail, mail_fts and mail_attachments.</code></td>
+</tr>
+<tr>
+<td>Over 20,000 characters</td>
+<td><code>sql is longer than 20,000 characters. Shorten the query.</code></td>
+</tr>
+<tr>
+<td>More than one statement</td>
+<td><code>query_index runs exactly one SELECT statement. Remove everything after the first statement.</code></td>
+</tr>
+<tr>
+<td>A write, <code>PRAGMA</code>, <code>ATTACH</code>, another table or column</td>
+<td><code>query_index only reads the views mail, mail_fts and mail_attachments with one SELECT. Not allowed here: &lt;what&gt;.</code></td>
+</tr>
+<tr>
+<td><code>?</code> parameters</td>
+<td><code>query_index takes no parameters; write the values into the SQL.</code></td>
+</tr>
+<tr>
+<td>More than 100 columns</td>
+<td><code>query_index returns at most 100 columns.</code></td>
+</tr>
+<tr>
+<td>Longer than 10 seconds</td>
+<td><code>The query ran longer than 10 seconds and was stopped. Add a date range, a folder or a LIMIT, or use email_stats for counts.</code></td>
+</tr>
+<tr>
+<td>Query needs too much memory</td>
+<td><code>The query needs too much memory. Simplify it: fewer nested WITH clauses, fewer or shorter computed columns.</code></td>
+</tr>
+<tr>
+<td>A value over 16 MB</td>
+<td><code>A value in the query is too large (more than 16 MB).</code></td>
+</tr>
+<tr>
+<td>SQL syntax or other SQLite error</td>
+<td><code>SQL error: &lt;SQLite's message&gt;. query_index reads the views ...</code></td>
+</tr>
+<tr>
+<td>Index not ready (not indexed yet, being rebuilt)</td>
+<td><code>The index for &lt;mailbox&gt; isn't available right now. Check index_status.</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>email_stats</code> errors: <code>group_by must be one of sender, sender_domain, recipient,
+recipient_domain, folder, month, week, weekday, hour.</code> and <code>order must be count or
+key.</code></p>
+<h2 id="attachments">Attachments<a class="headerlink" href="#attachments" title="Permanent link">&para;</a></h2>
+<p>Attachments are saved with a live call to Outlook, so Outlook must be running.
+Files are never overwritten: a duplicate name becomes <code>name (2).ext</code>.</p>
+<h3 id="get_attachment">get_attachment<a class="headerlink" href="#get_attachment" title="Permanent link">&para;</a></h3>
+<p>Saves one attachment of an email to disk and returns its path, file name and
+size.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>string, required</td>
+<td>The id of an email, from <code>search_emails</code></td>
+</tr>
+<tr>
+<td><code>filename</code></td>
+<td>string</td>
+<td>File name of the attachment (whole name, case-insensitive)</td>
+</tr>
+<tr>
+<td><code>position</code></td>
+<td>int</td>
+<td>1-based position in the email's attachment list</td>
+</tr>
+<tr>
+<td><code>save_dir</code></td>
+<td>string</td>
+<td>Folder to save into. Empty means the attachment folder. Relative paths go under it. Must be inside an allowed folder</td>
+</tr>
+</tbody>
+</table>
+<p>If you pass neither <code>filename</code> nor <code>position</code>, Clippy takes the only attachment, or
+the only real (non-inline) one when the rest are inline images. Otherwise the error
+lists the attachments (for example <code>This email has 3 attachments. Pass filename or
+position to choose one: 1 "report.pdf", 2 "notes.docx", 3 "image001.png" (inline).</code>)
+so Claude can choose; the list shows at most 20. If you pass both, they must agree.
+If two attachments have the same name, pass <code>position</code>. Inline attachments can be
+fetched by name or position. The returned <code>filename</code> is the attachment's original
+name; the saved file may be called <code>name (2).ext</code>, and characters Windows doesn't
+allow in file names become <code>_</code>.</p>
+<p>An attached email that has no file name is listed as <code>&lt;subject&gt;.msg</code> (or
+<code>(no name).msg</code>); any other attachment without a name is listed as
+<code>attachment-&lt;n&gt;</code>. Names recorded in the index by older versions, without the
+<code>.msg</code>, still match in <code>get_attachment</code>, <code>save_attachments</code> and <code>attachment_link</code>.</p>
+<h3 id="save_attachments">save_attachments<a class="headerlink" href="#save_attachments" title="Permanent link">&para;</a></h3>
+<p>Finds emails with the same filters as <code>search_emails</code> and saves their attachments
+into one folder. <code>attachment_name</code> and <code>attachment_ext</code> also choose which
+attachments are saved. Inline images are skipped unless <code>include_inline</code> is true.
+Returns <code>saved[]</code>, <code>failed[]</code>, <code>count</code> (number saved) and a <code>note</code> when nothing
+matched or nothing was eligible. Each <code>saved</code> entry has <code>id</code>, <code>mailbox</code>, <code>position</code>,
+<code>filename</code>, <code>path</code> and <code>size</code>; each <code>failed</code> entry has <code>id</code>, <code>mailbox</code>, <code>position</code>,
+<code>filename</code> and <code>error</code>. One failure doesn't stop the rest, except when Outlook
+closes or stops responding: then every attachment not yet saved is listed in
+<code>failed</code> with that error. Emails are saved newest first. The <code>note</code> is <code>No emails
+matched the filters.</code> or <code>&lt;n&gt; email(s) matched, but none had attachments to save.
+Inline attachments are skipped unless include_inline is true.</code></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>save_dir</code></td>
+<td>string</td>
+<td>Folder to save into. Empty means the attachment folder</td>
+</tr>
+<tr>
+<td><code>query</code>, <code>sender</code>, <code>recipient</code>, <code>subject</code>, <code>date_from</code>, <code>date_to</code>, <code>folder</code>, <code>has_attachment</code>, <code>attachment_name</code>, <code>attachment_ext</code>, <code>unread</code>, <code>mailbox</code></td>
+<td></td>
+<td>Same as in <code>search_emails</code></td>
+</tr>
+<tr>
+<td><code>include_inline</code></td>
+<td>bool</td>
+<td>true: also save inline attachments such as embedded images (default false)</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>int</td>
+<td>Maximum number of <strong>emails</strong>, 1 to 200 (default 50)</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>int</td>
+<td>Emails to skip, for paging</td>
+</tr>
+</tbody>
+</table>
+<h3 id="attachment_link">attachment_link<a class="headerlink" href="#attachment_link" title="Permanent link">&para;</a></h3>
+<p>Makes a <strong>one-time download link</strong> for one attachment of an email. Use it when Claude
+Code runs in WSL (or any other shell) and should get the attachment as a real file in
+its own working folder, without you copying it over from the Windows side.</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Where the file goes</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>get_attachment</code></td>
+<td>A Windows folder inside the <a href="../security/#file-access">allowed folders</a></td>
+<td>A Windows path (<code>C:\...</code>)</td>
+</tr>
+<tr>
+<td><code>save_attachments</code></td>
+<td>One Windows folder, for many emails</td>
+<td>A list of Windows paths</td>
+</tr>
+<tr>
+<td><code>attachment_link</code></td>
+<td>The shell's <strong>current folder</strong>, through <code>curl</code></td>
+<td>A link and a <code>curl</code> command</td>
+</tr>
+</tbody>
+</table>
+<p>The file's bytes never pass through Claude: the tool returns only the link, and the
+shell downloads the file. Nothing about the attachment's content is indexed or put
+into the conversation. <code>get_attachment</code> is unchanged and stays the right tool when
+you want the file on the Windows side.</p>
+<p><strong>Setup needed once:</strong> the shell must have <code>CLIPPY_TOKEN</code> set, because the download
+needs your auth token as well as the link. See
+<a href="../connect/#set-clippy_token-for-downloads">Set CLIPPY_TOKEN in WSL</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>string, required</td>
+<td>The id of an email, from <code>search_emails</code></td>
+</tr>
+<tr>
+<td><code>filename</code></td>
+<td>string</td>
+<td>File name of the attachment (whole name, case-insensitive)</td>
+</tr>
+<tr>
+<td><code>position</code></td>
+<td>int</td>
+<td>1-based position in the email's attachment list</td>
+</tr>
+</tbody>
+</table>
+<p>Choosing the attachment works exactly as in <a href="#get_attachment"><code>get_attachment</code></a>: with
+more than one attachment, pass <code>filename</code> or <code>position</code>; with neither, the error lists
+the attachments so Claude can choose; with both, they must agree; inline attachments
+can be fetched by name or position. There is no <code>save_dir</code>, because the file is not
+saved to a folder you choose.</p>
+<p>Result:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>url</code></td>
+<td><code>http://127.0.0.1:&lt;port&gt;/files/&lt;link token&gt;</code>. The link token is 43 characters of letters, digits, <code>-</code> and <code>_</code></td>
+</tr>
+<tr>
+<td><code>filename</code></td>
+<td>The attachment's original name</td>
+</tr>
+<tr>
+<td><code>size</code></td>
+<td>Size in bytes of the copy Clippy made</td>
+</tr>
+<tr>
+<td><code>expires_at</code></td>
+<td>When the link stops working: 10 minutes after it was made, in your local time with the offset, for example <code>2026-11-15T14:35:00+01:00</code></td>
+</tr>
+<tr>
+<td><code>curl</code></td>
+<td>The command to run in the shell (below)</td>
+</tr>
+<tr>
+<td><code>note</code></td>
+<td><code>One download only. If curl answers 401, CLIPPY_TOKEN isn't set in this shell: ask the user to copy the auth token from the Clippy tray menu and add export CLIPPY_TOKEN=&lt;token&gt; to ~/.bashrc.</code></td>
+</tr>
+</tbody>
+</table>
+<p>The <code>curl</code> command has this shape:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>curl<span class="w"> </span>-fsS<span class="w"> </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$CLIPPY_TOKEN</span><span class="s2">"</span><span class="w"> </span>-o<span class="w"> </span><span class="s1">'Q3 report.pdf'</span><span class="w"> </span><span class="s1">'http://127.0.0.1:8765/files/&lt;link token&gt;'</span>
+</code></pre></div>
+<p>The real token is never in the result: the shell fills in <code>$CLIPPY_TOKEN</code> itself. The
+file name in the command is made safe to put in single quotes: characters Windows
+doesn't allow in file names and every <code>'</code> become <code>_</code>, and a leading <code>-</code> or <code>.</code> is
+replaced by <code>_</code>, so the name can never be taken for an option or be a hidden file. The file is saved with that name in the folder where the command runs,
+and an existing file with the same name is overwritten by <code>curl</code>, so ask Claude to run
+it in the folder you want.</p>
+<p>How the link behaves:</p>
+<ul>
+<li><strong>One download only.</strong> The first successful request uses the link up. Running the
+  same command again gives <code>404</code>.</li>
+<li><strong>Expires after 10 minutes.</strong> After that the link is gone, even if never used.</li>
+<li><strong>Needs both tokens.</strong> The request must carry your bearer token (<code>$CLIPPY_TOKEN</code>)
+  and the link token. A request without the bearer token gets <code>401</code> and does <strong>not</strong>
+  use the link up.</li>
+<li><strong>Made at once.</strong> Clippy saves the attachment through Outlook when the link is
+  made, not when it is downloaded. The download then works even if Outlook closes
+  or gets busy, and Outlook problems show up as normal tool errors instead of a
+  <code>curl</code> failure.</li>
+<li><strong>Gone after use.</strong> Clippy deletes its private copy right after the download
+  (finished or interrupted), when the link expires, and when Clippy starts or
+  exits. Changing the port or restarting the server also drops every open link,
+  because the links name the old port. See
+  <a href="../security/#attachment-download-links">Security</a>.</li>
+<li>The download is <code>GET</code> only (other methods get <code>405</code>) and the whole file is
+  always sent.</li>
+</ul>
+<h4 id="attachment_link-limits">attachment_link limits<a class="headerlink" href="#attachment_link-limits" title="Permanent link">&para;</a></h4>
+<p>Expired links don't count. A link whose download is still running counts until the
+download ends.</p>
+<table>
+<thead>
+<tr>
+<th>Limit</th>
+<th>Refusal text</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>100 MiB per attachment</td>
+<td><code>The attachment is &lt;n&gt; MB; attachment_link handles up to 100 MB. Use get_attachment to save it on the Windows side.</code> (<code>&lt;n&gt;</code> is the size rounded up)</td>
+</tr>
+<tr>
+<td>At most 10 open links</td>
+<td><code>Too many open download links (10). Download them or wait until they expire (10 minutes), then try again.</code></td>
+</tr>
+<tr>
+<td>At most 200 MiB of open links in total</td>
+<td><code>The open download links already hold 200 MB. Download them or wait until they expire, then try again.</code></td>
+</tr>
+<tr>
+<td>At most 20 links per rolling 10 minutes</td>
+<td><code>Too many download links in the last 10 minutes (20). Try again in &lt;n&gt; min.</code> (<code>&lt;n&gt;</code> is whole minutes, at least 1)</td>
+</tr>
+</tbody>
+</table>
+<p>Before Clippy asks Outlook for anything, it checks the number of open links, the
+open bytes (refused when they already reach 200 MiB) and the rate, in that order.
+The size limit is checked when Outlook reports the attachment's size, and again on
+the saved copy. When the copy is registered, all four are checked once more (size
+first); a link that would push the open total over 200 MiB is refused then, and
+the copy is deleted.</p>
+<p>Other errors:</p>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>What the message says</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No <code>id</code></td>
+<td><code>id is required. Use the id from search_emails.</code></td>
+</tr>
+<tr>
+<td>Outlook isn't running, busy, or the email is gone</td>
+<td>The same messages as in <a href="#errors-claude-may-see">Errors Claude may see</a></td>
+</tr>
+<tr>
+<td>Several attachments and none chosen, or a name that doesn't match</td>
+<td>The attachment list, as for <code>get_attachment</code></td>
+</tr>
+<tr>
+<td>The private folder can't be used</td>
+<td><code>Clippy can't use its private download folder. Use get_attachment instead.</code></td>
+</tr>
+<tr>
+<td>The server is restarting</td>
+<td><code>Clippy's server isn't running, so it can't make a download link. Try again in a moment.</code></td>
+</tr>
+</tbody>
+</table>
+<details class="example">
+<summary>Example request</summary>
+<p>"Get the PDF attached to the email about the Q3 numbers into this folder."</p>
+<p>Claude finds the email with <code>search_emails</code>, then calls <code>attachment_link</code> with
+its <code>id</code> and <code>filename="Q3 report.pdf"</code>. It gets back <code>size: 482113</code>, an
+<code>expires_at</code> ten minutes from now and the <code>curl</code> command above. In WSL, Claude
+runs the command and <code>Q3 report.pdf</code> appears in the current folder. If you ask
+it to run the same command again, <code>curl</code> fails with <code>404</code>, because the link
+was single use. Ask for a new link instead.</p>
+</details>
+<h2 id="drafts">Drafts<a class="headerlink" href="#drafts" title="Permanent link">&para;</a></h2>
+<p>Drafts are only ever <strong>saved</strong> to the Drafts folder. You review and send them from
+Outlook. Nothing is sent by these tools. Drafts made by these tools carry a hidden
+marker that says Clippy's tools created them (AI drafts have their own marker, see
+<a href="../ai-drafts/">AI drafts</a>).</p>
+<h3 id="create_draft">create_draft<a class="headerlink" href="#create_draft" title="Permanent link">&para;</a></h3>
+<p>Creates a new draft. The default signature is added below the text when you have
+one set. Every attachment path is checked before anything is created; if one is
+refused, nothing is created, and the error ends with <code>Nothing was created.</code>
+Checks run in this order: mailbox (<code>all</code> is refused), recipients (<code>to</code> needs at
+least one), attachments. Line breaks in the subject become spaces.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>to</code></td>
+<td>string, required</td>
+<td>Recipients, separated by <code>;</code></td>
+</tr>
+<tr>
+<td><code>subject</code></td>
+<td>string, required</td>
+<td>Subject line</td>
+</tr>
+<tr>
+<td><code>body</code></td>
+<td>string, required</td>
+<td>Plain text, or an HTML fragment when <code>html</code> is true</td>
+</tr>
+<tr>
+<td><code>cc</code></td>
+<td>string</td>
+<td>Same format as <code>to</code></td>
+</tr>
+<tr>
+<td><code>bcc</code></td>
+<td>string</td>
+<td>Same format as <code>to</code></td>
+</tr>
+<tr>
+<td><code>html</code></td>
+<td>bool</td>
+<td>true when <code>body</code> is HTML (default false)</td>
+</tr>
+<tr>
+<td><code>attachments</code></td>
+<td>string[]</td>
+<td>Paths to existing files in allowed folders. Relative paths resolve under the attachment folder</td>
+</tr>
+<tr>
+<td><code>mailbox</code></td>
+<td>string</td>
+<td>Empty means your own mailbox, or an enabled shared mailbox. The draft goes to that mailbox's Drafts folder and is sent on its behalf</td>
+</tr>
+</tbody>
+</table>
+<p>Returns <code>id</code>, <code>subject</code>, <code>mailbox</code> (empty for your own) and <code>signature_added</code>.</p>
+<details class="example">
+<summary>Example request</summary>
+<p>"Draft an email to my manager asking for the Q3 numbers."</p>
+<p>Claude calls <code>create_draft</code> with <code>to</code> set to your manager's address,
+<code>subject="Q3 numbers"</code> and a <code>body</code>. The draft appears in Drafts. You edit and
+send it yourself.</p>
+</details>
+<h3 id="reply_draft">reply_draft<a class="headerlink" href="#reply_draft" title="Permanent link">&para;</a></h3>
+<p>Creates a reply draft to an email. The body is placed above the quoted original,
+followed by your reply signature when one is set.</p>
+<div class="admonition note">
+<p class="admonition-title">Subjects start with <code>Re::</code></p>
+<p>Reply subjects start with <code>Re::</code> (a double colon). This is intentional.</p>
+</div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>string, required</td>
+<td>Id of the email to reply to, from <code>search_emails</code></td>
+</tr>
+<tr>
+<td><code>body</code></td>
+<td>string, required</td>
+<td>Plain text reply, or an HTML fragment when <code>html</code> is true</td>
+</tr>
+<tr>
+<td><code>reply_all</code></td>
+<td>bool</td>
+<td>true: reply to all recipients (default false)</td>
+</tr>
+<tr>
+<td><code>html</code></td>
+<td>bool</td>
+<td>true when <code>body</code> is HTML (default false)</td>
+</tr>
+<tr>
+<td><code>mailbox</code></td>
+<td>string</td>
+<td>Empty means the mailbox the original is in, or an enabled shared mailbox</td>
+</tr>
+</tbody>
+</table>
+<p>Returns <code>id</code>, <code>subject</code>, <code>mailbox</code> and <code>signature_added</code>. <code>mailbox</code> defaults to the
+mailbox the original email is in.</p>
+<h2 id="calendar">Calendar<a class="headerlink" href="#calendar" title="Permanent link">&para;</a></h2>
+<p>See <a href="../calendar/">Calendar and meetings</a> for how these fit together.</p>
+<h3 id="list_events">list_events<a class="headerlink" href="#list_events" title="Permanent link">&para;</a></h3>
+<p>Lists calendar events in a time window, with recurring events expanded into
+instances. Sorted by start, at most 500. Defaults to the next 7 days.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>start</code></td>
+<td>string</td>
+<td>Window start. Default: today 00:00</td>
+</tr>
+<tr>
+<td><code>end</code></td>
+<td>string</td>
+<td>Window end. A date-only end covers that whole day. Default: <code>start</code> plus <code>days</code></td>
+</tr>
+<tr>
+<td><code>days</code></td>
+<td>int</td>
+<td>Window length in days when <code>end</code> isn't given, 1 to 366 (default 7). Outside that range: <code>days must be between 1 and 366.</code></td>
+</tr>
+<tr>
+<td><code>mailbox</code></td>
+<td>string</td>
+<td>An enabled shared mailbox's calendar. Empty means yours</td>
+</tr>
+</tbody>
+</table>
+<p>The result has the resolved <code>start</code> and <code>end</code> of the window, <code>count</code>, <code>truncated</code>
+(true when the 500 limit was reached) and <code>events[]</code>. Each event has <code>id</code>,
+<code>subject</code>, <code>start</code>, <code>end</code>, <code>all_day</code>, <code>location</code>, <code>organizer</code>, <code>is_recurring</code> and
+<code>busy_status</code> (<code>free</code>, <code>tentative</code>, <code>busy</code>, <code>out_of_office</code> or
+<code>working_elsewhere</code>). An <code>end</code> that isn't after <code>start</code> gives <code>end must be after
+start.</code></p>
+<h3 id="find_free_times">find_free_times<a class="headerlink" href="#find_free_times" title="Permanent link">&para;</a></h3>
+<p>Finds times when everyone is free, from Outlook free/busy. Nothing is booked.
+Returns numbered suggestions (whole free blocks) with <code>start</code>, <code>end</code>, <code>adjacent</code> and
+a ready-to-show <code>text</code>, and <code>offers</code>: options of exactly <code>duration_minutes</code>, with
+<code>offer_text</code> ready to paste into an email. People whose free/busy can't be read (for
+example, people outside your organization) are listed in <code>unknown_attendees</code> and
+ignored.</p>
+<p><strong>Ranking.</strong> Times right before or after one of your meetings come first (within 15
+minutes, on the same day), then times next to a tentative meeting, then everything
+else, each group in date order. <code>adjacent</code> says which: <code>busy</code>, <code>tentative</code> or <code>none</code>.
+Free/busy can't tell a meeting from other busy time, so "next to a meeting" means
+"next to busy time". Without your own calendar (<code>include_me=false</code>, or your free/busy
+can't be read), every time is <code>none</code>. Whether tentative time blocks a slot follows
+<strong>Tentative counts as busy</strong> in <a href="../settings/#scheduling">Settings</a>, and the zone
+label (<code>PT</code> below) follows <strong>Time-zone label</strong>.</p>
+<p><strong>Offers.</strong> <code>offers</code> and <code>offer_text</code> hold at most <code>max_suggestions</code> options of
+exactly <code>duration_minutes</code>, in the same ranking, one per line. Options are taken in
+30-minute steps from the start of each free block (plus one that ends exactly at
+its end) and never overlap each other:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>1. Tue 11/18  10:00–11:00 PT  (19:00–20:00 CET)
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>2. Wed 11/19  14:00–15:00 PT  (23:00–00:00 CET)
+</code></pre></div>
+<p>With <code>offer_cet=true</code> (for someone in Europe) each line also shows the time in
+Central European time, always labelled <code>CET</code>, also in summer. Options between 08:00
+and 18:00 CET come first. If there are fewer than wanted, the rest follow in a second
+list headed <code>Outside European office hours:</code>, numbered on from the first. Each
+offer has <code>list</code>: <code>main</code> or <code>outside_hours</code>. If your PC is already on Central
+European time, there is no CET part and no second list. See <a href="../ai-drafts/#meeting-times">Meeting times in AI drafts</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>recipients</code></td>
+<td>string, required</td>
+<td>Attendees as <code>Name &lt;email&gt;; Name &lt;email&gt;</code>. At most 50. May be empty when <code>include_me</code> is true</td>
+</tr>
+<tr>
+<td><code>duration_minutes</code></td>
+<td>int</td>
+<td>Minimum free block length, and the exact length of each offer, 1 to 1440 (default 60)</td>
+</tr>
+<tr>
+<td><code>days_ahead</code></td>
+<td>int</td>
+<td>Calendar days to search, counted from the day of <code>date_from</code>, 1 to 60 (default 10)</td>
+</tr>
+<tr>
+<td><code>date_from</code></td>
+<td>string</td>
+<td>Start date or date-time. Default: now</td>
+</tr>
+<tr>
+<td><code>earliest_hour</code></td>
+<td>int</td>
+<td>Working-hours start, 0 to 23. Default: from <a href="../settings/">Settings</a></td>
+</tr>
+<tr>
+<td><code>latest_hour</code></td>
+<td>int</td>
+<td>Working-hours end, 1 to 24, later than <code>earliest_hour</code>. Default: from Settings</td>
+</tr>
+<tr>
+<td><code>business_days_only</code></td>
+<td>bool</td>
+<td>Skip Saturdays and Sundays. Default: from Settings</td>
+</tr>
+<tr>
+<td><code>include_me</code></td>
+<td>bool</td>
+<td>Also check the calendar owner (default true)</td>
+</tr>
+<tr>
+<td><code>max_suggestions</code></td>
+<td>int</td>
+<td>1 to 20 (default 5). Also the most <code>offers</code> returned</td>
+</tr>
+<tr>
+<td><code>mailbox</code></td>
+<td>string</td>
+<td>Empty means your calendar, or an enabled shared mailbox</td>
+</tr>
+<tr>
+<td><code>offer_cet</code></td>
+<td>bool</td>
+<td>true when the person you are writing to is in Europe: offers also show CET, Europe office hours first (default false)</td>
+</tr>
+</tbody>
+</table>
+<p>The result has <code>suggestions[]</code> (<code>n</code>, <code>label</code>, <code>start</code>, <code>end</code>, <code>adjacent</code>), <code>text</code>,
+<code>offers[]</code> (<code>n</code>, <code>label</code>, <code>start</code>, <code>end</code>, <code>adjacent</code>, <code>list</code>), <code>offer_text</code>,
+<code>unknown_attendees[]</code> and <code>attendees[]</code> (the people whose free/busy was read, with
+name and email). <code>start</code> and <code>end</code> are local times with offset, for example
+<code>2026-10-15T13:00:00-07:00</code>. With no suggestions, <code>text</code> says why: no readable
+free/busy, or no free block in the days searched. The server remembers nothing
+between calls, so to book option N, Claude passes that option's <code>start</code> and <code>end</code>
+to <code>create_meeting_draft</code>.</p>
+<p>If <code>offer_cet</code> is true but the PC has no Central European time zone, the offers have
+no CET part, and a warning is written to the log once.</p>
+<details class="example">
+<summary>Example request</summary>
+<p>"Find an hour next week for me and the two people on this email. One of
+them is in Berlin."</p>
+<p>Claude calls <code>find_free_times</code> with <code>recipients</code> set to their two addresses,
+<code>duration_minutes=60</code>, <code>date_from</code> set to next Monday
+and <code>offer_cet=true</code>, then pastes <code>offer_text</code> into the email it drafts.</p>
+</details>
+<h3 id="create_meeting_draft">create_meeting_draft<a class="headerlink" href="#create_meeting_draft" title="Permanent link">&para;</a></h3>
+<p>Saves a meeting in your calendar <strong>without sending it</strong>. Clippy never sends
+anything. You add the Zoom or Teams link in Outlook and send the invite yourself. See
+<a href="../calendar/#meeting-drafts">Meeting drafts</a> for the whole workflow.</p>
+<p>The meeting gets the category <strong>Clippy draft invite</strong>, is listed in the tray under
+<strong>Draft invites</strong>, and counts toward the tray icon's badge. If the invite answers an
+email, pass <code>reply_to_id</code> and a note is saved in Drafts.</p>
+<p>Every recipient must resolve in Outlook, or nothing is created. In <strong>Disabled</strong> mode
+(see <a href="../settings/#scheduling">Settings, Scheduling</a>) the tool refuses with <code>Meeting drafts
+are disabled in Clippy's Revenge. Ask the user to enable them in the tray settings
+(Meeting invites: Draft only), then try again.</code> Clippy checks the arguments first, then
+<code>reply_to_id</code>, then the recipients, and only then creates and saves the meeting.
+With <code>mailbox</code>, you need delegate or editor rights on that mailbox's calendar, or
+the tool refuses. Each call adds one line to <a href="../activity/">Activity</a>, such as
+<code>meeting draft saved for 2 attendees: Thu 10/15 10:00–11:00</code>, or <code>meeting draft not
+created: &lt;reason&gt;</code> when it fails. The body never appears there.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>recipients</code></td>
+<td>string, required</td>
+<td>Attendees as <code>Name &lt;email&gt;; Name &lt;email&gt;</code> or bare emails, separated by <code>;</code></td>
+</tr>
+<tr>
+<td><code>subject</code></td>
+<td>string, required</td>
+<td>Meeting subject</td>
+</tr>
+<tr>
+<td><code>start</code></td>
+<td>string, required</td>
+<td>Local start date-time, e.g. <code>2026-03-01T14:30</code>. A date without a time is not accepted. An offset is converted to local time</td>
+</tr>
+<tr>
+<td><code>end</code></td>
+<td>string, required</td>
+<td>Local end date-time, after <code>start</code> and in the future</td>
+</tr>
+<tr>
+<td><code>body</code></td>
+<td>string</td>
+<td>Plain-text invite body</td>
+</tr>
+<tr>
+<td><code>location</code></td>
+<td>string</td>
+<td>Location, for example a room</td>
+</tr>
+<tr>
+<td><code>mailbox</code></td>
+<td>string</td>
+<td>An enabled shared mailbox to save the meeting in. Empty means yours</td>
+</tr>
+<tr>
+<td><code>reply_to_id</code></td>
+<td>string</td>
+<td>The <code>id</code> of the email that asked for the meeting (from <code>search_emails</code>). Saves a note in Drafts as a reply to it. An unknown id is an error and nothing is created</td>
+</tr>
+</tbody>
+</table>
+<p>To book option N of a <code>find_free_times</code> result, or of times offered in a draft, pass
+that option's start and end.</p>
+<div class="admonition note">
+<p class="admonition-title">No Teams or Zoom link</p>
+<p>Outlook's object model has no supported call to add a Teams or Zoom link. The
+result always tells Claude that the meeting has none and that you add it in
+Outlook. The old <code>teams</code> argument is gone.</p>
+</div>
+<p>The result has:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>status</code></td>
+<td>Always <code>saved_as_draft</code></td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td>For Claude: the meeting was saved without sending, it has no Teams or Zoom link, and it is listed in the tray under Draft invites. With a note, it adds <code>A note was saved in Drafts as a reply to the email.</code></td>
+</tr>
+<tr>
+<td><code>subject</code>, <code>start</code>, <code>end</code></td>
+<td>What was saved. Times are in the same format as <code>find_free_times</code></td>
+</tr>
+<tr>
+<td><code>mailbox</code>, <code>organizer</code>, <code>recipients</code></td>
+<td>Whose calendar it is in, who organizes it and who is invited</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td><code>Clippy draft invite</code>, or null if the category couldn't be set (the meeting is still saved)</td>
+</tr>
+<tr>
+<td><code>note_draft_id</code></td>
+<td>Only with <code>reply_to_id</code>: the id of the note draft</td>
+</tr>
+<tr>
+<td><code>note_error</code></td>
+<td>Only if the note failed: the meeting is saved, but the note in Drafts couldn't be created</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<p>Claude calls <code>create_meeting_draft</code> with <code>recipients</code> set to the sender's address,
+<code>subject="Project sync"</code>, <code>start="2026-10-15T10:00"</code>, <code>end="2026-10-15T11:00"</code> and
+<code>reply_to_id</code> set to the id of the sender's email. The meeting appears unsent in your
+calendar, a note reply appears in Drafts, and the tray shows <strong>Draft invites (1)</strong>.</p>
+</div>
+<h2 id="errors-claude-may-see">Errors Claude may see<a class="headerlink" href="#errors-claude-may-see" title="Permanent link">&para;</a></h2>
+<p>Every tool error is a plain sentence that tells Claude what to do next. Common ones:</p>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>What the message says</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Outlook isn't running</td>
+<td><code>Outlook is not running. Ask the user to start Outlook (tray → Start Outlook) and try again.</code></td>
+</tr>
+<tr>
+<td>Outlook is busy</td>
+<td><code>Outlook isn't responding. It may be busy, offline or showing a dialog box. Ask the user to check Outlook, then try again. If this call was creating a draft or a meeting, check Outlook for it before retrying.</code></td>
+</tr>
+<tr>
+<td>Index can't be opened</td>
+<td><code>The email index could not be opened; see the tray (Error state). Restart Clippy or use Rebuild index.</code></td>
+</tr>
+<tr>
+<td>Unknown or disabled mailbox</td>
+<td><code>Mailbox "&lt;input&gt;" is not configured or not enabled. Available mailboxes: &lt;list&gt;. To use another shared mailbox, ask the user to enable it in the Clippy tray menu under Shared mailboxes.</code></td>
+</tr>
+<tr>
+<td>Mailbox enabled but not in your Outlook profile</td>
+<td><code>Mailbox "&lt;address&gt;" is configured but is not open in Outlook. Ask the user to add it to their Outlook profile, then try again.</code></td>
+</tr>
+<tr>
+<td><code>mailbox="all"</code> on a tool that doesn't support it</td>
+<td><code>Mailbox "all" only works with search tools. Use one mailbox: &lt;list&gt;.</code> (<code>create_draft</code> and <code>reply_draft</code> word the second sentence a little differently)</td>
+</tr>
+<tr>
+<td>Unknown email <code>id</code></td>
+<td><code>Email "&lt;id&gt;" was not found in Outlook. It may have been deleted or moved to a folder that isn't indexed. Run search_emails again to get a current id.</code></td>
+</tr>
+<tr>
+<td><code>attachment_link</code> refused</td>
+<td>One of the <a href="#attachment_link-limits">limit messages</a></td>
+</tr>
+<tr>
+<td>Path outside the allowed folders</td>
+<td><code>Path '&lt;path&gt;' is not allowed: &lt;reason&gt;. Allowed folders: &lt;list&gt;.</code> See <a href="../security/#file-access">file access</a></td>
+</tr>
+<tr>
+<td>Meeting drafts turned off</td>
+<td>See <a href="#create_meeting_draft">create_meeting_draft</a></td>
+</tr>
+</tbody>
+</table>
+<p>Tool errors are not written to the log with their text, because they can quote what
+was searched for.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-circle-arrow-up" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4M12 16V8"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../updates/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Updates">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Updates
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../tray/" class="md-footer__link md-footer__link--next" aria-label="Next: Tray menu">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Tray menu
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog" role="status" aria-atomic="true">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      
+      
+        
+        
+      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":["content.code.copy","content.tabs.link","navigation.footer","navigation.instant","navigation.sections","navigation.tabs","navigation.top","navigation.tracking","search.highlight","toc.follow"],"redirect":null,"search":"../assets/javascripts/workers/search.719e0d91.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","clipboard.error":"Could not copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.3cb411a8.min.js"></script>
+      
+    
+  </body>
+</html>
