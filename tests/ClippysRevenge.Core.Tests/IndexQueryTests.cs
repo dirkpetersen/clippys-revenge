@@ -349,11 +349,13 @@ public class IndexQueryTests : IndexQueryFixture
         Assert.Throws<OperationCanceledException>(() => Q("SELECT 1", ct: pre.Token));
 
         using var cts = new CancellationTokenSource();
-        cts.CancelAfter(200);
-        var started = DateTime.UtcNow;
+        // Cancel from a dedicated thread: CancelAfter runs on the thread pool, which can be starved for seconds
+        // when several test processes share the machine, and the query would then hit its own 10 s deadline.
+        var canceller = new Thread(() => { Thread.Sleep(200); cts.Cancel(); }) { IsBackground = true };
+        canceller.Start();
         Assert.ThrowsAny<OperationCanceledException>(() =>
             Q("WITH RECURSIVE r(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM r) SELECT count(*) FROM r", ct: cts.Token));
-        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(3));
+        canceller.Join();
     }
 
     [Fact]

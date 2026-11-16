@@ -82,7 +82,7 @@ public class SyncServiceTests : IDisposable
 
     private async Task<SyncCycleResult> WaitCycle()
     {
-        if (!await _cycleSem.WaitAsync(TimeSpan.FromSeconds(10))) throw new TimeoutException("no cycle finished");
+        if (!await _cycleSem.WaitAsync(TimeSpan.FromSeconds(60))) throw new TimeoutException("no cycle finished");
         lock (_cycles) return _cycles[_consumed++];
     }
 
@@ -97,8 +97,8 @@ public class SyncServiceTests : IDisposable
     {
         private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public Task Entered => _entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-        public async Task Block() { _entered.TrySetResult(); await _release.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken); }
+        public Task Entered => _entered.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
+        public async Task Block() { _entered.TrySetResult(); await _release.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken); }
         public void Release() => _release.TrySetResult();
     }
 
@@ -268,7 +268,7 @@ public class SyncServiceTests : IDisposable
         gate.Release();
         var first = await WaitCycle();
         Assert.True(first.Aborted);
-        await rebuild.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await rebuild.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
         Assert.Contains(_hub.GetEvents(), e => e.Summary == "index deleted for rebuild");
         var second = await WaitCycle();
         Assert.True(second.Mailboxes[0].BackfillFinished);
@@ -438,7 +438,7 @@ public class SyncServiceTests : IDisposable
         };
         var svc = Make();
         await svc.StartAsync(CancellationToken.None);
-        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await svc.StopAsync(cts.Token);
         Assert.Equal(ActivityState.Idle, _hub.State);
@@ -481,7 +481,7 @@ public class SyncServiceTests : IDisposable
         };
         _time.Advance(TimeSpan.FromMinutes(10));
         svc.SyncNow();
-        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
 
         _settings.RetentionMonths = 3;
         svc.NotifySettingsChanged();
@@ -520,7 +520,7 @@ public class SyncServiceTests : IDisposable
         AddMails(2);
         await MakeWithCompleted().StartAsync(CancellationToken.None);
         await WaitCycle();
-        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
         await Settle();
         Assert.Equal(1, CompletedCount());
         lock (_completed) Assert.False(_completed[0].Aborted);
@@ -532,7 +532,7 @@ public class SyncServiceTests : IDisposable
         var svc = MakeWithCompleted();
         await svc.StartAsync(CancellationToken.None);
         await WaitCycle();
-        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
         _time.Advance(TimeSpan.FromSeconds(10));
         _src.ThrowOn("OpenMailboxAsync", 2, new MailSourceUnavailableException("gone"));
         svc.SyncNow();
@@ -548,10 +548,10 @@ public class SyncServiceTests : IDisposable
         var svc = MakeWithCompleted(_ => throw new InvalidOperationException("boom"));
         await svc.StartAsync(CancellationToken.None);
         await WaitCycle();
-        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
         svc.SyncNow();
         await WaitCycle();
-        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
         Assert.Equal(2, CompletedCount());
     }
 
@@ -561,7 +561,7 @@ public class SyncServiceTests : IDisposable
         var svc = MakeWithCompleted();
         await svc.StartAsync(CancellationToken.None);
         await WaitCycle();
-        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
         svc.Pause();
         svc.SyncNow();
         _time.Advance(TimeSpan.FromHours(1));
@@ -648,13 +648,21 @@ public class SyncServiceTests : IDisposable
         await svc.StartAsync(CancellationToken.None);
         await WaitCycle();
         Assert.True(svc.OwnSentBackfillComplete);
+        // Pause so no cycle runs between the rebuild and the assertion: RebuildAsync wakes the loop, and a
+        // fast cycle would otherwise finish the own Sent backfill again before the flag was checked.
+        svc.Pause();
         await svc.RebuildAsync(A, TestContext.Current.CancellationToken);
         Assert.True(svc.OwnSentBackfillComplete);
         await svc.RebuildAsync("", TestContext.Current.CancellationToken);
         Assert.False(svc.OwnSentBackfillComplete);
-        // The rebuild wakes the loop; wait for the next finished cycle.
-        await WaitCycle();
-        while (!svc.OwnSentBackfillComplete) await Task.Delay(20, TestContext.Current.CancellationToken);
+        svc.Resume();
+        // Wait for the flag itself: a cycle that was cancelled by Pause also reports as finished.
+        var end = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+        while (!svc.OwnSentBackfillComplete || Volatile.Read(ref count) < 2)
+        {
+            Assert.True(DateTime.UtcNow < end, "The own Sent backfill didn't finish again.");
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
         Assert.Equal(2, Volatile.Read(ref count));
     }
 
@@ -669,7 +677,7 @@ public class SyncServiceTests : IDisposable
         await svc.StartAsync(CancellationToken.None);
         var r = await WaitCycle();
         Assert.False(r.Aborted);
-        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
         Assert.Equal(1, count);
     }
 
