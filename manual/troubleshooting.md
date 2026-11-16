@@ -225,6 +225,27 @@ replaces or moves it. That is intended. See [The reason line](ai-drafts.md#the-r
 The line appears only after you gave AI drafts consent. `tokens unknown` means Claude
 reported no token numbers for today's calls. See [Token tally](ai-drafts.md#token-tally).
 
+### Clippy never says it noted my edits, or the style has no "Edits I usually make" section
+
+Clippy [learns from your edits](ai-drafts.md#learning-from-how-you-edit-drafts) only
+when all of this holds:
+
+- **Learn from how I edit Clippy's drafts** is on in Settings, **AI drafts**, and you
+  gave consent.
+- The draft was saved after you updated to version 0.1.1, for an email with an internet
+  message id, and did not use attachment text (those are never kept).
+- You sent it as a reply to that email, from your own mailbox, and it still carries
+  Clippy's marker. A reply you wrote from scratch, or a draft you made with a tool,
+  isn't matched.
+- Clippy has synced your Sent Items since (it checks at most every 5 minutes, after a
+  sync), and it is within 30 days.
+
+The section appears after the next writing-style update (**Regenerate**, or the weekly
+one) once **at least 3** edited drafts with text exist. Drafts you sent unchanged only
+raise the "unchanged" count, so they don't count toward the 3. If you edited your style
+skill yourself, an automatic update leaves it alone: use **Regenerate**. Clippy shows
+`AI drafts: noted how you edited <n> sent drafts.` in Activity when it finds some.
+
 ### The writing style isn't there yet
 
 Clippy builds your writing-style skill from your sent mail, and waits until your **Sent

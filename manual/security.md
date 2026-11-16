@@ -173,6 +173,7 @@ Where your data goes, in one table.
 | Attachment text and synced shared files (AI drafts) | Read in memory for one draft request. Outlook attachments are copied for a moment to `%LOCALAPPDATA%\ClippysRevenge\ai-files\` and deleted at once. Never stored, indexed or logged | Up to 40,000 characters of extracted text per draft, only while **Read attachments and synced shared files for drafts** is on. Images are never sent. Clippy makes no network request for a shared link: it reads only the local synced copy |
 | Attachment names | In the index | With the email, only for AI drafts |
 | Related earlier emails | In the index | Up to 5 earlier emails from the same mailbox (own text only), only for AI drafts while **Include related earlier emails** is on. Not stored or logged |
+| Texts of AI drafts and how you edited them | In your own mailbox's index only, as redacted own text (addresses, links, phone numbers removed), at most 1,500 characters each, newest 20 pairs with text, purged after 30 to 90 days. Not readable by any tool, never logged. Only while **Learn from how I edit Clippy's drafts** is on. See [below](#learning-from-your-edits) | Up to 20 redacted draft/sent pairs, only with the writing-style update (weekly or **Regenerate**), and only when at least 3 pairs exist |
 | Your facts file | `%USERPROFILE%\.claude\skills\my-email-context\SKILL.md` (you write it; Clippy never changes it after creating the template) | Its text, without comments, goes to Claude with every AI draft request. Don't put secrets in it |
 | Calendar and free/busy | Read from Outlook when you ask for times | Never. Meeting times in drafts are computed by Clippy after Claude has answered |
 | Bearer token | DPAPI-encrypted file | Only to the MCP client you gave it to, over `127.0.0.1` |
@@ -187,7 +188,7 @@ Where your data goes, in one table.
 |---|---|
 | Settings | `%APPDATA%\ClippysRevenge\settings.json` |
 | Token, API key | `%APPDATA%\ClippysRevenge\token.bin`, `anthropic-key.bin` (DPAPI) |
-| Index (plain text, one file per mailbox) | `%LOCALAPPDATA%\ClippysRevenge\index.db`, `index-<address>.db` |
+| Index (plain text, one file per mailbox) | `%LOCALAPPDATA%\ClippysRevenge\index.db`, `index-<address>.db`. The own `index.db` also holds the [draft and edit records](#learning-from-your-edits), the token tally and AI decisions |
 | Logs (7 days) | `%LOCALAPPDATA%\ClippysRevenge\logs` |
 | Facts file | `%USERPROFILE%\.claude\skills\my-email-context\SKILL.md` (written by you; Clippy only creates the template once), plus `facts-state.json` in `%APPDATA%\ClippysRevenge\my-email-style\` |
 | Writing-style skill | `%USERPROFILE%\.claude\skills\my-email-style\SKILL.md`, plus Clippy's copy and `state.json` in `%APPDATA%\ClippysRevenge\my-email-style\` |
@@ -226,6 +227,10 @@ your Claude Code or your API key):
 - your name and address, today's date, and your writing-style guide
 - once a week, about 150 to 300 samples of your sent mail for the style guide, with
   addresses, links and phone numbers removed
+- with that weekly style update (or **Regenerate**), up to 20 pairs of an AI draft and
+  the reply you sent after editing it, redacted and cut to 1,500 characters each, when
+  at least 3 exist and **Learn from how I edit Clippy's drafts** is on. See
+  [Learning from your edits](#learning-from-your-edits)
 - when Clippy re-checks an [outdated draft](ai-drafts.md#outdated-drafts), the text of
   its own earlier draft and the newer messages of the thread
 
@@ -279,6 +284,34 @@ What Clippy does and doesn't do when it reads files for a draft
   it still has no tools. The worst a malicious file can do is produce a bad draft.
 - **Off switch.** Untick **Read attachments and synced shared files for drafts** and
   none of this happens.
+
+### Learning from your edits
+
+What Clippy does and doesn't do with your edited drafts
+([details](ai-drafts.md#learning-from-how-you-edit-drafts)):
+
+- **Stored locally, redacted.** When Clippy saves an AI draft it keeps the reply text
+  (without the reason line, notes and signature) in your own mailbox's index, with
+  addresses, links and phone numbers replaced and cut to 1,500 characters. A draft
+  that used attachment text is not kept, so file text never reaches this store.
+- **Matched from the index only.** Clippy compares the draft with your sent reply
+  using mail it has already indexed. It makes no Outlook call for this and never
+  changes or moves the sent mail.
+- **Small and purged.** Texts are kept for the newest 20 edited pairs only; unmatched
+  draft texts expire after 30 days; the remaining numbers go after 90 days. No tool,
+  including `query_index`, can read these records, and they are deleted with the index
+  (**Rebuild index...**).
+- **Never logged.** Logs and Activity hold counts and exception type names only.
+- **Leaves the PC once a week at most.** Only the writing-style update sends pairs (up
+  to 20, redacted) to Claude, as data it is told never to follow. The model still
+  has no tools.
+- **Off switch.** Untick **Learn from how I edit Clippy's drafts**: nothing new is
+  recorded or matched and no pairs are sent. Existing records age out or go with
+  **Rebuild index...**.
+- **The result is part of your style skill.** The "Edits I usually make to drafts"
+  section Claude writes lives in the same Claude Code skill file as the rest of the
+  guide, with the same warning below. It is told to include no names, addresses, links
+  or numbers.
 
 !!! warning "The facts file is visible to Claude Code"
     The facts file is also a user-level Claude Code skill, %USERPROFILE%\.claude\skills\my-email-context\SKILL.md,

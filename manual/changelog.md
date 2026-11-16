@@ -78,7 +78,22 @@ The full list of releases, with downloads, is on
   considered.
 - **Don't draft for this sender.** Two new tray items under **AI drafts** add the
   selected email's sender, or the sender's domain, to **Never draft for**. Undo it in
-  Settings. See [Don't draft for this sender](ai-drafts.md#dont-draft-for-this-sender).
+  Settings. Neither item needs consent, and your own address and your own domain are
+  refused. See [Don't draft for this sender](ai-drafts.md#dont-draft-for-this-sender).
+- **Learning from how you edit drafts.** When you send a reply that began as an AI draft,
+  Clippy compares the two (after a sync of your mailbox, at most every 5 minutes) and
+  keeps a redacted pair in its local index: up to 20 edited pairs with text, at most
+  1,500 characters per side, deleted after 30 to 90 days. A reply that is 98 percent
+  or more the same counts as sent unchanged and keeps no text. Drafts that used
+  attachment text are never kept. At the next writing-style update (weekly, or
+  **Regenerate**), if at least 3 pairs exist, up to 20 are sent to Claude, which adds a
+  section "Edits I usually make to drafts" to your style skill. It adds no Claude call.
+  New setting **Learn from how I edit Clippy's drafts**, on by default; if you consented
+  earlier, Clippy tells you once; new consents name it. **This sends new data to
+  Claude**: see [Learning from how you edit drafts](ai-drafts.md#learning-from-how-you-edit-drafts)
+  and [Security](security.md#learning-from-your-edits).
+- **Activity.** `AI drafts: noted how you edited <n> sent drafts.`, and the style update
+  line gains `and <k> edited drafts`.
 - **Drafts and Deleted Items in other languages.** Clippy now recognizes these folders
   by their role, so they are skipped for related mail and earlier attachments in a
   non-English Outlook. A folder indexed before v0.1.1 under its translated name keeps

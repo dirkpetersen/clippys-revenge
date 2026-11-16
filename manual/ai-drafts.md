@@ -28,6 +28,10 @@ sent to Claude, and how to set it up and fix it.
   attachments of the email and its thread, and of OneDrive and SharePoint files that
   are already synced to your PC, and sends that text to Claude so the reply can use
   it. You can turn it off. See [Attachments and shared files](#attachments-and-shared-files).
+- **It learns from your edits.** Since version 0.1.1, when you send a reply that began
+  as one of Clippy's AI drafts, Clippy notes how you changed it and uses that to
+  improve your writing style. You can turn it off. See
+  [Learning from how you edit drafts](#learning-from-how-you-edit-drafts).
 - **Your signature** is added, as for `reply_draft`.
 - **Meeting times** are added by Clippy from your calendar, never written by the model.
   See [Meeting times](#meeting-times).
@@ -120,11 +124,14 @@ The first time you turn it on (and before the first manual draft), a dialog titl
 
 > Clippy will send new emails from your Inbox, earlier messages in the same thread,
 > the text of their attachments and of shared files synced to this PC, up to 5 related
-> earlier emails, and samples of your sent mail to Claude (Anthropic) to write reply
-> drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude
-> plan's usage. Shared mailboxes are included only if you turn them on one by one.
+> earlier emails, and samples of your sent mail and how you edited Clippy's drafts to
+> Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never
+> sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are
+> included only if you turn them on one by one.
 
-Buttons: **Turn on** and **Cancel** (the default).
+Buttons: **Turn on** and **Cancel** (the default). If you consented to an older text,
+you are not asked again. Instead you get one-time notices for what was added since, for
+the edits see [Notice for existing users](#notice-for-existing-users).
 
 While the feature is on, this leaves your PC for Anthropic, through Claude Code or
 the API:
@@ -141,6 +148,7 @@ the API:
 | Your facts file | What you wrote in [Facts about you](#facts-about-you), without the comments. Only when you filled something in |
 | Your writing style guide | The skill described [below](#your-writing-style), which contains short examples of your sent mail with addresses, links and phone numbers removed. Its meeting-times section is left out |
 | About 150 to 300 samples of your sent mail | Sent once a week, with addresses, links and phone numbers removed, to write the style guide |
+| Up to 20 pairs of an AI draft and what you sent | Only with the writing-style update (weekly, or when you press **Regenerate**), and only when at least 3 pairs exist. Each side is your own text without the quoted email or signature, with addresses, links and phone numbers removed, at most 1,500 characters. Only while [Learn from how I edit Clippy's drafts](#learning-from-how-you-edit-drafts) is on |
 
 **Never sent:**
 
@@ -269,12 +277,24 @@ entry applies to the next email Clippy looks at. Balloons:
 | `That's your own organization's domain. To stop drafting for all internal mail, add it in Settings → AI drafts.` | The domain item on your own domain, or a parent or subdomain of it |
 | `<address or domain> is already on "Never draft for".` | An existing entry already covers it (a domain entry covers its addresses) |
 | `"Never draft for" already has 200 entries. Remove some in Settings → AI drafts.` | The list is full |
+| `Select one email in Outlook first.` or `That email isn't in your mailbox or an enabled shared mailbox.` | Nothing, several emails or an email from a mailbox that isn't on is selected |
+| `Clippy doesn't know your email address yet. Start Outlook, wait for the first sync, then try again.` | Clippy needs your address to avoid blocking you. Nothing is added |
+| `It looks like Outlook isn't running. I'll wait — or right-click me and pick Start Outlook.` | Outlook closed while you clicked |
 
-Activity shows `AI drafts: added an entry to "Never draft for" (<n> entries).` without
-the address. To **undo**, delete the line in Settings, **AI drafts**, **Never draft
-for**. Drafts that already exist for that sender are left as they are. If Settings is
-open at the time, the addition is kept when you press OK, unless you also edited the
-**Never draft for** box in that window.
+For the domain item, the own-domain, "already" and "full" checks run **before** the
+confirmation question, so you are not asked about something that would be refused. The
+entry is checked again when it is saved. If the settings can't be saved, a balloon shows
+the reason.
+
+Activity shows `AI drafts: added an entry to "Never draft for" (<n> entries).` (`(1
+entry)` for the first one) without the address.
+
+**To undo:** open Settings, **AI drafts**, and delete the line (the address or the
+domain) from **Never draft for**, then press OK. Clippy drafts for that sender again from
+the next email on. There is no undo balloon or Activity action; the list in Settings is
+the only place. Drafts that already exist for that sender are left as they are. If
+Settings is open at the time, the addition is kept when you press OK, unless you also
+edited the **Never draft for** box in that window.
 
 ### Draft one reply now
 
@@ -863,8 +883,9 @@ file name, a link, a path, a reason or any text.
   crash) is deleted when Clippy starts. Synced files are read in place and not copied.
 - Nothing is ever sent, moved or deleted in your mailbox by this. Clippy doesn't
   display, save or change the mail and attached emails it opens.
-- Later, when Clippy learns from how you edit its drafts, drafts that used attachment
-  text will not be used for that, so file text can't end up in your writing style.
+- A draft that used attachment text is **not** used for
+  [learning from your edits](#learning-from-how-you-edit-drafts): Clippy doesn't keep
+  its text at all, so file text can't end up in your writing style.
 
 ### Turning it off, and the one-time notice
 
@@ -954,9 +975,10 @@ Clippy learns your style from your own sent mail and keeps it in a Claude Code
   internal and external, short and long, newest first, at most 3 per recipient.
 - It uses only **your own text**. Quoted history and signatures are cut, and
   automatic replies and meeting responses are left out.
-- **Mail Clippy drafted for you is excluded**, even after you edited and sent it.
-  So are replies to mail that Clippy drafted an answer for, so the style doesn't
-  learn from its own output.
+- **Mail Clippy drafted for you is excluded** from the samples, even after you edited
+  and sent it. So are replies to mail that Clippy drafted an answer for, so the style
+  doesn't learn from its own output. How you *edited* those drafts is used separately,
+  as described in [Learning from how you edit drafts](#learning-from-how-you-edit-drafts).
 - Email addresses, links and phone numbers are replaced by `<email>`, `<link>` and
   `<phone>` before anything is sent to Claude, and again in Claude's answer.
 - It needs at least 20 suitable sent emails.
@@ -1051,6 +1073,158 @@ introduce meeting options is taken from your own sent mail.
     delete that too, to the plain style "write plainly, briefly and politely" until
     you press **Regenerate**. If you don't want the skill visible to your Claude Code
     sessions, delete the folder in `.claude\skills` after each update.
+
+## Learning from how you edit drafts
+
+Clippy's drafts are a starting point: you shorten an opening, drop a phrase, change a
+sign-off, and send. Since version 0.1.1 Clippy can notice those changes and feed them
+into your [writing style](#your-writing-style), so later drafts need fewer edits. It
+costs **no extra Claude call**: the edits are given to the writing-style update that
+already runs once a week. Nothing is read from, or changed in, the mail you sent.
+
+The setting is **Learn from how I edit Clippy's drafts**, in Settings, **AI drafts**,
+**Writing style** group, **on by default**.
+
+### What Clippy records when it saves a draft
+
+Each time Clippy saves an AI draft (an automatic draft, **Draft a reply to the selected
+email**, a [rescan](#rescan-emails-from-the-last-24-hours) or a replacement in the
+[outdated-draft check](#outdated-drafts)), it keeps a copy of the draft's text in its
+own local index:
+
+- Only **the reply text Claude wrote**. The yellow [reason line](#the-reason-line), the
+  yellow [notes](#the-yellow-notes) and your signature are left out.
+- Addresses, links and phone numbers are replaced by `<email>`, `<link>` and `<phone>`,
+  and the text is cut to **1,500 characters**.
+- A copy is kept only when the setting is on, the email has an internet message id (so
+  the sent reply can be matched later) and the draft was **not** built with attachment
+  text. A draft that used the text of an attachment or a synced file is never kept, so
+  file contents can't reach your writing style. A draft where every attachment was
+  skipped (nothing read) still counts.
+- Drafts made with the `reply_draft` tool are never recorded. An outdated-draft check that keeps or removes a draft saves nothing new.
+- A draft for a shared mailbox you turned on is recorded in your own mailbox's index.
+
+If a copy can't be saved, the draft itself is not affected. The log says only that
+`AI drafts: couldn't record a draft's text (<exception type>).`
+
+### How Clippy finds what you sent
+
+After each sync of your own mailbox, and at most **every 5 minutes**, Clippy looks at
+the mail in your index that you sent in the last 30 days (up to 500 per run, newest
+first). It compares only the index; it asks Outlook nothing. A sent message is
+matched to a recorded draft when:
+
+- it is in Sent Items (or a folder below it) and still carries Clippy's `ai` marker
+  (Outlook keeps it when a draft is sent),
+- its "in reply to" id equals the internet message id of the email the draft answered, and
+- the draft was recorded before the message was sent.
+
+If Clippy drafted a reply to the same email more than once (for example, a replaced
+draft), **the newest draft wins**: it is marked as matched, and the older ones for that
+email become *superseded*, because you didn't send them. Both lose their text. A reply
+that you wrote from scratch has no marker and is never matched. Sent mail without any
+recorded draft (for example, from before version 0.1.1, or when the draft used
+attachment text) is simply ignored.
+
+!!! note "Known limit"
+    If an outdated-draft check couldn't move your old draft and you send the **old**
+    one, Clippy compares it with the newer recorded text. That gives one noisy pair,
+    which ages out with the others.
+
+### Sent unchanged, or edited
+
+Clippy prepares your sent text the same way as the draft (your own text only, without
+the quoted email, your signature and any `Clippy:` line you forgot to delete; then
+redaction and the 1,500-character cut). It splits both texts into words and
+punctuation marks and measures what they share. The **similarity** is a number from 0
+to 1:
+
+- **0.98 or more**: *sent unchanged* (or nearly: one word in about 50). Clippy keeps
+  only the numbers (similarity and lengths), no text.
+- **Less than 0.98**: *edited*. Clippy keeps both texts, the draft and what you sent.
+
+For example, `Thanks, sounds good.` against `No.` has a similarity of about 0.29.
+Capital letters count as a difference.
+
+### What is kept, and for how long
+
+Everything is in Clippy's local index file, nowhere else:
+
+| What | How long |
+|---|---|
+| A recorded draft text waiting for its sent reply | 30 days. Then it is marked expired and its text is erased |
+| A draft text that was matched, superseded or expired | 30 more days, then the row is deleted |
+| The texts of **the newest 20** edited pairs | Until 20 newer pairs exist. Older pairs lose their texts and keep only their numbers |
+| The numbers of a pair (similarity, lengths, time) | 90 days, then the row is deleted |
+
+[`query_index`](tools.md#query_index) and the other tools can't read any of this: they
+see only mail, not these records. **Rebuild index…** in the tray deletes it with the
+rest of the index. Texts and similarity numbers never appear in logs or in the Activity
+window; only counts do.
+
+### When your edits go to Claude
+
+Nothing about your edits leaves your PC when you send a reply. It leaves only at the
+**writing-style update**: the automatic weekly one, or when you press **Regenerate** in
+Settings (the usual [edit check](#your-writing-style) for a style you edited still
+applies). That update then does this:
+
+1. If the setting is on and at least **3** edited pairs from the last 90 days have
+   texts, it adds them to the request, **up to 20, newest first**, together with a
+   count of how many drafts you sent unchanged in those 90 days. Each pair has the
+   draft, what you sent and the similarity.
+2. Claude is told that these pairs are data, never instructions, to look for
+   patterns that **recur** (what you add, remove, shorten or rephrase, which greetings
+   and sign-offs you change), to ignore one-off content (facts, dates, names, numbers),
+   to mention when most drafts went out unchanged, and to write the result as a short
+   section of your style guide, **Edits I usually make to drafts**, with a few bullet
+   points as instructions for future drafts. The section has no names, addresses,
+   links, phone numbers or other numbers.
+3. With fewer than 3 pairs, or with the setting off, the request is exactly as before.
+
+Your drafting prompts then use the new section like the rest of the skill. You can read
+it with **View** in Settings, and edit it. As with any change to the skill, an update
+never overwrites your own edits without asking. If Clippy can't read the edits, it
+logs `Writing style: reading edited drafts failed (<exception type>)` and updates the
+style without them.
+
+The result line in Settings stays `Writing style updated from <n> sent emails.` The
+update still needs at least 20 suitable sent emails: the edits only add to them.
+
+### What you see in Activity
+
+- After a check that found new sent drafts: `AI drafts: noted how you edited 1 sent
+  draft.` or `AI drafts: noted how you edited 12 sent drafts.` The number includes
+  drafts you sent unchanged. No subject or address.
+- When a writing-style update used edits: `writing style updated from 240 sent emails
+  and 7 edited drafts (52 s)`. The second number is the pairs given to Claude.
+
+See [Activity](activity.md#writing-style) for all style messages.
+
+### Turning it off
+
+Untick **Learn from how I edit Clippy's drafts**. Clippy then stops recording draft
+texts, stops matching sent mail, and leaves the edits out of the next style update. It
+**doesn't delete** what it already holds: those rows age out as described above, or
+disappear at once when you press **Rebuild index…**. A style section that was already
+written stays in your skill until the next style update replaces the skill.
+
+### Notice for existing users
+
+New consents already name this in the [consent text](#consent-and-what-is-sent). If you
+gave consent before version 0.1.1, you are not asked again. Instead, once, at the first
+AI draft Clippy saves after the update with the setting on (before any edit can be
+recorded, so before anything can reach Claude), an Activity entry and a balloon say:
+
+> AI drafts now learn from how you edit Clippy's drafts before sending. The next writing-style update sends up to 20 of your edited replies (addresses, links and phone numbers removed) to Claude. You can turn this off in Settings → AI drafts.
+
+### Privacy in short
+
+- Stored only in your local index, as redacted own text, capped and purged as above.
+  Never in settings, logs, Activity, or any tool result.
+- Leaves your PC only inside the writing-style update, up to 20 pairs, redacted.
+- No Outlook call is involved and nothing in your mailbox changes.
+- The model still has no tools. See also [Security](security.md#ai-drafts-data-flow).
 
 ## Troubleshooting
 

@@ -118,8 +118,36 @@ in Outlook and use **Draft a reply to the selected email** in the tray menu. See
 Yes, while it is on: the email being answered, thread excerpts, up to 5 related
 earlier emails, attachment names, the extracted text of attachments and of synced shared
 files (unless you turn that off), your facts file and your style guide go to Claude
-through your own Claude Code (or your API key). Files themselves and images never do.
+through your own Claude Code (or your API key). Once a week, with the writing-style
+update, samples of your sent mail go too, and up to 20 pairs of an AI draft and what you
+sent after editing it (unless you turn that off). Files themselves and images never do.
 See [what is sent](ai-drafts.md#consent-and-what-is-sent).
+
+## Does Clippy learn from how I edit its drafts?
+
+Yes, since version 0.1.1, unless you turn it off. When you send a reply that began as
+an AI draft, Clippy notes what you changed. It keeps a redacted copy of the draft and of
+what you sent in its local index (at most 1,500 characters each, the newest 20 edited
+pairs, deleted after 30 to 90 days). Nothing leaves your PC then. At the next
+writing-style update (weekly, or **Regenerate**), if there are at least 3 pairs, up to 20
+are sent to Claude, which adds an "Edits I usually make to drafts" section to your style.
+Drafts that used attachment text are never kept. Untick **Learn from how I edit
+Clippy's drafts** in Settings, **AI drafts**, to stop it. See
+[Learning from how you edit drafts](ai-drafts.md#learning-from-how-you-edit-drafts).
+
+## How do I make Clippy forget how I edited its drafts?
+
+Turn off **Learn from how I edit Clippy's drafts** in Settings, **AI drafts**: nothing
+more is recorded or sent. That doesn't erase what is already stored; it ages out within 90
+days. To erase it now, use **Rebuild index…** in the tray and choose **My mailbox** or **All mailboxes**
+(it deletes the index file that holds the records). Then press **Regenerate** in Settings to write a style without
+the "Edits I usually make to drafts" section.
+
+## Why does Activity say "noted how you edited 3 sent drafts"?
+
+Clippy looked at your recently sent mail, found replies that started as its AI drafts and
+compared them with the drafts. It says how many it noted, including drafts you sent
+unchanged. See [Activity](activity.md#learning-from-your-edits).
 
 ## Does Clippy read my attachments?
 
