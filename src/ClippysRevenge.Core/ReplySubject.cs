@@ -10,8 +10,9 @@ public static partial class ReplySubject
     [GeneratedRegex(@"^(re|fwd|fw|aw|wg):+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex LeadingPrefix();
 
-    /// <summary>Never throws. null/whitespace gives "Re::".</summary>
-    public static string Normalize(string? subject)
+    /// <summary>The subject with every leading Re:/Fwd:/Fw:/AW:/WG: prefix (any number of colons, any case) removed,
+    /// trimmed. Null/whitespace gives "". Never throws.</summary>
+    public static string StripPrefixes(string? subject)
     {
         var s = (subject ?? "").Trim();
         while (true)
@@ -20,7 +21,13 @@ public static partial class ReplySubject
             if (!m.Success) break;
             s = s[m.Length..].TrimStart();
         }
-        var rest = s.Trim();
+        return s.Trim();
+    }
+
+    /// <summary>Never throws. null/whitespace gives "Re::".</summary>
+    public static string Normalize(string? subject)
+    {
+        var rest = StripPrefixes(subject);
         return rest.Length == 0 ? "Re::" : Prefix + rest;
     }
 }

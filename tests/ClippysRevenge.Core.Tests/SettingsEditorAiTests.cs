@@ -187,4 +187,26 @@ public class SettingsEditorAiTests
         var e = new SettingsEditor(live);
         e.Rebase(live);
         Assert.Equal(["old@x.example"], e.Draft.AiDrafting.ExcludeSenders);
-    }}
+    }
+
+    [Fact]
+    public void Rebase_keeps_a_live_related_mail_notice_flag()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        live.AiDrafting.RelatedMailNoticeShown = true;
+        Assert.False(e.Draft.AiDrafting.RelatedMailNoticeShown);
+        e.Rebase(live);
+        Assert.True(e.Draft.AiDrafting.RelatedMailNoticeShown);
+    }
+
+    [Fact]
+    public void Changing_RelatedMail_is_a_change()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        Assert.False(e.Changes(live).Any);
+        e.Draft.AiDrafting.RelatedMail = false;
+        Assert.True(e.Changes(live).Any);
+    }
+}

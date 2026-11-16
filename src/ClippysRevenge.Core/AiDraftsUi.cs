@@ -9,10 +9,13 @@ namespace ClippysRevenge.Core;
 public static class AiConsent
 {
     public const string Title = "Turn on AI drafts?";
-    public const string Text = "Clippy will send new emails from your Inbox, earlier messages in the same thread, and samples of your sent mail to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.";
+    public const string Text = "Clippy will send new emails from your Inbox, earlier messages in the same thread, up to 5 related earlier emails, and samples of your sent mail to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.";
     public const string TurnOnButton = "Turn on";
     public const string CancelButton = "Cancel";
 }
+
+/// <summary>One-time AI-drafts notices (SPEC 25.3; M19/M20 add members).</summary>
+public enum AiNotice { RelatedMail }
 
 public static class AiMenuTexts
 {
@@ -362,10 +365,27 @@ public sealed class AiDraftingToggler
         {
             if (ai.HasConsent) return false;
             ai.RecordConsent(_time.GetUtcNow());
+            ai.RelatedMailNoticeShown = true;   // the consent text already names related mail
             return true;
         });
         if (did) _changed();
         return _settings.AiDrafting.ConsentedAtUtc!.Value;
+    }
+
+    /// <summary>Sets the notice's *NoticeShown flag through Mutate (clone, save, swap under Settings.Gate). No-op (no save)
+    /// when already set. Never calls changed() (no worker wake-up).</summary>
+    /// <exception cref="ArgumentOutOfRangeException">notice isn't a defined AiNotice.</exception>
+    /// <exception cref="IOException">The save failed. Live is unchanged.</exception>
+    /// <exception cref="UnauthorizedAccessException">Same.</exception>
+    public void MarkNoticeShown(AiNotice notice)
+    {
+        if (!Enum.IsDefined(notice)) throw new ArgumentOutOfRangeException(nameof(notice));
+        Mutate(ai =>
+        {
+            if (ai.RelatedMailNoticeShown) return false;
+            ai.RelatedMailNoticeShown = true;
+            return true;
+        });
     }
 
     /// <summary>SetEnabled on a clone, then save, then swap. No-op (no save, no changed()) when live.Enabled already equals enabled.</summary>

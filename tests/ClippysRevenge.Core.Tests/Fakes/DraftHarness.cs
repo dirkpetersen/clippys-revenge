@@ -54,8 +54,10 @@ internal sealed class DraftHarness : IDisposable
     public FakeFreeBusySource FreeBusy { get; } = new();
     public Func<TimeZoneInfo?> Cet { get; set; } = TestZones.Berlin;
     public DraftWorker Worker { get; }
+    public List<AiNotice> NoticeMarks { get; } = [];
+    public Action<AiNotice>? MarkNoticeShown { get; set; }
 
-    public DraftHarness()
+    public DraftHarness(bool withMarkNoticeShown = true)
     {
         Time.Advance(Start - ManualTimeProvider.T0);
         Indexes = new MailboxIndexes(_dir, [Shared]);
@@ -65,10 +67,15 @@ internal sealed class DraftHarness : IDisposable
         Settings.AiDrafting.RecordConsent(Start.AddHours(-2));
         Settings.AiDrafting.SetEnabled(true, Start.AddHours(-1));
         Settings.AiDrafting.MaxAgeDays = 2;
+        // Existing worker tests stay byte-identical; the related-mail tests turn it on.
+        Settings.AiDrafting.RelatedMail = false;
+        Settings.AiDrafting.RelatedMailNoticeShown = true;
         Settings.SharedMailboxes.Add(new SharedMailbox { Smtp = Shared, Enabled = true, AiDrafts = false });
+        if (withMarkNoticeShown) MarkNoticeShown = NoticeMarks.Add;
         Worker = new DraftWorker(new DraftWorkerServices(() => Settings, Indexes, Mailbox, Writer, Model, Style,
             () => SignatureHtml, Hub, Balloons, () => Available, () => Paused, Zone, Time, Log,
-            FreeBusy: FreeBusy, CentralEurope: () => Cet(), Facts: Facts));
+            FreeBusy: FreeBusy, CentralEurope: () => Cet(), Facts: Facts,
+            MarkNoticeShown: withMarkNoticeShown ? n => MarkNoticeShown?.Invoke(n) : null));
     }
 
     public AiDraftingSettings Ai => Settings.AiDrafting;

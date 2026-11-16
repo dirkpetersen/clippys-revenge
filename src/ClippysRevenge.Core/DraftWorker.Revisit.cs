@@ -144,9 +144,13 @@ public sealed partial class DraftWorker
         var email = new PromptEmail(detail.SenderName, detail.SenderEmail, detail.To, detail.Cc, detail.EventTime,
             detail.Subject, NonInlineNames(detail.Attachments), detail.Body);
         var input = PromptInput(s.Settings, s.Key, email, thread);
+        var related = FindRelated(ai, s.Index,
+            new RelatedAnchor(targetId, detail.InternetMessageId, topic, detail.EventTime, detail.SenderEmail, detail.Subject, detail.Body),
+            input.SignatureText, s.UserSmtp, s.MailboxSmtp);
+        input = input with { Related = related };
         var request = new ModelRequest(
             DraftPrompt.RevisitSystemPrompt(s.Identity.DisplayName, s.UserSmtp, _s.Style.ReadForPrompt(), ai.MeetingTimes,
-                _s.Facts?.ReadForPrompt() ?? ""),
+                _s.Facts?.ReadForPrompt() ?? "", DraftPrompt.HasRelated(input)),
             DraftPrompt.RevisitUserPrompt(new RevisitPromptInput(input, info!.PlainBody, t.Draft.Created)),
             DraftModel.RevisitSchema, ai.Model, ai.Effort, TimeSpan.FromSeconds(ai.TimeoutSeconds),
             DraftModel.DraftMaxOutputTokens);

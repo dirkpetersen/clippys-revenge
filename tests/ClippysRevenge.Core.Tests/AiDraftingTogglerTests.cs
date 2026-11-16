@@ -193,4 +193,49 @@ public sealed class AiDraftingTogglerTests : IDisposable
     }
 
     [Fact]
-    public void EditAi_null_edit() => Assert.Throws<ArgumentNullException>(() => _t.EditAi(null!));}
+    public void EditAi_null_edit() => Assert.Throws<ArgumentNullException>(() => _t.EditAi(null!));
+
+    [Fact]
+    public void MarkNoticeShown_saves_once_and_does_not_notify()
+    {
+        _t.MarkNoticeShown(AiNotice.RelatedMail);
+        Assert.True(_settings.AiDrafting.RelatedMailNoticeShown);
+        Assert.True(Assert.Single(_saves).AiDrafting.RelatedMailNoticeShown);
+        Assert.Equal(0, _changed);
+        _t.MarkNoticeShown(AiNotice.RelatedMail);
+        Assert.Single(_saves);
+        Assert.Equal(0, _changed);
+    }
+
+    [Fact]
+    public void MarkNoticeShown_save_failure_propagates_and_live_is_unchanged()
+    {
+        _saveThrows = new IOException("disk");
+        Assert.Throws<IOException>(() => _t.MarkNoticeShown(AiNotice.RelatedMail));
+        Assert.False(_settings.AiDrafting.RelatedMailNoticeShown);
+    }
+
+    [Fact]
+    public void MarkNoticeShown_rejects_an_undefined_notice()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => _t.MarkNoticeShown((AiNotice)99));
+        Assert.Empty(_saves);
+    }
+
+    [Fact]
+    public void RecordConsent_also_marks_the_related_mail_notice_shown()
+    {
+        _t.RecordConsent();
+        Assert.True(_settings.AiDrafting.RelatedMailNoticeShown);
+        Assert.True(Assert.Single(_saves).AiDrafting.RelatedMailNoticeShown);
+    }
+
+    [Fact]
+    public void RecordConsent_with_existing_consent_leaves_the_notice_flag_alone()
+    {
+        _settings.AiDrafting.RecordConsent(Now.AddDays(-3));
+        _t.RecordConsent();
+        Assert.False(_settings.AiDrafting.RelatedMailNoticeShown);
+        Assert.Empty(_saves);
+    }
+}

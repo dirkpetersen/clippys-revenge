@@ -47,4 +47,13 @@ public class ReplySubjectTests
         var r = ReplySubject.Normalize(input);
         if (r != "Re::") Assert.StartsWith("Re:: ", r, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData(null, "")]
+    [InlineData("  ", "")]
+    [InlineData("Re: AW: Fw:: x", "x")]
+    [InlineData("Fwd:Hello ", "Hello")]
+    [InlineData("Reply", "Reply")]
+    [InlineData("Re::", "")]
+    public void StripPrefixes(string? input, string expected) => Assert.Equal(expected, ReplySubject.StripPrefixes(input));
 }
