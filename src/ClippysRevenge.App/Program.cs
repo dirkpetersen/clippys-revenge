@@ -216,7 +216,8 @@ internal static class Program
                 styleGuide,
                 () => signatures.Default(SignatureKind.Reply), hub, balloons,
                 () => worker.State == OutlookConnectionState.Available, () => syncRef.IsPaused, TimeZoneInfo.Local,
-                Logger: loggerFactory.CreateLogger<DraftWorker>(), FreeBusy: freeBusy, Facts: facts));
+                Logger: loggerFactory.CreateLogger<DraftWorker>(), FreeBusy: freeBusy, Facts: facts,
+                MarkNoticeShown: new AiDraftingToggler(settings, store.Save, static () => { }).MarkNoticeShown));
             var draftsRef = drafts;
             sync.CycleCompleted += _ => draftsRef.Wake();
             sync.OwnSentBackfillCompleted += () => draftsRef.Wake();

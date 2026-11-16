@@ -527,4 +527,39 @@ public class AiSettingsTests
         s.AiDrafting.ReviseDrafts = false;
         Assert.False(s.Clone().AiDrafting.ReviseDrafts);
     }
+
+    [Fact]
+    public void RelatedMail_defaults_and_validation()
+    {
+        var a = new AiDraftingSettings();
+        Assert.True(a.RelatedMail);
+        Assert.False(a.RelatedMailNoticeShown);
+        Assert.Empty(a.Validate());
+        a.RelatedMail = false;
+        a.RelatedMailNoticeShown = true;
+        Assert.Empty(a.Validate());
+    }
+
+    [Fact]
+    public void RelatedMail_json_round_trip()
+    {
+        var old = Settings.FromJson("{\"AiDrafting\":{\"DailyCap\":7}}").AiDrafting;
+        Assert.True(old.RelatedMail);
+        Assert.False(old.RelatedMailNoticeShown);
+        var s = Settings.FromJson("{\"AiDrafting\":{\"RelatedMail\":false,\"RelatedMailNoticeShown\":true}}").AiDrafting;
+        Assert.False(s.RelatedMail);
+        Assert.True(s.RelatedMailNoticeShown);
+        Assert.Contains("\"RelatedMail\": true", S().ToJson());
+    }
+
+    [Fact]
+    public void RelatedMail_survives_clone()
+    {
+        var s = S();
+        s.AiDrafting.RelatedMail = false;
+        s.AiDrafting.RelatedMailNoticeShown = true;
+        var c = s.Clone().AiDrafting;
+        Assert.False(c.RelatedMail);
+        Assert.True(c.RelatedMailNoticeShown);
+    }
 }

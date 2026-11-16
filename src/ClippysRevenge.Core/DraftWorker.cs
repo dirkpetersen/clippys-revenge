@@ -65,7 +65,8 @@ public sealed record DraftWorkerServices(
     ILogger? Logger = null,
     IFreeBusySource? FreeBusy = null,                 // null = calendar never readable (placeholder)
     Func<TimeZoneInfo?>? CentralEurope = null,        // null = SenderRegion.CentralEurope
-    IFactsSource? Facts = null);                      // null = no facts block (prompts byte-identical to M16)
+    IFactsSource? Facts = null,                       // null = no facts block (prompts byte-identical to M16)
+    Action<AiNotice>? MarkNoticeShown = null);        // null = the notice isn't persisted (shown once per process)
 
 public enum DraftPassEnd
 {
@@ -688,7 +689,7 @@ public sealed partial class DraftWorker : BackgroundService
         var email = new PromptEmail(detail.SenderName, detail.SenderEmail, detail.To, detail.Cc, detail.EventTime,
             detail.Subject, NonInlineNames(detail.Attachments), detail.Body);
         var request = BuildRequest(ai, cur, index, key, email, c.ConversationTopic ?? facts!.ConversationTopic, c.EventTime,
-            c.EntryId, identity, userSmtp, manual: false);
+            c.EntryId, detail.InternetMessageId ?? factsImid, identity, userSmtp, manual: false);
 
         var callCt = p.CallToken ?? ct;
         if (callCt.IsCancellationRequested) return DraftPassEnd.Cancelled;
@@ -928,13 +929,17 @@ public sealed partial class DraftWorker : BackgroundService
     }
 
     private ModelRequest BuildRequest(AiDraftingSettings ai, Settings settings, EmailIndex index, string key, PromptEmail email,
-        string? topic, DateTimeOffset eventTime, string entryId, AiIdentity identity, string userSmtp, bool manual)
+        string? topic, DateTimeOffset eventTime, string entryId, string? imid, AiIdentity identity, string userSmtp, bool manual)
     {
         var thread = index.Thread(topic, eventTime, DraftPrompt.MaxThreadMessages, entryId);
         var input = PromptInput(settings, key, email, thread);
+        var related = FindRelated(ai, index,
+            new RelatedAnchor(entryId, imid, topic, eventTime, email.SenderEmail, email.Subject, email.Body),
+            input.SignatureText, userSmtp, key.Length == 0 ? userSmtp : key);
+        input = input with { Related = related };
         return new ModelRequest(
             DraftPrompt.SystemPrompt(identity.DisplayName, userSmtp, manual, _s.Style.ReadForPrompt(), ai.MeetingTimes,
-                _s.Facts?.ReadForPrompt() ?? ""),
+                _s.Facts?.ReadForPrompt() ?? "", DraftPrompt.HasRelated(input)),
             DraftPrompt.UserPrompt(input), DraftModel.ReplySchema, ai.Model, ai.Effort,
             TimeSpan.FromSeconds(ai.TimeoutSeconds), DraftModel.DraftMaxOutputTokens);
     }
@@ -1045,7 +1050,7 @@ public sealed partial class DraftWorker : BackgroundService
         var prior = index.GetDecision(e.EntryId);
         var email = new PromptEmail(e.SenderName, e.SenderEmail, e.To, e.Cc, e.EventTime, e.Subject,
             NonInlineNames(e.Attachments), e.Body);
-        var request = BuildRequest(ai, cur, index, key, email, e.ConversationTopic, e.EventTime, e.EntryId, identity, userSmtp, manual: true);
+        var request = BuildRequest(ai, cur, index, key, email, e.ConversationTopic, e.EventTime, e.EntryId, e.InternetMessageId, identity, userSmtp, manual: true);
 
         var result = await _s.Model.RunAsync(request with { Kind = ModelCallKind.Manual }, ct).ConfigureAwait(false);
         var now = _time.GetUtcNow();

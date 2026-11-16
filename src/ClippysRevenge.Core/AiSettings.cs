@@ -53,6 +53,12 @@ public sealed partial class AiDraftingSettings
     /// <summary>Revisit Clippy's own unsent AI drafts when the thread moves on (SPEC 19.2, 23).</summary>
     public bool ReviseDrafts { get; set; } = true;
 
+    /// <summary>Add up to 5 related earlier emails from the local index to drafting prompts (SPEC 19.2, 25.3).</summary>
+    public bool RelatedMail { get; set; } = true;
+
+    /// <summary>Internal: the one-time related-mail notice was shown (SPEC 25.3). Not in the Settings window.</summary>
+    public bool RelatedMailNoticeShown { get; set; }
+
     [JsonIgnore] public bool HasConsent => ConsentedAtUtc is not null;
 
     [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9._\[\]-]*\z")]
