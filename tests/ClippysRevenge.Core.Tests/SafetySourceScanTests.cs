@@ -1100,4 +1100,146 @@ public class SafetySourceScanTests
         }
         Assert.DoesNotMatch(@"\bworker\.|\bstores\.|\bRunAsync\b|\bEnsureResolvedAsync\b|\bOutlookMail\b", f.Code);
     }
+
+    // ---- Attachment links (M17.3, SPEC 24.6) ----
+
+    private static bool IsLinkFile(string rel)
+    {
+        var name = Path.GetFileName(rel);
+        return name.StartsWith("AttachmentLinks", StringComparison.Ordinal)
+            || name is "FilesEndpoint.cs" or "PrivateFolder.cs";
+    }
+
+    private static readonly Regex LinkLogArgBad = new(
+        @"\b(token|Token|tempPath|TempPath|path|Path|FileName|fileName|filename|original|originalName|url|Url|Folder|folder|link|id)\b");
+
+    /// <summary>Log calls whose arguments (text up to the first ';', strings blanked) name a token, path, url or file name.</summary>
+    internal static List<string> LinkLogHits(string code, string rel)
+    {
+        var hits = new List<string>();
+        foreach (Match m in LogCall.Matches(code))
+        {
+            var end = code.IndexOf(';', m.Index);
+            var call = code[m.Index..(end < 0 ? code.Length : end)];
+            if (LinkLogArgBad.IsMatch(call))
+            {
+                hits.Add($"{rel}:{LineOf(code, m.Index)}: {call.Trim()}");
+            }
+        }
+        return hits;
+    }
+
+    [Fact]
+    public void LinkFiles_NeverTouchTheIndex()
+    {
+        var files = Scan.Value.Files.Where(f => IsLinkFile(f.Rel)).ToList();
+        foreach (var rel in new[]
+        {
+            "src/ClippysRevenge.Core/AttachmentLinks.cs",
+            "src/ClippysRevenge.Core/AttachmentLinks.Helpers.cs",
+            "src/ClippysRevenge.Core/AttachmentLinks.Tool.cs",
+            "src/ClippysRevenge.Core/FilesEndpoint.cs",
+            "src/ClippysRevenge.App/PrivateFolder.cs",
+        })
+        {
+            Assert.Contains(files, f => f.Rel == rel);
+        }
+        var hits = files.Where(f => Regex.IsMatch(f.Code, @"\b(EmailIndex|MailboxIndexes|UpsertBatch|SetThreadMeta)\b"))
+            .Select(f => f.Rel).ToList();
+        AssertNone(hits, "Attachment link files must never touch the email index (attachment content never enters the index).");
+    }
+
+    [Fact]
+    public void LinkFiles_LogNoTokenPathOrName()
+    {
+        var files = Scan.Value.Files.Where(f => IsLinkFile(f.Rel)).ToList();
+        AssertNone(files.SelectMany(f => LinkLogHits(f.Code, f.Rel)).ToList(),
+            "Link files must not log a token, path, url or file name.");
+        foreach (var rel in new[] { "src/ClippysRevenge.Core/AttachmentLinks.cs", "src/ClippysRevenge.Core/AttachmentLinks.Tool.cs" })
+        {
+            Assert.True(LogCall.Matches(files.Single(f => f.Rel == rel).Code).Count >= 1, rel);
+        }
+    }
+
+    [Fact]
+    public void LinkLogMatcher_CatchesPlantedViolations()
+    {
+        Assert.Single(LinkLogHits("_log?.LogDebug(\"\", link.Token);", "x"));
+        Assert.Single(LinkLogHits("log.LogWarning(\"\", tempPath);", "x"));
+        Assert.Single(LinkLogHits("log.LogDebug(\"\", Path.GetFileName(p));", "x"));
+        Assert.Single(LinkLogHits("log.LogInformation(\"\", url);", "x"));
+        Assert.Single(LinkLogHits("log.LogDebug(\"\", saved.FileName);", "x"));
+        Assert.Single(LinkLogHits("log.LogDebug(\"\", id);", "x"));
+        Assert.Empty(LinkLogHits("_log?.LogDebug(\"\", expired, _links.Count);", "x"));
+        Assert.Empty(LinkLogHits("log.LogWarning(\"\", ex.GetType().Name);", "x"));
+        Assert.Empty(LinkLogHits("log.LogDebug(\"\", saved.Size, _links.OpenCount);", "x"));
+        Assert.Empty(LinkLogHits("log.LogDebug(\"\", ex.Reason);", "x"));
+    }
+
+    [Fact]
+    public void SaveAsFile_OnlyInOutlookMailAttachments()
+    {
+        const string rel = "src/ClippysRevenge.App/OutlookMail.Attachments.cs";
+        // M19.7's ReadAttachmentForAi raises the count in that file to 3.
+        AssertNone(Find(f => f.Code, @"\bSaveAsFile\s*\(", f => f.Rel == rel),
+            "SaveAsFile( is only allowed in OutlookMail.Attachments.cs.");
+        var inFile = Find(f => f.Code, @"\bSaveAsFile\s*\(", f => f.Rel != rel);
+        Assert.Equal(2, inFile.Count);
+    }
+
+    [Fact]
+    public void FilesRoute_MappedOnce()
+    {
+        const string host = "src/ClippysRevenge.Core/McpHttpHost.cs";
+        const string endpoint = "src/ClippysRevenge.Core/FilesEndpoint.cs";
+        var mapCalls = Find(f => f.Code, @"FilesEndpoint\s*\.\s*Map\s*\(");
+        Assert.Single(mapCalls);
+        Assert.StartsWith(host + ":", mapCalls[0]);
+
+        var routes = Find(f => f.Code, @"(?<!FilesEndpoint)\s*\.\s*Map(Get|Post|Put|Patch|Delete|Methods|Fallback)?\s*\(");
+        Assert.Single(routes);
+        Assert.StartsWith(endpoint + ":", routes[0]);
+
+        var literals = Scan.Value.Files
+            .Where(f => f.Literals.Any(l => l[(l.IndexOf('|') + 1)..].StartsWith("/files", StringComparison.Ordinal)))
+            .Select(f => f.Rel).ToList();
+        Assert.All(literals, rel => Assert.True(
+            rel is "src/ClippysRevenge.Core/AttachmentLinks.cs" or "src/ClippysRevenge.Core/RollingFileLogger.cs", rel));
+    }
+
+    [Fact]
+    public void AttachmentLinkTool_Registered()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/AttachmentTools.cs");
+        Assert.Contains("Name = \"attachment_link\", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false", f.WithStrings);
+        Assert.Contains("[Description(LinkTexts.ToolDescription)]", f.WithStrings);
+        var start = f.Code.IndexOf("AttachmentLink(", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var end = f.Code.IndexOf("=>", start, StringComparison.Ordinal);
+        Assert.True(end > start);
+        Assert.DoesNotContain("save_dir", f.WithStrings[f.WithStrings.IndexOf("AttachmentLink(", StringComparison.Ordinal)..]);
+    }
+
+    [Fact]
+    public void PrivateFolder_StaysSmall()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/PrivateFolder.cs");
+        Assert.Matches(@"SetAccessRuleProtection\s*\(\s*isProtected:\s*true", f.Code);
+        Assert.Matches(@"\bLinkTarget\b", f.Code);
+        Assert.DoesNotMatch(@"\bProcess\b|\bDelete\s*\(|\bMove\s*\(|\bLog\w*\s*\(", f.Code);
+        Assert.DoesNotContain(f.Literals, l => l.Contains("icacls", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Program_CleansLinksBeforeTheHostStarts()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/Program.cs");
+        var clean = f.Code.IndexOf("attachmentLinks.CleanUpAtStart(", StringComparison.Ordinal);
+        var start = f.Code.IndexOf("StartHostAsync(host", StringComparison.Ordinal);
+        Assert.True(clean >= 0, "CleanUpAtStart missing");
+        Assert.True(start > clean, "CleanUpAtStart must run before StartHostAsync(host");
+        Assert.Contains("Links = attachmentLinks", f.Code);
+        Assert.Contains("links.Clear()", f.Code);
+        Assert.Contains("attachmentLinks.Dispose()", f.Code);
+    }
 }

@@ -109,6 +109,8 @@ public static class FileDownloadHeaders
 public static class LinkTexts
 {
     public const string Note = "One download only. If curl answers 401, CLIPPY_TOKEN isn't set in this shell: ask the user to copy the auth token from the Clippy tray menu and add export CLIPPY_TOKEN=<token> to ~/.bashrc.";
+    public const string ToolDescription = "Makes a one-time download link for one attachment of an email, for use from WSL or another shell. Use the id from search_emails; pass filename or position when the email has more than one attachment. Run the returned curl command in the shell: it saves the file in the current folder. The link works once and expires in 10 minutes. The file content is not returned to you. The shell needs CLIPPY_TOKEN set (see note in the result). To save the file on the Windows side instead, use get_attachment.";
+    public const string MaskedWslTokenLine = "export CLIPPY_TOKEN=••••••••";
     public const string FolderUnusable = "Clippy can't use its private download folder. Use get_attachment instead.";
     public const string TooManyOpen = "Too many open download links (10). Download them or wait until they expire (10 minutes), then try again.";
     public const string TooManyBytes = "The open download links already hold 200 MB. Download them or wait until they expire, then try again.";
@@ -125,6 +127,19 @@ public static class LinkTexts
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(minutes, 1);
         return $"Too many download links in the last 10 minutes (20). Try again in {minutes.ToString(CultureInfo.InvariantCulture)} min.";
+    }
+
+    /// <summary>"export CLIPPY_TOKEN=" + token.</summary>
+    /// <exception cref="ArgumentException">token null/empty, or has a char outside [A-Za-z0-9._~+/=-].</exception>
+    public static string WslTokenLine(string token)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(token);
+        foreach (var c in token)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || c is '-' or '.' or '_' or '~' or '+' or '/' or '='))
+                throw new ArgumentException("Token must contain only letters, digits and -._~+/=.", nameof(token));
+        }
+        return "export CLIPPY_TOKEN=" + token;
     }
 
     /// <summary>http://127.0.0.1:port/files/token.</summary>
