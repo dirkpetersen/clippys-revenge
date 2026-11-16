@@ -147,6 +147,33 @@ public sealed class RollingFileLoggerTests : IDisposable
     }
 
     [Fact]
+    public void Redact_FilesLinks()
+    {
+        var tok = AttachmentLinks.NewToken();
+        Assert.Equal("GET /files/[redacted] HTTP/1.1", LogRedactor.Redact("GET /files/" + tok + " HTTP/1.1", []));
+        Assert.Equal("http://127.0.0.1:8765/files/[redacted]?x=1", LogRedactor.Redact("http://127.0.0.1:8765/files/" + tok + "?x=1", []));
+        Assert.Equal("/files/[redacted]", LogRedactor.Redact("/FILES/" + tok, []));
+        var n19 = "/files/" + new string('a', 19);
+        Assert.Equal(n19, LogRedactor.Redact(n19, []));
+        Assert.Equal("/files/[redacted]", LogRedactor.Redact("/files/" + new string('a', 20), []));
+        Assert.Equal("/files/abc", LogRedactor.Redact("/files/abc", []));
+        Assert.Equal("/files/", LogRedactor.Redact("/files/", []));
+    }
+
+    [Fact]
+    public void FilesLinkToken_IsMaskedInFile()
+    {
+        var tok = AttachmentLinks.NewToken();
+        using (var p = Make())
+        {
+            p.CreateLogger("ClippysRevenge.Test").LogInformation("GET /files/{T} done", tok);
+        }
+        var text = File.ReadAllText(Path.Combine(_dir, Today));
+        Assert.Contains("/files/[redacted]", text);
+        Assert.DoesNotContain(tok, text);
+    }
+
+    [Fact]
     public void ApiKeySecret_IsMaskedInMessageAndException()
     {
         const string apiKey = "plainapikey-98765";
