@@ -867,6 +867,7 @@ public sealed partial class DraftWorker : BackgroundService
                     _log?.LogWarning("AI drafts: couldn't record an AI draft ({Type}).", ex.GetType().Name);
                 }
             }
+            RecordDraftText(detail.InternetMessageId ?? factsImid, html, built.Attachments.Counts, made);
             _s.Hub.Event(ActivityKind.Draft,
                 DraftTexts.DraftCreated(made.Subject) + DraftAttachmentTexts.EventSuffix(built.Attachments.Counts),
                 mailbox: string.IsNullOrEmpty(made.Mailbox) ? null : made.Mailbox);
@@ -1151,6 +1152,7 @@ public sealed partial class DraftWorker : BackgroundService
                     made = await _s.Writer.ReplyAsync(MakePlan(e.EntryId, reply.ReplyAll ?? false, html, WorkPriority.Interactive,
                         ReasonTop(ai, reply.NoteForUser) + AttachmentNotes.Html(built.Attachments.Notes)), ct)
                         .ConfigureAwait(false);
+                    RecordDraftText(e.InternetMessageId, html, built.Attachments.Counts, made);
                     text = DraftTexts.ManualDone;
                 }
                 catch (ItemNotFoundException)

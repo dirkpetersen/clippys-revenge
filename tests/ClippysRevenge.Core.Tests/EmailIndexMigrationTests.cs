@@ -76,11 +76,11 @@ public class EmailIndexMigrationTests : IDisposable
     }
 
     [Fact]
-    public void V1_file_migrates_to_version_4()
+    public void V1_file_migrates_to_version_5()
     {
         var path = NewV1();
         _ = new EmailIndex(path);
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         AssertV2Objects(path);
         AssertV3Objects(path);
     }
@@ -150,7 +150,7 @@ public class EmailIndexMigrationTests : IDisposable
             c.Execute("CREATE INDEX ix_emails_irt ON emails(in_reply_to)");
         }
         _ = new EmailIndex(path);
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         AssertV2Objects(path);
         AssertV3Objects(path);
     }
@@ -162,7 +162,7 @@ public class EmailIndexMigrationTests : IDisposable
         _ = new EmailIndex(path);
         var before = Snapshot(path);
         for (var i = 0; i < 3; i++) _ = new EmailIndex(path);
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         Assert.Equal(before, Snapshot(path));
         Assert.Null(Meta(path, "thread_meta_complete"));
         AssertV2Objects(path);
@@ -183,7 +183,7 @@ public class EmailIndexMigrationTests : IDisposable
         Assert.Equal(before, Snapshot(path));
 
         _ = new EmailIndex(path);
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         AssertV2Objects(path);
         AssertV3Objects(path);
         Assert.Equal(before, Snapshot(path));
@@ -194,7 +194,7 @@ public class EmailIndexMigrationTests : IDisposable
     {
         var path = NewV1();
         await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(() => new EmailIndex(path))));
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         AssertV2Objects(path);
         AssertV3Objects(path);
     }
@@ -204,7 +204,7 @@ public class EmailIndexMigrationTests : IDisposable
     {
         var path = Path.Combine(_dir, "new.db");
         var ix = new EmailIndex(path);
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         AssertV2Objects(path);
         Assert.Equal("1", ix.GetMeta("thread_meta_complete"));
     }
@@ -213,11 +213,11 @@ public class EmailIndexMigrationTests : IDisposable
     public void Newer_schema_is_refused_and_file_unchanged()
     {
         var path = NewV1();
-        using (var c = Raw(path)) c.Execute("UPDATE meta SET value = '5' WHERE key = 'schema_version'");
+        using (var c = Raw(path)) c.Execute("UPDATE meta SET value = '6' WHERE key = 'schema_version'");
         var before = Snapshot(path);
         var ex = Assert.Throws<InvalidOperationException>(() => new EmailIndex(path));
-        Assert.Contains("supports up to 4", ex.Message);
-        Assert.Equal("5", Meta(path, "schema_version"));
+        Assert.Contains("supports up to 5", ex.Message);
+        Assert.Equal("6", Meta(path, "schema_version"));
         Assert.Equal(0, Count(path, "SELECT COUNT(*) FROM pragma_table_info('emails') WHERE name = 'in_reply_to'"));
         Assert.Equal(before, Snapshot(path));
     }
@@ -254,12 +254,12 @@ public class EmailIndexMigrationTests : IDisposable
     }
 
     [Fact]
-    public void V2_file_migrates_to_version_4_and_keeps_rows()
+    public void V2_file_migrates_to_version_5_and_keeps_rows()
     {
         var path = NewV2();
         var before = FullSnapshot(path);
         var ix = new EmailIndex(path);
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         Assert.Equal(before, FullSnapshot(path));
         Assert.Equal("1", Meta(path, "thread_meta_complete"));
         AssertV3Objects(path);
@@ -282,7 +282,7 @@ public class EmailIndexMigrationTests : IDisposable
         Assert.Equal(0, Count(path, "SELECT COUNT(*) FROM sqlite_master WHERE name = 'ai_drafts'"));
         Assert.Equal(before, FullSnapshot(path));
         _ = new EmailIndex(path);
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         AssertV3Objects(path);
     }
 
@@ -307,7 +307,7 @@ public class EmailIndexMigrationTests : IDisposable
             DateTimeOffset.FromUnixTimeSeconds(1_763_000_000), DateTimeOffset.FromUnixTimeSeconds(1_763_000_800));
         var before = FullSnapshot(path);
         for (var i = 0; i < 3; i++) _ = new EmailIndex(path);
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         Assert.Equal(before, FullSnapshot(path));
         Assert.Equal(1, Count(path, "SELECT COUNT(*) FROM ai_drafts"));
     }
@@ -329,7 +329,7 @@ public class EmailIndexMigrationTests : IDisposable
                   updated INTEGER NOT NULL)
                 """);
         _ = new EmailIndex(path);
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         AssertV3Objects(path);
     }
 
@@ -360,12 +360,12 @@ public class EmailIndexMigrationTests : IDisposable
     }
 
     [Fact]
-    public void V3_file_migrates_to_version_4_and_keeps_rows()
+    public void V3_file_migrates_to_version_5_and_keeps_rows()
     {
         var path = NewV3();
         var before = V3Snapshot(path);
         _ = new EmailIndex(path);
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         AssertV4Objects(path);
         Assert.Equal(before, V3Snapshot(path));
         Assert.Equal(0, Count(path, "SELECT COUNT(*) FROM ai_calls"));
@@ -383,7 +383,7 @@ public class EmailIndexMigrationTests : IDisposable
         Assert.Equal(0, Count(path, "SELECT COUNT(*) FROM sqlite_master WHERE name = 'ai_calls'"));
         Assert.Equal(before, V3Snapshot(path));
         _ = new EmailIndex(path);
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         AssertV4Objects(path);
     }
 
@@ -413,7 +413,7 @@ public class EmailIndexMigrationTests : IDisposable
                   input INTEGER, output INTEGER, cache_read INTEGER, cache_creation INTEGER)
                 """);
         _ = new EmailIndex(path);
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         AssertV4Objects(path);
     }
 
@@ -425,8 +425,112 @@ public class EmailIndexMigrationTests : IDisposable
         ix.AddAiCall(DateTimeOffset.FromUnixTimeSeconds(1_763_000_000), ModelCallKind.Draft, "cli", true, new TokenUsage(1, 2, null, null));
         var before = V3Snapshot(path);
         for (var i = 0; i < 3; i++) _ = new EmailIndex(path);
-        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal("5", Meta(path, "schema_version"));
         Assert.Equal(before, V3Snapshot(path));
         Assert.Equal(1, Count(path, "SELECT COUNT(*) FROM ai_calls"));
+    }
+
+    // ---- schema 5 (ai_draft_texts, ai_edits) ----
+
+    private string V4Path => Path.Combine(_dir, "v4.db");
+
+    private string NewV4()
+    {
+        SchemaV4.Create(V4Path);
+        return V4Path;
+    }
+
+    private static void AssertV5Objects(string path)
+    {
+        using var c = Raw(path);
+        var names = c.Query<(string type, string name)>("SELECT type, name FROM sqlite_master").ToList();
+        foreach (var t in new[] { "ai_draft_texts", "ai_edits" })
+            Assert.Contains(("table", t), names);
+        foreach (var i in new[] { "ix_ai_draft_texts_imid", "ix_ai_edits_sent" })
+            Assert.Contains(("index", i), names);
+    }
+
+    private static string V4Snapshot(string path)
+    {
+        using var c = Raw(path);
+        var calls = c.Query<(long, long, string, string, string, long?, long?, long?, long?)>("SELECT * FROM ai_calls ORDER BY id");
+        return V3Snapshot(path) + "##" + string.Join("|", calls);
+    }
+
+    [Fact]
+    public void V4_file_migrates_to_version_5_and_keeps_rows()
+    {
+        var path = NewV4();
+        var before = V4Snapshot(path);
+        _ = new EmailIndex(path);
+        Assert.Equal("5", Meta(path, "schema_version"));
+        AssertV5Objects(path);
+        Assert.Equal(before, V4Snapshot(path));
+        Assert.Equal(1, Count(path, "SELECT COUNT(*) FROM ai_calls"));
+        Assert.Equal(1, Count(path, "SELECT COUNT(*) FROM ai_drafts"));
+        Assert.Equal(1, Count(path, "SELECT COUNT(*) FROM ai_revisits"));
+        Assert.Equal(0, Count(path, "SELECT COUNT(*) FROM ai_draft_texts"));
+        Assert.Equal(0, Count(path, "SELECT COUNT(*) FROM ai_edits"));
+    }
+
+    [Fact]
+    public void Failure_in_step_5_rolls_back_to_version_4()
+    {
+        var path = NewV4();
+        var before = V4Snapshot(path);
+        Assert.Throws<InvalidOperationException>(() =>
+            new EmailIndex(path, n => { if (n == 5) throw new InvalidOperationException("boom"); }));
+        SqliteConnection.ClearAllPools();
+        Assert.Equal("4", Meta(path, "schema_version"));
+        Assert.Equal(0, Count(path, "SELECT COUNT(*) FROM sqlite_master WHERE name IN ('ai_draft_texts', 'ai_edits')"));
+        Assert.Equal(before, V4Snapshot(path));
+        _ = new EmailIndex(path);
+        Assert.Equal("5", Meta(path, "schema_version"));
+        AssertV5Objects(path);
+        Assert.Equal(before, V4Snapshot(path));
+    }
+
+    [Fact]
+    public void V1_file_goes_to_5_in_one_transaction()
+    {
+        var path = NewV1();
+        Assert.Throws<InvalidOperationException>(() =>
+            new EmailIndex(path, n => { if (n == 5) throw new InvalidOperationException("boom"); }));
+        SqliteConnection.ClearAllPools();
+        Assert.Equal("1", Meta(path, "schema_version"));
+        Assert.Equal(0, Count(path, "SELECT COUNT(*) FROM sqlite_master WHERE name IN ('ai_decisions', 'ai_drafts', 'ai_revisits', 'ai_calls', 'ai_draft_texts', 'ai_edits')"));
+    }
+
+    [Fact]
+    public void Partly_created_v5_table_is_finished()
+    {
+        var path = NewV4();
+        using (var c = Raw(path))
+            c.Execute("""
+                CREATE TABLE ai_draft_texts (
+                  draft_entry_id TEXT PRIMARY KEY,
+                  mailbox TEXT NOT NULL,
+                  source_imid TEXT NOT NULL,
+                  created INTEGER NOT NULL,
+                  text TEXT NOT NULL,
+                  state TEXT NOT NULL,
+                  updated INTEGER NOT NULL)
+                """);
+        _ = new EmailIndex(path);
+        Assert.Equal("5", Meta(path, "schema_version"));
+        AssertV5Objects(path);
+    }
+
+    [Fact]
+    public void Reopening_v5_changes_nothing()
+    {
+        var path = NewV4();
+        var ix = new EmailIndex(path);
+        ix.RecordAiDraftText("D9", "", "<A@x>", DateTimeOffset.FromUnixTimeSeconds(1_763_000_000), "hello");
+        var before = V4Snapshot(path);
+        for (var i = 0; i < 3; i++) _ = new EmailIndex(path);
+        Assert.Equal("5", Meta(path, "schema_version"));
+        Assert.Equal(before, V4Snapshot(path));
+        Assert.Equal(1, Count(path, "SELECT COUNT(*) FROM ai_draft_texts"));
     }
 }

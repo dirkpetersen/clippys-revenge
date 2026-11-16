@@ -11,16 +11,29 @@ public sealed partial class EmailIndex
     private static readonly Regex RuleId = new("^[a-z_]+\\z", RegexOptions.CultureInvariant);
 
     /// <summary>Deletes ai_decisions rows with decided, ai_drafts rows with updated, ai_revisits rows with decided
-    /// and ai_calls rows with at older than now minus <see cref="DecisionRetention"/>, in one transaction. Returns the total rows deleted. No VACUUM.</summary>
+    /// and ai_calls rows with at older than now minus <see cref="DecisionRetention"/>, in one transaction. Also, per SPEC
+    /// 27.2/27.5: ai_draft_texts rows that aren't pending and were updated over <see cref="DraftTextRetention"/> ago are
+    /// deleted, pending ones created over that long ago become expired with their text cleared, and ai_edits rows with
+    /// sent older than <see cref="EditRetention"/> are deleted. Returns the total rows deleted (expiring isn't counted).
+    /// No VACUUM.</summary>
     public int PurgeDecisions(DateTimeOffset now)
     {
         var p = new { t = (now - DecisionRetention).ToUnixTimeSeconds() };
+        var e = new
+        {
+            t30 = (now - DraftTextRetention).ToUnixTimeSeconds(),
+            t90 = (now - EditRetention).ToUnixTimeSeconds(),
+            now = now.ToUnixTimeSeconds(),
+        };
         using var conn = OpenConnection();
         using var tx = conn.BeginTransaction();
         var n = conn.Execute("DELETE FROM ai_decisions WHERE decided < @t", p, tx)
               + conn.Execute("DELETE FROM ai_drafts WHERE updated < @t", p, tx)
               + conn.Execute("DELETE FROM ai_revisits WHERE decided < @t", p, tx)
-              + conn.Execute("DELETE FROM ai_calls WHERE at < @t", p, tx);
+              + conn.Execute("DELETE FROM ai_calls WHERE at < @t", p, tx)
+              + conn.Execute("DELETE FROM ai_draft_texts WHERE state <> 'pending' AND updated < @t30", e, tx);
+        conn.Execute("UPDATE ai_draft_texts SET state = 'expired', text = '', updated = @now WHERE state = 'pending' AND created < @t30", e, tx);
+        n += conn.Execute("DELETE FROM ai_edits WHERE sent < @t90", e, tx);
         tx.Commit();
         return n;
     }

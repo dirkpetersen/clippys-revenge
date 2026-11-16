@@ -682,6 +682,38 @@ public class DraftWorkerAttachmentsTests
     }
 
     [Fact]
+    public async Task Learning_from_edits_never_lets_an_echoed_attachment_text_reach_the_index_files()
+    {
+        using var h = Fx(out _, enqueue: false);
+        h.Ai.LearnFromEdits = true;
+        h.Model.Enqueue(OkReply(0.9, body: "<p>echo " + M + "</p>"));
+        await Pass(h);
+        Assert.Contains(M, Assert.Single(h.Writer.Plans).HtmlFragment, StringComparison.Ordinal);   // positive control
+        Assert.Null(h.Indexes.For("").GetAiDraftText("D1"));
+        SqliteConnection.ClearAllPools();
+        var utf8 = Encoding.UTF8.GetBytes(M);
+        var utf16 = Encoding.Unicode.GetBytes(M);
+
+        var files = Directory.GetFiles(h.Dir, "*", SearchOption.AllDirectories);
+        Assert.NotEmpty(files);
+        foreach (var f in files)
+        {
+            using var fs = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var ms = new MemoryStream();
+            await fs.CopyToAsync(ms, Ct);
+            var bytes = ms.ToArray();
+            Assert.False(bytes.AsSpan().IndexOf(utf8) >= 0, f);
+            Assert.False(bytes.AsSpan().IndexOf(utf16) >= 0, f);
+        }
+        using var c = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = MailboxIndexes.PathFor(h.Dir, ""), Pooling = false }.ToString());
+        c.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM ai_draft_texts";
+        Assert.Equal(0L, (long)cmd.ExecuteScalar()!);
+    }
+
+    [Fact]
     public async Task Debug_count_line_is_exactly_one_per_prompt_with_counts_only()
     {
         using var h = Fx(out _);

@@ -212,6 +212,21 @@ public class SettingsEditorAiTests
     }
 
     [Fact]
+    public void Rebase_keeps_a_live_edits_notice_flag_and_never_clears_a_draft_one()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        live.AiDrafting.EditsNoticeShown = true;
+        Assert.False(e.Draft.AiDrafting.EditsNoticeShown);
+        e.Rebase(live);
+        Assert.True(e.Draft.AiDrafting.EditsNoticeShown);
+
+        live.AiDrafting.EditsNoticeShown = false;
+        e.Rebase(live);
+        Assert.True(e.Draft.AiDrafting.EditsNoticeShown);
+    }
+
+    [Fact]
     public void Changing_RelatedMail_is_a_change()
     {
         var live = Live();

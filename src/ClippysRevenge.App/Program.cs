@@ -243,6 +243,10 @@ internal static class Program
             var draftsRef = drafts;
             sync.CycleCompleted += _ => draftsRef.Wake();
             sync.OwnSentBackfillCompleted += () => draftsRef.Wake();
+            var edits = new EditLearning(indexesRef, () => settings.AiDrafting,
+                () => StyleCorpus.SignatureTexts(kind => signatures.Default(kind)), hub,
+                logger: loggerFactory.CreateLogger<EditLearning>());
+            sync.CycleCompleted += cycle => edits.OnSyncCycleCompleted(cycle);
             }
             catch (Exception ex)
             {
