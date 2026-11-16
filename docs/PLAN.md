@@ -324,3 +324,4 @@ Append one line per finished task: `YYYY-MM-DD M#.# <short summary> (<commit>)`.
 2026-11-16 M18.5 live Claude note/facts/related test (47aada8; not run, user runs with CLIPPY_LIVE_CLAUDE=1)
 2026-11-16 M18.6 docs facts/related/reason line (c148097); M19.5 attachments block + notes, skipped list capped at 30 (0a1ca8a); 4893 tests; docs strict build OK
 2026-11-16 M18 review: APPROVED, no blocking; fixed live note length (+1 for the ellipsis), MeetingTimesText spacing, RelatedMail.IsSent trim; localized Drafts/Deleted Items names left for M19.6/M20 check
+2026-11-16 Flaky tests made deterministic (c8248c7); product fix: SingleInstance.SignalExisting retries on a broken pipe instead of losing the signal; UpdateServiceTests flake not reproduced; 4893 tests
