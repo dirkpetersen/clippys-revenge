@@ -13,6 +13,8 @@
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
     <!-- AI drafting API-key backend (SPEC §19.3); official SDK, pinned. -->
     <PackageReference Include="Anthropic" Version="13.3.0" />
+    <!-- AI drafts: PDF text (SPEC §26.4); Apache-2.0, managed, pinned. -->
+    <PackageReference Include="PdfPig" Version="0.1.16" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="ClippysRevenge.Core.Tests" />
