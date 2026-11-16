@@ -15,8 +15,18 @@ public interface IDraftModel
     Task<ModelResult> RunAsync(ModelRequest request, CancellationToken ct);
 }
 
+/// <summary>Token counts of one call (SPEC 19.13). Null = unknown.</summary>
+public sealed record TokenUsage(long? Input, long? Output, long? CacheRead, long? CacheCreation)
+{
+    /// <summary>Input or Output is not null.</summary>
+    public bool Known => Input is not null || Output is not null;
+}
+
+public enum ModelCallKind { Draft, Manual, Revisit, Rescan, Style }
+
 public sealed record ModelRequest(string SystemPrompt, string UserPrompt, string JsonSchema,
-    string Model, string Effort, TimeSpan Timeout, int MaxOutputTokens);
+    string Model, string Effort, TimeSpan Timeout, int MaxOutputTokens,
+    ModelCallKind Kind = ModelCallKind.Draft);
 
 public enum ModelFailure { NotInstalled, Timeout, Cancelled, BadInput, BadOutput, NoStructuredOutput, ProcessExit, Http }
 
@@ -25,7 +35,8 @@ public abstract record ModelResult
     private ModelResult() { }
 
     /// <summary>Output is a JSON object, already Clone()d (it outlives its JsonDocument).</summary>
-    public sealed record Ok(JsonElement Output, TimeSpan Duration, int? InputTokens, int? OutputTokens) : ModelResult;
+    public sealed record Ok(JsonElement Output, TimeSpan Duration, int? InputTokens, int? OutputTokens,
+        TokenUsage? Usage = null) : ModelResult;
 
     /// <summary>RetryAt null = unknown (the caller waits 60 min, SPEC 19.7).</summary>
     public sealed record RateLimited(DateTimeOffset? RetryAt) : ModelResult;
@@ -33,7 +44,7 @@ public abstract record ModelResult
     public sealed record NotSignedIn : ModelResult;
 
     /// <summary>Code: the process exit code (ProcessExit) or the HTTP status (Http); else null.</summary>
-    public sealed record Failed(ModelFailure Kind, int? Code) : ModelResult;
+    public sealed record Failed(ModelFailure Kind, int? Code, TokenUsage? Usage = null) : ModelResult;
 }
 
 public sealed record ModelStatus(bool Ready, string Text);

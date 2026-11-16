@@ -409,6 +409,7 @@ public sealed partial class DraftWorker : BackgroundService
         public int Moved { get; set; }
         public int Kept { get; set; }
         public int Revisits { get; set; }   // revisits that made a model call
+        public AiUsageTotals Usage { get; set; } = AiUsageTotals.Zero;
         public bool Rescan { get; init; }
         public WorkPriority Priority { get; init; } = WorkPriority.Background;
         public CancellationToken? CallToken { get; init; }   // rescan: cancelled by CancelRescan; null = the pass's ct
@@ -521,10 +522,11 @@ public sealed partial class DraftWorker : BackgroundService
                     duration: elapsed);
             if (p.Drafted + p.Updated > 0)
                 _s.Balloons.Post(BalloonTexts.AiDrafted(p.Drafted + p.Updated), BalloonKind.Info, BalloonAction.ShowDrafts);
-            _log?.LogInformation("AI drafts pass: {End}, {Drafted} drafted, {Updated} updated, {Moved} moved, {Kept} kept, {NoReply} no reply, {LowConfidence} low confidence{LowConfidenceDetail}, {Skipped} skipped, {Failed} failed, {Calls} calls in {Ms} ms",
+            _log?.LogInformation("AI drafts pass: {End}, {Drafted} drafted, {Updated} updated, {Moved} moved, {Kept} kept, {NoReply} no reply, {LowConfidence} low confidence{LowConfidenceDetail}, {Skipped} skipped, {Failed} failed, {Calls} calls in {Ms} ms, tokens in {TokensIn} out {TokensOut}{UnknownTokens}",
                 end, p.Drafted, p.Updated, p.Moved, p.Kept, p.NoReply, p.LowConfidence,
                 DraftTexts.LowConfidenceLogDetail(p.LowConfidence, p.HighestLow, p.LowMinimum),
-                p.Skipped, p.Failed, p.Calls, (long)elapsed.TotalMilliseconds);
+                p.Skipped, p.Failed, p.Calls, (long)elapsed.TotalMilliseconds,
+                p.Usage.In, p.Usage.Out, AiUsageTexts.UnknownCallsLogDetail(p.Usage.UnknownCalls));
         }
         return new DraftPassResult(end, p.Drafted, p.NoReply, p.LowConfidence, p.Skipped, p.Failed, p.Calls, p.Updated, p.Moved, p.Kept);
     }
@@ -696,7 +698,9 @@ public sealed partial class DraftWorker : BackgroundService
             p.Total++;
             _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
         }
-        var result = await _s.Model.RunAsync(request, callCt).ConfigureAwait(false);
+        var result = await _s.Model.RunAsync(
+            request with { Kind = p.Rescan ? ModelCallKind.Rescan : ModelCallKind.Draft }, callCt).ConfigureAwait(false);
+        p.Usage = p.Usage.AddCall(result);
         if (!p.Rescan)
         {
             p.Done++;
@@ -1043,7 +1047,7 @@ public sealed partial class DraftWorker : BackgroundService
             NonInlineNames(e.Attachments), e.Body);
         var request = BuildRequest(ai, cur, index, key, email, e.ConversationTopic, e.EventTime, e.EntryId, identity, userSmtp, manual: true);
 
-        var result = await _s.Model.RunAsync(request, ct).ConfigureAwait(false);
+        var result = await _s.Model.RunAsync(request with { Kind = ModelCallKind.Manual }, ct).ConfigureAwait(false);
         var now = _time.GetUtcNow();
 
         var called = true;

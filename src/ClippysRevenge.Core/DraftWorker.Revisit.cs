@@ -159,7 +159,8 @@ public sealed partial class DraftWorker
             p.Total++;
             _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
         }
-        var result = await _s.Model.RunAsync(request, callCt).ConfigureAwait(false);
+        var result = await _s.Model.RunAsync(request with { Kind = ModelCallKind.Revisit }, callCt).ConfigureAwait(false);
+        p.Usage = p.Usage.AddCall(result);
         if (!p.Rescan)
         {
             p.Done++;

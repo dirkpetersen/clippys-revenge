@@ -197,9 +197,10 @@ public sealed partial class DraftWorker
             var cap = _s.Settings().AiDrafting.DailyCap;
             var text = stop is { } st ? RescanTexts.Stopped(st, cap, done, counts, elapsed) : RescanTexts.Summary(counts, elapsed);
             _s.Hub.Event(ActivityKind.Ai, text, duration: elapsed);
-            _log?.LogInformation("AI drafts rescan: {End}, {Emails} emails, {Drafted} drafted, {Updated} updated, {Moved} moved, {Kept} kept, {NoReply} no reply, {LowConfidence} low confidence, {Skipped} skipped, {Failed} failed, {Calls} calls in {Ms} ms",
+            _log?.LogInformation("AI drafts rescan: {End}, {Emails} emails, {Drafted} drafted, {Updated} updated, {Moved} moved, {Kept} kept, {NoReply} no reply, {LowConfidence} low confidence, {Skipped} skipped, {Failed} failed, {Calls} calls in {Ms} ms, tokens in {TokensIn} out {TokensOut}{UnknownTokens}",
                 stop?.ToString() ?? "Completed", total, p.Drafted, p.Updated, p.Moved, p.Kept, p.NoReply, p.LowConfidence,
-                p.Skipped, p.Failed, p.Calls, (long)elapsed.TotalMilliseconds);
+                p.Skipped, p.Failed, p.Calls, (long)elapsed.TotalMilliseconds,
+                p.Usage.In, p.Usage.Out, AiUsageTexts.UnknownCallsLogDetail(p.Usage.UnknownCalls));
             return new RescanResult(true, stop, done, counts, p.Calls, elapsed, text);
         }
         finally

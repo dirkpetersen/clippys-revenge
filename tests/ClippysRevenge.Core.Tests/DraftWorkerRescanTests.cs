@@ -182,7 +182,7 @@ public class DraftWorkerRescanTests
         Assert.Equal(4, r.ModelCalls);
         Assert.Equal("Rescan: 4 emails, 0 drafts, 4 no reply needed (0 s)", Assert.Single(AiTexts(h)));
         Assert.Contains(h.Log.Lines,
-            l => l == "AI drafts rescan: Completed, 4 emails, 0 drafted, 0 updated, 0 moved, 0 kept, 4 no reply, 0 low confidence, 0 skipped, 0 failed, 4 calls in 0 ms");
+            l => l == "AI drafts rescan: Completed, 4 emails, 0 drafted, 0 updated, 0 moved, 0 kept, 4 no reply, 0 low confidence, 0 skipped, 0 failed, 4 calls in 0 ms, tokens in 40 out 20");
     }
 
     [Fact]

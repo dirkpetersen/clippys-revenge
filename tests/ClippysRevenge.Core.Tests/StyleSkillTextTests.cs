@@ -288,6 +288,7 @@ When an email asks for or suggests a meeting or a call and <name> wants to meet,
         var settings = new AiDraftingSettings { Model = "claude-sonnet-5", Effort = "high" };
         var r = StylePrompt.Request(TwoSamples(), settings, ManualTimeProvider.T0, TimeZoneInfo.Utc);
         Assert.Equal(StylePrompt.System, r.SystemPrompt);
+        Assert.Equal(ModelCallKind.Style, r.Kind);
         Assert.Equal(DraftModel.StyleSchema, r.JsonSchema);
         Assert.Equal(DraftModel.StyleTimeout, r.Timeout);
         Assert.Equal(16_000, r.MaxOutputTokens);

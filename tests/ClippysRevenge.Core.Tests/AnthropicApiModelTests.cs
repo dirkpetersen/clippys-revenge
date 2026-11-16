@@ -40,8 +40,65 @@ public class AnthropicApiModelTests
         return JsonSerializer.SerializeToElement(d);
     }
 
-    private static void AssertFailed(ModelResult r, ModelFailure kind, int? code = null) =>
-        Assert.Equal(new ModelResult.Failed(kind, code), r);
+    private static void AssertFailed(ModelResult r, ModelFailure kind, int? code = null)
+    {
+        var f = Assert.IsType<ModelResult.Failed>(r);
+        Assert.Equal(kind, f.Kind);
+        Assert.Equal(code, f.Code);
+    }
+
+    private static readonly TokenUsage DefaultUsage = new(120, 45, null, null);
+
+    // ---- usage (SPEC 19.13) ----
+
+    [Fact]
+    public async Task Usage_Ok_HasInputAndOutput()
+    {
+        using var m = Model();
+        var ok = Assert.IsType<ModelResult.Ok>(await m.RunAsync(Req(), TestContext.Current.CancellationToken));
+        Assert.Equal(DefaultUsage, ok.Usage);
+    }
+
+    [Fact]
+    public async Task Usage_Ok_HasCacheCounts()
+    {
+        _fake.Respond(200, FakeAnthropicHandler.OkBody(FakeAnthropicHandler.Reply,
+            cacheUsage: "\"cache_read_input_tokens\":3000,\"cache_creation_input_tokens\":200"));
+        using var m = Model();
+        var ok = Assert.IsType<ModelResult.Ok>(await m.RunAsync(Req(), TestContext.Current.CancellationToken));
+        Assert.Equal(new TokenUsage(120, 45, 3000, 200), ok.Usage);
+    }
+
+    [Fact]
+    public async Task Usage_On_Refusal_MaxTokens_AndNonObjectText()
+    {
+        using var m = Model();
+        _fake.Respond(200, FakeAnthropicHandler.OkBody(FakeAnthropicHandler.Reply, "refusal"));
+        var r = Assert.IsType<ModelResult.Failed>(await m.RunAsync(Req(), TestContext.Current.CancellationToken));
+        Assert.Equal(ModelFailure.NoStructuredOutput, r.Kind);
+        Assert.Equal(DefaultUsage, r.Usage);
+
+        _fake.Respond(200, FakeAnthropicHandler.OkBody("{\"needs_reply\":tr", "max_tokens"));
+        r = Assert.IsType<ModelResult.Failed>(await m.RunAsync(Req(), TestContext.Current.CancellationToken));
+        Assert.Equal(ModelFailure.BadOutput, r.Kind);
+        Assert.Equal(DefaultUsage, r.Usage);
+
+        _fake.Respond(200, FakeAnthropicHandler.OkBody("[1]"));
+        r = Assert.IsType<ModelResult.Failed>(await m.RunAsync(Req(), TestContext.Current.CancellationToken));
+        Assert.Equal(ModelFailure.NoStructuredOutput, r.Kind);
+        Assert.Equal(DefaultUsage, r.Usage);
+    }
+
+    [Fact]
+    public async Task Usage_Http500_IsNull()
+    {
+        _fake.Respond(500, "{}");
+        using var m = Model();
+        var r = Assert.IsType<ModelResult.Failed>(await m.RunAsync(Req(), TestContext.Current.CancellationToken));
+        Assert.Equal(ModelFailure.Http, r.Kind);
+        Assert.Equal(500, r.Code);
+        Assert.Null(r.Usage);
+    }
 
     // ---- RunAsync ----
 
@@ -61,7 +118,7 @@ public class AnthropicApiModelTests
     public async Task RequestShape_AndHeaders()
     {
         using var m = Model();
-        await m.RunAsync(Req(), TestContext.Current.CancellationToken);
+        await m.RunAsync(Req() with { Kind = ModelCallKind.Style }, TestContext.Current.CancellationToken);
         var rec = _fake.Last;
         Assert.Equal(HttpMethod.Post, rec.Method);
         Assert.Equal("https://api.anthropic.com/v1/messages", rec.Uri.ToString());

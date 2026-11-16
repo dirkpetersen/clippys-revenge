@@ -10,8 +10,8 @@ public sealed partial class EmailIndex
 
     private static readonly Regex RuleId = new("^[a-z_]+\\z", RegexOptions.CultureInvariant);
 
-    /// <summary>Deletes ai_decisions rows with decided, ai_drafts rows with updated, and ai_revisits rows with decided
-    /// older than now minus <see cref="DecisionRetention"/>, in one transaction. Returns the total rows deleted. No VACUUM.</summary>
+    /// <summary>Deletes ai_decisions rows with decided, ai_drafts rows with updated, ai_revisits rows with decided
+    /// and ai_calls rows with at older than now minus <see cref="DecisionRetention"/>, in one transaction. Returns the total rows deleted. No VACUUM.</summary>
     public int PurgeDecisions(DateTimeOffset now)
     {
         var p = new { t = (now - DecisionRetention).ToUnixTimeSeconds() };
@@ -19,7 +19,8 @@ public sealed partial class EmailIndex
         using var tx = conn.BeginTransaction();
         var n = conn.Execute("DELETE FROM ai_decisions WHERE decided < @t", p, tx)
               + conn.Execute("DELETE FROM ai_drafts WHERE updated < @t", p, tx)
-              + conn.Execute("DELETE FROM ai_revisits WHERE decided < @t", p, tx);
+              + conn.Execute("DELETE FROM ai_revisits WHERE decided < @t", p, tx)
+              + conn.Execute("DELETE FROM ai_calls WHERE at < @t", p, tx);
         tx.Commit();
         return n;
     }

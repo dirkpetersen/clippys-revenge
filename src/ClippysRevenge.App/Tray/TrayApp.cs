@@ -43,7 +43,7 @@ internal sealed record TrayServices(
     AiTrayServices? Ai = null,
     Func<AboutForm>? CreateAboutForm = null,
     DraftInviteTrayServices? DraftInvites = null,
-    AttentionCount? Attention = null);
+    AttentionCount? Attention = null, Func<string?>? AiUsageLine = null);
 
 /// <summary>Tray icon and menu (SPEC 6.1, 6.2). All UI objects are touched on the UI thread only.</summary>
 internal sealed partial class TrayApp : ApplicationContext
@@ -252,7 +252,7 @@ internal sealed partial class TrayApp : ApplicationContext
             open.Activate();
             return;
         }
-        _activity = new ActivityForm(_s.Hub);
+        _activity = new ActivityForm(_s.Hub, _s.AiUsageLine);
         _activity.FormClosed += (_, _) =>
         {
             _activity?.Dispose();
@@ -452,6 +452,7 @@ internal sealed partial class TrayApp : ApplicationContext
 
     private void BuildAiMenu()
     {
+        BuildUsageItem();
         _aiAuto.Click += (_, _) => ToggleAi();
         _aiDraftSelected.Click += (_, _) => DraftSelected();
         _aiShowDrafts.Click += (_, _) => ShowDraftsInOutlook();
@@ -464,6 +465,7 @@ internal sealed partial class TrayApp : ApplicationContext
 
     private void ApplyAiMenu()
     {
+        ApplyUsageItem();
         var ai = _s.Ai;
         var m = AiDraftsMenu.Build(_s.GetSettings().AiDrafting, ai is not null, _s.IsOutlookUnavailable(),
             Volatile.Read(ref _aiBusy) == 1, ai?.CurrentRescan(), Volatile.Read(ref _rescanPhase) == 1);
