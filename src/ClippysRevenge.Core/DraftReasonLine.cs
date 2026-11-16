@@ -26,11 +26,16 @@ public static partial class DraftReasonLine
 
     /// <summary>"" for null/blank (or nothing left after cleaning), else exactly
     /// "&lt;p&gt;" + DraftHtml.HighlightOpen + Prefix + escaped text + DraftHtml.HighlightClose + "&lt;/p&gt;".</summary>
-    public static string Html(string? note)
+    public static string Html(string? note) => Wrap(CleanText(note, MaxChars));
+
+    /// <summary>Steps of Html with maxChars instead of MaxChars: input cap, control to space, format characters and lone
+    /// surrogates removed, whitespace collapsed and trimmed, URLs to LinkText, leading "Clippy:" removed, cut. Not
+    /// escaped. "" when nothing is left, on a regex timeout, or on any exception. Never throws.</summary>
+    internal static string CleanText(string? note, int maxChars)
     {
         try
         {
-            if (string.IsNullOrEmpty(note)) return "";
+            if (maxChars < 1 || string.IsNullOrEmpty(note)) return "";
             var n = Math.Min(note.Length, MaxInputChars);
             if (n < note.Length && n > 0 && char.IsHighSurrogate(note[n - 1])) n--;
 
@@ -78,7 +83,21 @@ public static partial class DraftReasonLine
                 text = text[PrefixWord.Length..].Trim();
             if (text.Length == 0) return "";
 
-            text = DraftPrompt.Cut(text, MaxChars);
+            return DraftPrompt.Cut(text, maxChars);
+        }
+        catch (Exception)
+        {
+            return "";
+        }
+    }
+
+    /// <summary>"" for null/empty, else "&lt;p&gt;" + HighlightOpen + Prefix + Escape(text) + HighlightClose + "&lt;/p&gt;".
+    /// No cleaning (the caller cleans). Never throws.</summary>
+    internal static string Wrap(string? text)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(text)) return "";
             return "<p>" + DraftHtml.HighlightOpen + Prefix + DraftPrompt.Escape(text) + DraftHtml.HighlightClose + "</p>";
         }
         catch (Exception)
