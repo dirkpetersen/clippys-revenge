@@ -116,9 +116,82 @@ in Outlook and use **Draft a reply to the selected email** in the tray menu. See
 ## Does AI drafting send my mail to Anthropic?
 
 Yes, while it is on: the email being answered, thread excerpts, up to 5 related
-earlier emails, attachment names, your facts file and your style guide go to Claude through your own Claude Code (or your API key).
-Attachment contents never do. See
-[what is sent](ai-drafts.md#consent-and-what-is-sent).
+earlier emails, attachment names, the extracted text of attachments and of synced shared
+files (unless you turn that off), your facts file and your style guide go to Claude
+through your own Claude Code (or your API key). Files themselves and images never do.
+See [what is sent](ai-drafts.md#consent-and-what-is-sent).
+
+## Does Clippy read my attachments?
+
+For AI drafts, yes, since v0.1.1 and unless you turn it off. It reads the text of PDF,
+Word, Excel, PowerPoint, text, HTML and `.eml` attachments (and attached emails) of the
+email and its thread, and of OneDrive/SharePoint files linked in them that are synced to
+your PC, and sends that text to Claude for that one draft. It is never stored or
+indexed. Images are not read. See
+[Attachments and shared files](ai-drafts.md#attachments-and-shared-files), and
+[Settings](settings.md#ai-drafts) to turn it off.
+
+## Why couldn't Clippy read my shared file?
+
+When Clippy can't read a file from a link or cloud attachment, the draft starts with a
+yellow note, for example `Clippy: Couldn't read the shared file Plan.docx (not synced to
+this PC).` The reasons:
+
+- **Not synced to this PC.** Clippy never downloads from the network. It reads only the
+  copy that your OneDrive sync client already keeps on this PC. The file must be in your
+  OneDrive, a synced SharePoint or Teams library or folder, or a folder you added with
+  **Add shortcut to My files**. Sync the library (in SharePoint, **Sync**) or add the
+  shortcut, then rescan or draft the reply again. "Specific people" and other secret-token
+  sharing links, `Doc.aspx?sourcedoc=…` links, and `1drv.ms` and `onedrive.live.com`
+  links can't be matched to a local file even when it is synced.
+- **Not from your organization.** The note says `Clippy only opens shared files from
+  people in your organization`. Clippy opens a shared link only when the email came from
+  you or from your own email domain (or a subdomain), so that outsiders can't make it
+  put a file from your OneDrive into a draft. Attached files are read whoever sent them.
+- **Not a OneDrive or SharePoint link.** Dropbox, Google Drive and other links are never
+  opened. There is no note for these.
+- **The file is too slow.** An online-only file is downloaded by OneDrive when Clippy opens
+  it. If that takes longer than 10 seconds (or the draft's 20 seconds), the note says
+  `it took too long`.
+- **The file itself.** `password-protected`, `larger than 25 MB`, `no text in it, maybe a
+  scan` (Clippy has no OCR), `the file seems damaged`, or `Clippy can't read .<ext>
+  files` for formats such as `.doc`, `.xls`, `.rtf` and `.zip`.
+- **The setting is off.** If **Read attachments and synced shared files for drafts** is
+  unticked, no files are read and there are no notes.
+
+Notes are shown only for files of the email itself and for earlier files the email
+mentions by name. More about the notes, with their exact texts, is in
+[The yellow notes](ai-drafts.md#the-yellow-notes).
+
+## Where does Clippy keep the attachment text?
+
+Nowhere. It is read into memory for one draft request and then dropped. The next draft
+in the same thread reads the file again. Outlook attachments pass through a private
+folder, `%LOCALAPPDATA%\ClippysRevenge\ai-files\`, for a moment and are deleted at once
+(and at start-up, if one was left). See [Security](security.md#attachment-text-and-shared-files).
+
+## What is the "Today: … tokens" line?
+
+A tally of today's Claude calls and the tokens they used, shown while AI drafts consent
+exists: at the top of the tray's **AI drafts** menu and in the Activity window. For
+example `Today: 18 AI calls, ~210k tokens (in 190k / out 20k)`. It counts drafts,
+re-checks, rescans and style updates, not calls that never started. Only counts are
+stored (30 days). See [Token tally](ai-drafts.md#token-tally).
+
+## How do I stop drafts for one sender?
+
+Select an email from them in Outlook and use **Don't draft for this sender** (or **…this
+sender's domain…**) in the tray's **AI drafts** menu. To undo, delete the line in
+Settings, AI drafts, **Never draft for**. See
+[Don't draft for this sender](ai-drafts.md#dont-draft-for-this-sender).
+
+## Does Clippy work in a non-English Outlook?
+
+Yes. Since v0.1.1 Clippy recognizes the Drafts and Deleted Items folders by their role,
+so they are skipped for related mail and earlier attachments whatever Outlook calls them.
+A folder indexed before v0.1.1 under its translated name keeps its old entries until you
+add the folder again or use **Rebuild index…**. See
+[Drafts and Deleted Items in other languages](ai-drafts.md#drafts-and-deleted-items-in-other-languages).
 
 ## Can I tell the AI drafts my Zoom link or how I like to sign off?
 

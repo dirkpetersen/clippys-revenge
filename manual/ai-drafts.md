@@ -24,6 +24,10 @@ sent to Claude, and how to set it up and fix it.
 - **Your mailbox only**, unless you turn on a shared mailbox one by one.
 - **Not every email gets a draft.** Newsletters, notifications, automatic mail and
   mail that needs no answer are skipped. See [Rules](#rules).
+- **Attachments are read.** Since version 0.1.1, Clippy also reads the text of the
+  attachments of the email and its thread, and of OneDrive and SharePoint files that
+  are already synced to your PC, and sends that text to Claude so the reply can use
+  it. You can turn it off. See [Attachments and shared files](#attachments-and-shared-files).
 - **Your signature** is added, as for `reply_draft`.
 - **Meeting times** are added by Clippy from your calendar, never written by the model.
   See [Meeting times](#meeting-times).
@@ -99,6 +103,9 @@ account, not from Clippy. Each email that Clippy evaluates is one Claude call,
 whether or not it ends up as a draft. **Daily limit** (default 30) caps the calls
 per day across all mailboxes. The tab shows `Today: 3 of 30 Claude calls, 1 draft`.
 
+Because attachment text makes requests longer, Clippy also keeps a **daily token
+tally** so you can see the cost. See [Token tally](#token-tally).
+
 ### Turn it on
 
 Check **Draft replies to new email automatically** in the tab, or use the tray menu
@@ -112,8 +119,9 @@ The first time you turn it on (and before the first manual draft), a dialog titl
 **Turn on AI drafts?** says:
 
 > Clippy will send new emails from your Inbox, earlier messages in the same thread,
-> up to 5 related earlier emails, and samples of your sent mail to Claude (Anthropic) to write reply drafts in your
-> style. Drafts are only saved, never sent. With Claude Code, this uses your Claude
+> the text of their attachments and of shared files synced to this PC, up to 5 related
+> earlier emails, and samples of your sent mail to Claude (Anthropic) to write reply
+> drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude
 > plan's usage. Shared mailboxes are included only if you turn them on one by one.
 
 Buttons: **Turn on** and **Cancel** (the default).
@@ -127,7 +135,8 @@ the API:
 | Thread excerpts | Up to 8 earlier messages of the same conversation from your local index, your own text only (quoted history and signatures cut), each cut at 4,000 characters |
 | Related earlier emails | Up to 5 earlier emails from the same mailbox that may relate to this one, own text only, at most 4,000 characters in all. Only while [Include related earlier emails](#related-earlier-mail) is on |
 | Your earlier draft | Only when Clippy [re-checks an outdated draft](#outdated-drafts): the text of Clippy's own earlier draft and the newer messages of the thread. Nothing beyond what the consent text already names |
-| Attachment **names** | For the email and the thread messages. Names only |
+| Attachment **names** | For the email and the thread messages |
+| Attachment **text** | Text extracted from the attachments of the email and its thread, and from OneDrive/SharePoint files linked in those emails that are already synced to your PC: at most 40,000 characters in all, 20,000 per file. Only while [Read attachments and synced shared files for drafts](#attachments-and-shared-files) is on. Sent for that one draft, never stored |
 | Your name and address, today's date | So the draft is addressed and dated correctly |
 | Your facts file | What you wrote in [Facts about you](#facts-about-you), without the comments. Only when you filled something in |
 | Your writing style guide | The skill described [below](#your-writing-style), which contains short examples of your sent mail with addresses, links and phone numbers removed. Its meeting-times section is left out |
@@ -135,7 +144,9 @@ the API:
 
 **Never sent:**
 
-- Attachment contents or any file.
+- Any file itself. Only text that Clippy extracted from the attachments and synced
+  files described [below](#attachments-and-shared-files) is sent, and images are
+  never sent.
 - Anything else from your index: other mail, your calendar (also for meeting times: free/busy is read by Clippy after Claude has answered), other folders.
 - Mail from shared mailboxes you haven't turned on.
 - Your Claude credentials. Clippy never reads them.
@@ -174,7 +185,8 @@ first rule that matches wins. No Claude call is made for skipped mail.
 
 **Never draft for** and **Only draft for** take one entry per line: an address
 (`alex@example.org`) or a domain (`example.org` or `@example.org`, which also covers
-subdomains). Each list holds up to 200 entries.
+subdomains). Each list holds up to 200 entries. You can add to **Never draft for**
+straight from Outlook, see [Don't draft for this sender](#dont-draft-for-this-sender).
 
 Then the model decides whether a reply is needed. It skips newsletters, FYIs, mail
 where you are only on CC and nothing is asked of you, and thank-you notes that close
@@ -231,6 +243,38 @@ confidence seen against your minimum.
 Under **Mailboxes** in the tab, **My mailbox** is always on while AI drafts are on.
 Each [shared mailbox](indexing.md#shared-mailboxes) you index has its own checkbox,
 off by default. Drafts for a shared mailbox use your own writing style.
+
+### Don't draft for this sender
+
+Since version 0.1.1 you can stop drafts for a sender without opening Settings. Select
+an email from that sender in Outlook, then use one of two items in the tray's **AI
+drafts** submenu:
+
+- **Don't draft for this sender** adds the sender's address to **Never draft for**,
+  with no dialog.
+- **Don't draft for this sender's domain…** adds the domain after a confirmation,
+  `Never draft replies to anyone at <domain>?`, with **Add** and **Cancel** (the
+  default). A domain entry also covers its subdomains.
+
+They need no consent, because nothing is sent. They work on the email you selected, in
+your mailbox or an enabled shared mailbox, and are greyed out while Outlook isn't
+running, while AI drafts services aren't available and while a rescan runs. The new
+entry applies to the next email Clippy looks at. Balloons:
+
+| Balloon | When |
+|---|---|
+| `I won't draft replies to <address> any more. You can undo this in Settings → AI drafts.` (`…to anyone at <domain>…` for a domain) | It was added |
+| `I couldn't find that sender's email address.` | The email has no usable address |
+| `That's your own address.` | The sender is you or your mailbox |
+| `That's your own organization's domain. To stop drafting for all internal mail, add it in Settings → AI drafts.` | The domain item on your own domain, or a parent or subdomain of it |
+| `<address or domain> is already on "Never draft for".` | An existing entry already covers it (a domain entry covers its addresses) |
+| `"Never draft for" already has 200 entries. Remove some in Settings → AI drafts.` | The list is full |
+
+Activity shows `AI drafts: added an entry to "Never draft for" (<n> entries).` without
+the address. To **undo**, delete the line in Settings, **AI drafts**, **Never draft
+for**. Drafts that already exist for that sender are left as they are. If Settings is
+open at the time, the addition is kept when you press OK, unless you also edited the
+**Never draft for** box in that window.
 
 ### Draft one reply now
 
@@ -620,9 +664,10 @@ keeps **at most 5**, and shows them oldest first. If a Sent Items email to that 
 exists, it is guaranteed a place, so Claude can see how you answered before.
 
 Left out: the email itself and everything in its thread, mail in **Drafts** and
-**Deleted Items**, copies of the same message in other folders, and anything newer than
-the email. Of several emails in one thread only the best one is kept, and duplicates are
-dropped.
+**Deleted Items** (also when Outlook shows them under another name, see
+[Drafts and Deleted Items in other languages](#drafts-and-deleted-items-in-other-languages)),
+copies of the same message in other folders, and anything newer than the email. Of
+several emails in one thread only the best one is kept, and duplicates are dropped.
 
 ### What goes to Claude
 
@@ -641,6 +686,235 @@ once, with a balloon and an Activity entry:
 New consents already include it in the consent text. Untick **Include related earlier
 emails** to send none.
 
+## Attachments and shared files
+
+A reply often depends on a file: the budget in the spreadsheet, the contract PDF, the
+plan someone linked. Since version 0.1.1, Clippy reads the **text** of those files when
+it builds a draft request and sends it to Claude with the email. The model can then
+refer to a file by name ("the attached budget.xlsx", "the shared Plan.docx") and use
+what it says. This applies to every kind of draft: automatic, **Draft a reply to the
+selected email**, [outdated-draft](#outdated-drafts) re-checks and
+[rescans](#rescan-emails-from-the-last-24-hours). It adds **no** extra Claude call.
+
+It is a setting, **on by default**: **Read attachments and synced shared files for
+drafts** in Settings, **AI drafts**. See [Turning it off](#turning-it-off-and-the-one-time-notice).
+
+### What is read
+
+For the email being answered, and for the earlier messages of its thread:
+
+- **Attachments.** Every attachment that is not an inline picture (such as a signature
+  logo). For the email itself, all of them. For earlier messages, Clippy looks at the
+  newest 50 messages of the thread in your mailbox's index, at or before the email.
+- **Attached emails** (an Outlook message attached to another message). Their subject,
+  sender, date, attachment names and body (at most 20,000 characters) are read. Their
+  own attachments are not.
+- **Shared files.** Links in the email text to OneDrive or SharePoint, and Outlook
+  "cloud attachments" (the share links Outlook adds when you attach a OneDrive file).
+  At most 10 links per message. See [Shared files](#shared-files-onedrive-and-sharepoint).
+- Skipped without reading: **images** (`png`, `jpg` and so on, only the name is
+  listed), and any file type in the table below that Clippy can't read.
+
+Earlier messages in the **Deleted Items** folder are never used: you threw them away.
+Messages in **Drafts** are used, because a draft you are writing can carry the file
+being discussed. Clippy's own earlier draft is not used when it re-checks that draft.
+Earlier files are read from Outlook again for each draft, so a later reply in the same
+thread that mentions an earlier attachment still sees it. If the earlier message is no
+longer in your mailbox, or the attachment is no longer on it, that item is skipped.
+
+### Formats
+
+The format is chosen by the file extension and confirmed by the first bytes of the
+file. A file that doesn't match is treated as damaged. Nothing is opened in another
+program, executed or rendered. Macros, embedded objects, linked content and fields are
+never read.
+
+| Format | Extensions | What is read |
+|---|---|---|
+| PDF | `pdf` | Text of the first **30 pages**. No scans: a PDF without text is reported as maybe a scan (no OCR). A PDF that needs a password is skipped |
+| Word | `docx`, `docm`, `dotx` | Paragraphs and tables (cells separated by tabs). Not headers, footnotes or comments |
+| Excel | `xlsx`, `xlsm`, `xltx` | The first **5 sheets**, up to **200 rows** and **30 columns** each, as tab-separated lines under the sheet name. Cells are cut at 200 characters. Dates show as `yyyy-MM-dd`. Formulas show their last calculated value |
+| PowerPoint | `pptx`, `pptm`, `ppsx` | The first **60 slides**: the text of each slide, then its speaker notes |
+| Text | `txt`, `text`, `csv`, `tsv`, `md`, `markdown`, `log`, `json`, `xml`, `ics`, `vcf` | The first 1 MiB. A file with binary content is reported as damaged |
+| Web page | `html`, `htm` | The visible text. Scripts and styles are dropped |
+| Saved email | `eml` | Subject, sender, date and the text part |
+| Outlook message | `msg` and attached emails | Read through Outlook itself, as described above |
+| Not read | `doc`, `dot`, `xls`, `xlt`, `xlsb`, `ppt`, `pps`, `rtf`, `odt`, `ods`, `odp`, `pages`, `numbers`, `key`, `zip`, `7z`, `rar` | Skipped, with a yellow note. Save as `docx`, `xlsx` or `pdf` to have it read |
+| Anything else | | Skipped, no note |
+
+An encrypted Word, Excel or PowerPoint file is skipped as password-protected.
+
+### Limits
+
+These limits are fixed. There is no setting for them.
+
+| Limit | Value |
+|---|---|
+| File size | 25 MB per file. A larger file is skipped without being read |
+| Text per file | 20,000 characters. A longer file is cut and marked as only partly read |
+| Text per draft | 40,000 characters for all files together |
+| Files per draft | 20 files that need reading. Images and files Clippy can't read don't use a slot |
+| Time per file | 10 seconds. A file that takes longer is skipped |
+| Time per draft | 20 seconds for all files together. The files left are skipped |
+
+**Which files come first.** Files are read in three tiers, most important first:
+
+1. the attachments of the email being answered, then its links;
+2. files of earlier messages whose name (or its name without the extension, at least 4
+   characters) appears in the email's subject or in what the sender wrote, as a whole
+   word, for example "see the budget" for `budget.xlsx`;
+3. everything else in the thread, newest message first.
+
+The same file sent twice (same name and size) counts once. When the total text is more
+than 40,000 characters, Clippy shortens the **later tiers first**, oldest first. Files
+in the first tier are only shared down, and each keeps at least 2,000 characters while
+there is room. A file that gets nothing is skipped as too much text for one draft.
+
+Clippy tells the model which files were not read and why, so a reply that depends on
+one gets a placeholder like `[[check budget.xlsx]]` instead of an invented answer. The
+model is told that the file text is data, never instructions.
+
+### Shared files (OneDrive and SharePoint)
+
+Clippy opens a shared file only when **all** of these are true:
+
+- **It is a OneDrive or SharePoint link.** Only links to `<name>.sharepoint.com`
+  (including `<name>-my.sharepoint.com`), `onedrive.live.com`, `d.docs.live.net` and
+  `1drv.ms` are considered. Microsoft Safe Links wrappers around such a link are
+  unwrapped first. A link to any other site, such as Dropbox or Google Drive, is **never
+  opened, mapped or fetched**: Clippy doesn't list it for the model, and the model still
+  sees the link in the email text as before.
+- **It is already synced to this PC.** Clippy never downloads anything from the
+  network. It looks up the link among the folders your OneDrive sync client keeps on
+  this PC (your OneDrive, synced SharePoint and Teams libraries and folders, and
+  folders added with **Add shortcut to My files**) and reads the local copy. There is
+  no Microsoft Graph and no sign-in. If the link points to a file in a library you
+  don't sync, the file is **not synced to this PC** and is not read. Sharing links that
+  carry only a secret token (`/:w:/s/…`, `/:f:/g/…`, "Specific people" links),
+  `Doc.aspx?sourcedoc=…` links, and every `onedrive.live.com` and `1drv.ms` link can't
+  be matched to a local file, so they end up in the same state.
+- **It comes from you or your own organization.** A link or cloud attachment is opened
+  only when the email that holds it was sent by you, or by an address in your own email
+  domain or one of its subdomains. A stranger could otherwise send a link to a file in
+  *your* OneDrive and get its content into a draft addressed back to them. Normal
+  attachments are always read, whoever sent them.
+
+**Files On-Demand.** If your OneDrive keeps the file "online only", opening it makes
+**your own OneDrive client** download it, with its own sign-in. Clippy itself makes no
+network request. The size check happens first, and the download time counts against the
+10 and 20 second limits. A file that doesn't arrive in time is skipped as too slow.
+Files-on-demand placeholders are not treated as shortcuts or links, so they are allowed.
+
+Clippy reads only through the normal Windows file path rules ([file
+access](security.md#file-access)): it never follows a shortcut or junction out of the
+synced folder.
+
+### The yellow notes
+
+If Clippy couldn't read a file that you would expect it to read, the draft gets a
+yellow-highlighted line at the top, just under the [reason line](#the-reason-line), in
+the same style. The notes are Clippy's own text, not the model's. They are for the
+email's own files and for earlier files that the email mentions by name (tiers 1 and
+2), never for the rest of the thread. File names are cleaned, links in them are shown as
+`[link]`, and a name is cut at 80 characters.
+
+| Note | Meaning |
+|---|---|
+| `Clippy: Couldn't read the shared file <name> (not synced to this PC).` | The link or cloud attachment doesn't match a file in your synced OneDrive/SharePoint folders, or the file isn't there |
+| `Clippy: Couldn't read the shared file <name> (Clippy only opens shared files from people in your organization).` | The email came from outside your organization |
+| `Clippy: Couldn't read <name> (the earlier email is no longer in your mailbox).` | The message with that file was deleted or archived. Only for a file the email mentions |
+| `Clippy: Couldn't read <name> (it's password-protected).` | An encrypted PDF or Office file |
+| `Clippy: Couldn't read <name> (larger than 25 MB).` | Over the size limit |
+| `Clippy: Couldn't read <name> (no text in it, maybe a scan).` | A PDF with no text |
+| `Clippy: Couldn't read <name> (Clippy can't read .<ext> files).` | One of the [formats it can't read](#formats), such as `.doc`, `.xls`, `.rtf` or `.zip` |
+| `Clippy: Couldn't read <name> (the file seems damaged).` | A corrupt file, a file whose content doesn't match its type, or a read that failed |
+| `Clippy: Couldn't read <name> (it took too long).` | A time limit was hit |
+| `Clippy: Couldn't read <name> (too much attachment text for one draft).` | The file had no share of the 40,000 characters or was over the 20 files |
+| `Clippy: Read only the start of <name> (it's long).` | The file was cut by the page, row, slide or character limits, or by the draft total |
+
+At most **5** notes are shown. More are replaced by one line,
+`Clippy: <n> more files couldn't be read fully.` (`1 more file couldn't be read fully.`
+for one). The same note is shown once. Images, file types Clippy has no note for, and
+links to sites other than OneDrive and SharePoint get **no note**. Like the reason
+line, the notes are part of the draft as Clippy saved it: **delete them before
+sending**, and deleting them counts as editing the draft, so Clippy leaves that draft
+alone afterwards. When Clippy re-checks a draft it shows the model neither the reason
+line nor the notes. The notes appear whether or not the reason line is on.
+
+### What you see in Activity
+
+When any file was considered, the `Draft` event gets a suffix:
+`AI reply draft created: Re:: Budget (attachments: 3 read, 1 not read)`. "Read"
+includes files read only in part. Activity and the log hold **counts only**: never a
+file name, a link, a path, a reason or any text.
+
+### Privacy
+
+- The text goes to Claude (through your Claude Code or API key) for **that one draft**,
+  the same way the email text does. Anything an attachment contains, such as personal
+  data, goes with it. That is why consent mentions it.
+- The text is **never stored** by Clippy: not in the index, the settings, the logs or
+  the Activity window, and there is no cache. The same attachment is read again for the
+  next draft in a thread. Attachment contents are still never indexed, only the file
+  names.
+- To read an Outlook attachment, Clippy saves a copy for a moment in a private folder,
+  `%LOCALAPPDATA%\ClippysRevenge\ai-files\`, that only your Windows user can use. The
+  copy is read into memory and deleted at once. Whatever is left (for example after a
+  crash) is deleted when Clippy starts. Synced files are read in place and not copied.
+- Nothing is ever sent, moved or deleted in your mailbox by this. Clippy doesn't
+  display, save or change the mail and attached emails it opens.
+- Later, when Clippy learns from how you edit its drafts, drafts that used attachment
+  text will not be used for that, so file text can't end up in your writing style.
+
+### Turning it off, and the one-time notice
+
+Untick **Read attachments and synced shared files for drafts** in Settings, **AI
+drafts**, to stop reading files. Drafts then carry attachment names only, as in version
+0.1.0. Nothing about attachments is then asked of Outlook, the index or the registry.
+
+If you gave consent before version 0.1.1, you are not asked again. Instead, once, at
+the first pass after the update with the setting on, an Activity entry and a balloon say:
+
+> AI drafts now also read attachments and shared files synced to this PC, and send their text to Claude, to write better replies. You can turn this off in Settings → AI drafts.
+
+New consents already name it in the [consent text](#consent-and-what-is-sent).
+
+### Token tally
+
+Longer requests cost more of your Claude plan or API budget, so Clippy shows what
+today's AI calls used. While you have given consent, a line like this is shown:
+
+```
+Today: 18 AI calls, ~210k tokens (in 190k / out 20k)
+```
+
+- **Where:** the first, greyed-out line of the tray's **AI drafts** submenu (refreshed
+  when you open it) and under the state line in the [Activity window](activity.md).
+- **What it counts:** every Claude call of the day (since midnight, your time): automatic
+  drafts, manual drafts, re-checks, rescans and writing-style updates, whether or not a
+  draft came out of it. `in` is the input tokens including cached ones, `out` is the
+  output, and the `~` number is their sum. Calls that never started or were refused
+  (usage limit reached, not signed in, Claude Code missing) aren't counted.
+- **Forms:** `Today: no AI calls`; `Today: 3 AI calls, tokens unknown` when Claude
+  reported no token numbers; and `…, 2 without token data` added when only some calls
+  lack them. Large numbers are rounded: `1.2k`, `210k`, `1.2M`.
+- **What is stored:** only counts, in your own mailbox's index, kept for 30 days. No
+  prompt, answer or mail text. The tally is separate from **Daily limit** (style
+  updates are shown in it but don't count toward the limit). The log line after a pass
+  also ends in `, tokens in <n> out <n>`.
+
+This is different from the `Today: <n> of <cap> Claude calls, <d> drafts` line in
+Settings, which counts calls against your daily limit.
+
+### Drafts and Deleted Items in other languages
+
+Clippy skips mail in **Drafts** and **Deleted Items** when it picks related emails and
+earlier files. Since version 0.1.1 it recognizes these two folders by their Outlook
+role, so it also works when Outlook shows them under a translated name. Folders that
+Clippy indexed **before** version 0.1.1 under their translated name keep their old
+entries until you add the folder again or press **Rebuild index…**. The old entries
+stay marked with the translated name, so the exclusion doesn't apply to them.
+
 ## The reason line
 
 Every AI draft starts with a yellow-highlighted line that says why Clippy drafted it, for
@@ -657,7 +931,8 @@ example:
 - The setting is **Start each draft with a highlighted note on why it was drafted** in
   Settings, **AI drafts**, **on by default**. When off, no line is asked for or added.
 - It is added above the meeting times and the reply text, in new drafts, manual drafts,
-  replaced drafts and rescans.
+  replaced drafts and rescans. If Clippy couldn't read a file, its
+  [yellow notes](#the-yellow-notes) follow right below it.
 
 **Delete the line before you send.** It is meant for you only. If you forget and send
 it, Clippy strips such a `Clippy:` line from your own sent mail whenever it later shows
@@ -800,6 +1075,8 @@ then press **Check**.
 | `Rescan stopped (...) after 5 of 12 emails: ...` | See [Rescan](#rescan-emails-from-the-last-24-hours) for the reasons. Fix the cause and rescan again |
 | `AI drafts: an outdated draft couldn't be moved to Deleted Items. It's still in Drafts.` | Clippy couldn't open that mailbox's Deleted Items. Delete the old draft yourself if you want |
 | `AI drafts: no draft for the email received ...: Claude's confidence 0.55 is below your minimum of 0.60.` | Draft it by hand from the tray, or lower **Minimum confidence**. See [Emails Clippy decides not to draft](#emails-clippy-decides-not-to-draft) |
+| `Clippy: Couldn't read the shared file <name> (not synced to this PC).` or another yellow `Couldn't read …` note at the top of a draft | Clippy couldn't read a file. See [The yellow notes](#the-yellow-notes) and [Why couldn't Clippy read my shared file?](faq.md#why-couldnt-clippy-read-my-shared-file) |
+| `[[check budget.xlsx]]` in a draft | The model was told the file wasn't read and left a placeholder. Open the file yourself |
 | `[[add meeting times: ...]]` in a draft | Clippy couldn't offer times. See [Meeting times](#meeting-times) |
 | `AI drafts: a reply draft couldn't be saved in Outlook. I'll try again later.` | Check that Outlook is running and Drafts is available |
 | `Select one email in Outlook first.` | Manual draft: select one email |
@@ -816,5 +1093,5 @@ drafts on, it is older than the age limit, it matched a [rule](#rules), or Claud
 decided no reply was needed or wasn't confident enough (the Activity window says so
 in the second case).
 
-Logs and the Activity window never contain mail text, prompts, the style skill or
-Claude's answers.
+Logs and the Activity window never contain mail text, prompts, the style skill,
+attachment text, attachment file names or links, or Claude's answers.

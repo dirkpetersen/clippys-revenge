@@ -9,6 +9,9 @@ The Activity window shows what Clippy is doing and what it did lately. Open it w
   `Paused`, `Purging old mail`, `Syncing`, `Indexing your mail`, `Waiting for Outlook` or
   `Error`. Where it has a label, it follows after a colon, for example `Indexing your
   mail: Inbox (2025-11 → now)`.
+- **The token tally**, under the state line, while you have given AI drafts consent:
+  for example `Today: 18 AI calls, ~210k tokens (in 190k / out 20k)`. See
+  [Token tally](ai-drafts.md#token-tally).
 - **A progress bar** during the first backfill, with `<done> of <total>`.
   While drafting, the state reads `Drafting replies (<done> / <total>)` instead, with no
   bar.
@@ -21,7 +24,8 @@ The Activity window shows what Clippy is doing and what it did lately. Open it w
 Durations read `7 ms`, `1.8 s` or `1 min 4 s`.
 
 Events carry tool names, counts, folder names and email subjects. They **never** show
-email bodies, search text, prompts, Claude's answers or attachment contents. Subjects
+email bodies, search text, prompts, Claude's answers, attachment contents or attachment
+file names. Subjects
 are cut at 80 characters with `…`. The list is kept in memory only: it is empty after a
 restart. The [log files](troubleshooting.md#logs) hold more technical detail, also
 without mail text.
@@ -92,7 +96,7 @@ rescan items.
 
 | Kind | Text |
 |---|---|
-| `Draft` | `AI reply draft created: <subject>` |
+| `Draft` | `AI reply draft created: <subject>`. When Clippy considered attachments or shared files for it, a suffix follows: `AI reply draft created: Re:: Budget (attachments: 3 read, 1 not read)`. "Read" counts files read in full or in part, "not read" counts files that were skipped. Only counts, never names. A replaced draft carries the same suffix before its final period. See [Attachments and shared files](ai-drafts.md#attachments-and-shared-files) |
 | `Ai` | `AI drafts: 3 drafted, 5 no reply needed, 2 skipped (41 s)`. One summary line after each pass. Parts that are 0 are left out. Possible parts, in order: `<d> drafted`, `<u> updated`, `<m> moved to Deleted Items`, `<k> kept`, `<x> no reply needed`, `<l> low confidence`, `<s> skipped`, `<f> failed` |
 | `Ai` | `AI drafts: no draft for the email received 2026-11-15 09:42: Claude's confidence 0.45 is below your minimum of 0.60. To draft it anyway, select it in Outlook and use "Draft a reply to the selected email" in the tray menu, or lower Minimum confidence in Settings → AI drafts.` Low confidence. It shows the received time, no subject or sender. The email is decided once |
 | `Ai` | `AI drafts: daily limit of 30 reached. I'll continue tomorrow.` |
@@ -158,6 +162,13 @@ An untouched template is normal and reports nothing.
 | Kind | Text |
 |---|---|
 | `Ai` | `AI drafts now also send up to 5 related earlier emails from your mailbox to Claude, to write better replies. You can turn this off in Settings → AI drafts.` Shown once (with a balloon), if you consented before v0.1.1 and **Include related earlier emails** is on |
+
+### Attachments and Never draft for
+
+| Kind | Text |
+|---|---|
+| `Ai` | `AI drafts now also read attachments and shared files synced to this PC, and send their text to Claude, to write better replies. You can turn this off in Settings → AI drafts.` Shown once (with a balloon), if you consented before v0.1.1 and **Read attachments and synced shared files for drafts** is on |
+| `Ai` | `AI drafts: added an entry to "Never draft for" (<n> entries).` You used [Don't draft for this sender](ai-drafts.md#dont-draft-for-this-sender). The address is not shown |
 
 ### Writing style
 

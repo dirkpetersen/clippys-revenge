@@ -89,9 +89,10 @@ API key take effect at once, not only when you press OK.
 | **Update or remove my AI drafts when a thread moves on** | On | Lets Clippy re-check its own unsent AI drafts when a newer message arrives in their thread. It keeps a draft that is still right, replaces one that is outdated, or moves it to **Deleted Items** when no reply is needed any more. It only ever touches drafts you haven't edited or opened. Turn it off to leave all drafts as they are. See [Outdated drafts](ai-drafts.md#outdated-drafts). This is the `ReviseDrafts` setting in `settings.json` |
 | **Include related earlier emails** | On | Adds up to 5 earlier emails from the same mailbox (last 12 months, own text only) to each draft request, so a reply fits the history. Off: none are sent. See [Related earlier mail](ai-drafts.md#related-earlier-mail). This is the `RelatedMail` setting in `settings.json` |
 | **Start each draft with a highlighted note on why it was drafted** | On | Every AI draft starts with a yellow `Clippy: …` line (at most 160 characters) saying what the email asks and what the draft answers. Delete it before sending. Off: no line. See [The reason line](ai-drafts.md#the-reason-line). This is the `ReasonLine` setting in `settings.json` |
+| **Read attachments and synced shared files for drafts** | On | Clippy reads the text of the attachments of the email and its thread, and of OneDrive/SharePoint files that are already synced to this PC (only links from you or your own organization), and sends it to Claude with the draft request. Off: only attachment names are sent. Nothing is stored, and nothing is downloaded from the network. See [Attachments and shared files](ai-drafts.md#attachments-and-shared-files). This is the `ReadAttachments` setting in `settings.json` |
 | **Offer meeting times when an email asks for a meeting** | On | The draft offers free times from your calendar. See [Meeting times](ai-drafts.md#meeting-times) |
 | **Number of times to offer** | `5` (1 to 10) | How many options per draft |
-| **Never draft for** | Empty | One address or domain per line (`ann@example.org`, or `example.org` including subdomains). At most 200 lines |
+| **Never draft for** | Empty | One address or domain per line (`ann@example.org`, or `example.org` including subdomains). At most 200 lines. The tray items [Don't draft for this sender](ai-drafts.md#dont-draft-for-this-sender) add lines here. To undo one, delete the line |
 | **Only draft for** | Empty | When not empty, Clippy drafts only for these senders. Same form |
 | **Mailboxes** | **My mailbox** | Your own mailbox is always on while AI drafts are on. Each shared mailbox you index has a check box, off by default |
 | **Writing style** | | Status line: `Generated <date> from <n> sent emails`, `Edited by you` or `Not generated yet`. See below |
@@ -100,7 +101,7 @@ API key take effect at once, not only when you press OK.
 | **Regenerate…** | | Builds the style skill now. If you edited it, Clippy asks `You edited your writing style skill. Replace your edits with a new version?` with **Replace** and **Keep mine** |
 | **Open in editor** | | Opens your `SKILL.md` in Notepad. If there is no skill yet, it says so |
 | `Facts about you: filled in`, `Facts about you: template only` or `Facts about you: not found` | | Read-only line about your [facts file](ai-drafts.md#facts-about-you). Edit the file with **Edit my facts…** in the tray |
-| `Today: <n> of <cap> Claude calls, <d> drafts` | | Read-only line with today's usage |
+| `Today: <n> of <cap> Claude calls, <d> drafts` | | Read-only line with today's usage against the daily limit. The [token tally](ai-drafts.md#token-tally) (`Today: 18 AI calls, ~210k tokens (in 190k / out 20k)`) is shown in the tray's AI drafts menu and in the Activity window |
 | `What gets sent to Claude` | | A link to the [AI drafts page](ai-drafts.md) |
 
 The writing-style skill is built from your **Sent Items** in the index. Clippy builds the

@@ -27,7 +27,10 @@ little as possible and to keep that access on your PC.
   tray's **Start Outlook** item, which you click yourself, is the only exception.
 - **Never uses the cloud.** No Microsoft Graph, no Entra app registrations, no
   OAuth. Nothing leaves your PC except what Claude Code sends to its model, update checks to GitHub, and, while AI drafts are on, what Clippy sends to Anthropic (see [Outbound connections](#outbound-connections)).
-- **Never indexes attachment contents.** Only file names.
+- **Never indexes or stores attachment contents.** Only file names are indexed. For
+  [AI drafts](ai-drafts.md#attachments-and-shared-files), the text of attachments and of
+  synced OneDrive/SharePoint files is read in memory for one draft request, sent to
+  Claude, and never written to the index, settings, logs or Activity.
 - **Never touches your Claude credentials.** [AI drafts](ai-drafts.md) run your own signed-in Claude Code, or an API key you type in. Clippy never reads Claude Code's stored sign-in.
 
 ## Network
@@ -166,7 +169,8 @@ Where your data goes, in one table.
 | Data | Stays on your PC | Leaves your PC |
 |---|---|---|
 | Mail bodies, subjects, addresses | In the local index and in Outlook | Only for [AI drafts](ai-drafts.md), if you turned them on (see below). Never otherwise |
-| Attachment contents | Not indexed; saved only when a tool call exports them to an allowed folder, or as a short-lived [download link](#attachment-download-links) copy in a private folder | Never over the network. A download link is fetched over `127.0.0.1` by your own shell |
+| Attachment contents | Not indexed; saved only when a tool call exports them to an allowed folder, or as a short-lived [download link](#attachment-download-links) copy in a private folder | Never over the network by tools. A download link is fetched over `127.0.0.1` by your own shell. The one exception is the **text** extracted for [AI drafts](#ai-drafts-data-flow), see the next row |
+| Attachment text and synced shared files (AI drafts) | Read in memory for one draft request. Outlook attachments are copied for a moment to `%LOCALAPPDATA%\ClippysRevenge\ai-files\` and deleted at once. Never stored, indexed or logged | Up to 40,000 characters of extracted text per draft, only while **Read attachments and synced shared files for drafts** is on. Images are never sent. Clippy makes no network request for a shared link: it reads only the local synced copy |
 | Attachment names | In the index | With the email, only for AI drafts |
 | Related earlier emails | In the index | Up to 5 earlier emails from the same mailbox (own text only), only for AI drafts while **Include related earlier emails** is on. Not stored or logged |
 | Your facts file | `%USERPROFILE%\.claude\skills\my-email-context\SKILL.md` (you write it; Clippy never changes it after creating the template) | Its text, without comments, goes to Claude with every AI draft request. Don't put secrets in it |
@@ -189,6 +193,7 @@ Where your data goes, in one table.
 | Writing-style skill | `%USERPROFILE%\.claude\skills\my-email-style\SKILL.md`, plus Clippy's copy and `state.json` in `%APPDATA%\ClippysRevenge\my-email-style\` |
 | Temporary files for Claude Code | `%LOCALAPPDATA%\ClippysRevenge\ai\` (one system-prompt file per run, deleted afterwards; mail text is never written there) |
 | Saved attachments | `%USERPROFILE%\Downloads\Clippy's Revenge` (default) |
+| Attachment copies for AI drafts | `%LOCALAPPDATA%\ClippysRevenge\ai-files\` (your user only; each copy is deleted as soon as its text is read, and leftovers at app start; normally empty) |
 | Download-link copies | `%LOCALAPPDATA%\ClippysRevenge\links\` (your user only; deleted after download, on expiry and at app start; normally empty) |
 | Draft-invite tracking | `%APPDATA%\ClippysRevenge\draft-invites.json` (Outlook ids only) |
 
@@ -214,14 +219,17 @@ your Claude Code or your API key):
   turn this off with **Include related earlier emails**
 - the text of your [facts file](ai-drafts.md#facts-about-you), without comments, when you
   filled it in. Don't put passwords or other secrets in it
-- attachment **file names**, never attachment contents
+- attachment **file names**, and, while **Read attachments and synced shared files for
+  drafts** is on, the **text** of the attachments of the email and its thread and of
+  OneDrive/SharePoint files they link to that are already synced to your PC (at most
+  40,000 characters per draft). See [Attachment text](#attachment-text-and-shared-files)
 - your name and address, today's date, and your writing-style guide
 - once a week, about 150 to 300 samples of your sent mail for the style guide, with
   addresses, links and phone numbers removed
 - when Clippy re-checks an [outdated draft](ai-drafts.md#outdated-drafts), the text of
   its own earlier draft and the newer messages of the thread
 
-**Never sent:** attachment contents or any file, other mail or folders from the index,
+**Never sent:** images, any file itself (only extracted text), other mail or folders from the index,
 your calendar, mail from shared mailboxes you haven't turned on, your Claude
 credentials, and your API key (except to Anthropic as the key itself).
 
@@ -234,6 +242,43 @@ Clippy never reads Claude Code's stored credentials, never calls an API with the
 and never offers a claude.ai sign-in. It runs your own `claude` command, or uses an
 API key you typed in (stored DPAPI-encrypted). Logs and the Activity window don't
 contain mail text, prompts, your facts, related mail, the style guide, the reason line or Claude's answers.
+
+### Attachment text and shared files
+
+What Clippy does and doesn't do when it reads files for a draft
+([details](ai-drafts.md#attachments-and-shared-files)):
+
+- **In memory only.** The text lives while one request is built and sent. It is never
+  written to the index, settings, logs or Activity, and there is no cache. Logs and
+  Activity hold counts only, never file names, links, paths or text.
+- **Private temp folder.** To read an Outlook attachment, Clippy saves it as
+  `<random>.bin` (or `.msg` for an attached email) in `%LOCALAPPDATA%\ClippysRevenge\ai-files\`,
+  a folder only your Windows user can use. It reads the bytes and deletes the copy at
+  once. At app start every leftover is deleted. If the folder is a junction or symlink,
+  or its permissions can't be set, attachments aren't read. The attachment's own name
+  never reaches a path.
+- **Nothing in Outlook changes.** Clippy opens attached emails read-only, closes them
+  without saving, and never sends, moves or deletes anything.
+- **Files are parsed, not run.** Text is extracted by Clippy's own code. Macros,
+  embedded objects, linked content and fields are never read or followed. Zip-based
+  Office files are checked for too many entries, a huge size or a suspicious
+  compression ratio before reading. Each file is capped at 25 MB, 20,000 characters and
+  10 seconds.
+- **Shared links never leave your PC.** Only links to Microsoft's OneDrive/SharePoint
+  hosts are considered (`*.sharepoint.com`, `onedrive.live.com`, `d.docs.live.net`,
+  `1drv.ms`, after unwrapping Safe Links). Every other link is not touched at all.
+  Clippy makes **no network request** for a link, uses no Microsoft Graph and no
+  sign-in, and reads only the copy your own OneDrive client has synced to this PC. If
+  the file is online-only, opening it makes your OneDrive client download it. Paths
+  are checked like all [file access](#file-access), so a shortcut or junction can't
+  lead out of the synced folder.
+- **Only from your organization.** Links and cloud attachments are opened only when the
+  email was sent by you or by an address in your own domain (or a subdomain of it), so a
+  stranger can't make Clippy put a file from your OneDrive into a draft for them.
+- **Prompt injection.** The model is told that file text is data, never instructions, and
+  it still has no tools. The worst a malicious file can do is produce a bad draft.
+- **Off switch.** Untick **Read attachments and synced shared files for drafts** and
+  none of this happens.
 
 !!! warning "The facts file is visible to Claude Code"
     The facts file is also a user-level Claude Code skill, %USERPROFILE%\.claude\skills\my-email-context\SKILL.md,
