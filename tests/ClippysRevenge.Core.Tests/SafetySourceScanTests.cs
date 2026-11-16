@@ -260,13 +260,21 @@ public class SafetySourceScanTests
     [Fact]
     public void ProcessStart_OnlyInOutlookLauncher_AndLauncherUsesNoCom()
     {
-        AssertNone(Find(f => f.Code, @"\bProcess\s*\.\s*Start\b|\bShellExecute\w*\s*\(", f => f.Rel == Launcher || f.Rel == TrayFile || f.Rel == ClaudeCliFile || f.Rel == RestarterFile),
-            "Only OutlookLauncher.cs, TrayApp.cs (ShellOpen: folders, the skill file, the manual link), ClaudeCli.cs and UpdateRestarter.cs (the update handover) may start a process.");
+        AssertNone(Find(f => f.Code, @"\bProcess\s*\.\s*Start\b|\bShellExecute\w*\s*\(", f => f.Rel == Launcher || f.Rel == TrayFile || f.Rel == ClaudeCliFile || f.Rel == RestarterFile || f.Rel == NotepadFile),
+            "Only OutlookLauncher.cs, FactsNotepad.cs (notepad.exe), TrayApp.cs (ShellOpen: folders, the skill file, the manual link), ClaudeCli.cs and UpdateRestarter.cs (the update handover) may start a process.");
         // TrayApp.ShellOpen hands one path or URL to the shell (not Outlook); it is the only other Process.Start.
         var tray = Scan.Value.Files.Single(f => f.Rel == TrayFile);
         Assert.Single(Regex.Matches(tray.Code, @"\bProcess\s*\.\s*Start\b"));
         Assert.Matches(@"void\s+ShellOpen\s*\(string target\)\s*\{\s*Process\.Start\(new ProcessStartInfo\(target\)\s*\{\s*UseShellExecute\s*=\s*true\s*\}\)", tray.Code);
         Assert.DoesNotMatch(@"\bArgumentList\b|\.Arguments\b|\bVerb\s*=", tray.Code);
+
+        // FactsNotepad starts notepad.exe only: no shell, the path as one ArgumentList element, no Outlook.
+        var n = Scan.Value.Files.SingleOrDefault(f => f.Rel == NotepadFile);
+        Assert.NotNull(n);
+        Assert.Single(Regex.Matches(n!.Code, @"\bProcess\s*\.\s*Start\b"));
+        Assert.Matches(@"new\s+ProcessStartInfo\s*\(\s*""notepad\.exe""\s*\)\s*\{\s*UseShellExecute\s*=\s*false\s*\}", n.WithStrings);
+        Assert.Single(Regex.Matches(n.Code, @"\bArgumentList\s*\.\s*Add\s*\("));
+        Assert.DoesNotMatch(@"\.Arguments\b|\bVerb\s*=|UseShellExecute\s*=\s*true|Outlook\b|Marshal\b|Activator", n.Code);
 
         var l = Scan.Value.Files.SingleOrDefault(f => f.Rel == Launcher);
         Assert.NotNull(l);
@@ -284,6 +292,7 @@ public class SafetySourceScanTests
         Assert.Matches(@"Path\s*\.\s*GetFullPath\s*\(\s*paths\s*\.\s*ExePath\s*\)", r.Code);
     }
 
+    private const string NotepadFile = "src/ClippysRevenge.App/Tray/FactsNotepad.cs";
     private const string RestarterFile = "src/ClippysRevenge.App/UpdateRestarter.cs";
     private const string UpdateInstallFile = "src/ClippysRevenge.Core/UpdateInstall.cs";
     private const string KillRegex = @"\.\s*Kill\s*\(";

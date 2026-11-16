@@ -14,7 +14,8 @@ internal sealed record AiSettingsServices(
     AiStatusChecker? Checker = null,      // null when the index failed to open
     StyleSkill? Style = null,
     Func<CancellationToken, Task<Recipient?>>? Owner = null,
-    Func<AiDraftsToday>? Today = null);
+    Func<AiDraftsToday>? Today = null,
+    FactsEditor? Facts = null);          // the facts status line (SPEC 25.2); null hides it
 
 /// <summary>The AI drafts tab (SPEC 19.10). Edits the staged draft; consent and API key changes apply at once.</summary>
 internal sealed partial class SettingsForm
@@ -40,6 +41,9 @@ internal sealed partial class SettingsForm
     private readonly TextBox _aiMeetingCount = new();
     private readonly CheckBox _aiDirect = new() { Text = "Only when I'm in To or CC" };
     private readonly CheckBox _aiRevise = new() { Text = AiTabTexts.ReviseDraftsText };
+    private readonly CheckBox _aiRelated = new() { Text = AiTabTexts.RelatedMailText };
+    private readonly CheckBox _aiReason = new() { Text = AiTabTexts.ReasonLineText };
+    private readonly Label _aiFactsStatus = new() { AutoEllipsis = true };
     private readonly TextBox _aiExclude = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
     private readonly TextBox _aiInclude = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
     private readonly CheckBox _aiOwnBox = new() { Text = SettingsEditor.OwnMailboxLabel, Enabled = false };
@@ -103,31 +107,35 @@ internal sealed partial class SettingsForm
 
         Put(p, _aiRevise, 8, 394, 620, 24);
 
-        Put(p, _aiMeeting, 8, 424, 370, 24);
-        Lbl(p, AiTabTexts.MeetingCountLabel, 384, 428, 150);
-        Put(p, _aiMeetingCount, 540, 424, 60, 24);
+        Put(p, _aiRelated, 8, 424, 620, 24);
+        Put(p, _aiReason, 8, 454, 620, 24);
+        Put(p, _aiFactsStatus, 8, 484, 620, 20);
 
-        Lbl(p, "Never draft for", 8, 460, 200);
-        Lbl(p, "Only draft for", 330, 460, 200);
-        Put(p, _aiExclude, 8, 486, 310, 80);
-        Put(p, _aiInclude, 330, 486, 300, 80);
-        var listHint = Lbl(p, AiTabTexts.ListHint, 8, 568, 400);
+        Put(p, _aiMeeting, 8, 514, 370, 24);
+        Lbl(p, AiTabTexts.MeetingCountLabel, 384, 518, 150);
+        Put(p, _aiMeetingCount, 540, 514, 60, 24);
+
+        Lbl(p, "Never draft for", 8, 550, 200);
+        Lbl(p, "Only draft for", 330, 550, 200);
+        Put(p, _aiExclude, 8, 576, 310, 80);
+        Put(p, _aiInclude, 330, 576, 300, 80);
+        var listHint = Lbl(p, AiTabTexts.ListHint, 8, 658, 400);
         listHint.ForeColor = SystemColors.GrayText;
 
-        Lbl(p, "Mailboxes", 8, 596, 120);
-        Put(p, _aiOwnBox, 8, 622, 300, 22);
-        Put(p, _aiMailboxes, 8, 648, 622, 70);
+        Lbl(p, "Mailboxes", 8, 686, 120);
+        Put(p, _aiOwnBox, 8, 712, 300, 22);
+        Put(p, _aiMailboxes, 8, 738, 622, 70);
 
-        Lbl(p, "Writing style", 8, 726, 100);
-        Put(p, _aiStyleStatus, 110, 730, 520, 20);
-        Put(p, _aiWeekly, 8, 754, 200, 24);
-        Put(p, _aiView, 8, 784, 70, 26);
-        Put(p, _aiRegen, 84, 784, 110, 26);
-        Put(p, _aiOpen, 200, 784, 120, 26);
-        Put(p, _aiStyleNote, 8, 816, 620, 34);
+        Lbl(p, "Writing style", 8, 816, 100);
+        Put(p, _aiStyleStatus, 110, 820, 520, 20);
+        Put(p, _aiWeekly, 8, 844, 200, 24);
+        Put(p, _aiView, 8, 874, 70, 26);
+        Put(p, _aiRegen, 84, 874, 110, 26);
+        Put(p, _aiOpen, 200, 874, 120, 26);
+        Put(p, _aiStyleNote, 8, 906, 620, 34);
 
-        Put(p, _aiToday, 8, 858, 620, 20);
-        Put(p, _aiManual, 8, 882, 620, 20);
+        Put(p, _aiToday, 8, 948, 620, 20);
+        Put(p, _aiManual, 8, 972, 620, 20);
         _tabs.TabPages.Add(p);
 
         foreach (var e in AiDraftingSettings.Efforts) _aiEffort.Items.Add(e);
@@ -184,6 +192,8 @@ internal sealed partial class SettingsForm
         };
         _aiDirect.CheckedChanged += (_, _) => { if (!_binding) AiDraft.RequireDirectRecipient = _aiDirect.Checked; };
         _aiRevise.CheckedChanged += (_, _) => { if (!_binding) AiDraft.ReviseDrafts = _aiRevise.Checked; };
+        _aiRelated.CheckedChanged += (_, _) => { if (!_binding) AiDraft.RelatedMail = _aiRelated.Checked; };
+        _aiReason.CheckedChanged += (_, _) => { if (!_binding) AiDraft.ReasonLine = _aiReason.Checked; };
         _aiWeekly.CheckedChanged += (_, _) => { if (!_binding) AiDraft.AutoRegenerateStyle = _aiWeekly.Checked; };
         _aiExclude.TextChanged += (_, _) => { if (!_binding) AiDraft.ExcludeSenders = AiSettingsLines.Parse(_aiExclude.Text); };
         _aiInclude.TextChanged += (_, _) => { if (!_binding) AiDraft.IncludeOnlySenders = AiSettingsLines.Parse(_aiInclude.Text); };
@@ -237,6 +247,7 @@ internal sealed partial class SettingsForm
             _aiStyleNote.Text = AiTabTexts.NoIndex;
         }
         _aiToday.Visible = _s.Ai.Today is not null;
+        _aiFactsStatus.Visible = _s.Ai.Facts is not null;
     }
 
     /// <summary>Called from BindAll (under the form's binding guard): shows the draft in the tab.</summary>
@@ -259,6 +270,8 @@ internal sealed partial class SettingsForm
             _aiMaxAge.Text = d.MaxAgeDays.ToString(CultureInfo.InvariantCulture);
             _aiDirect.Checked = d.RequireDirectRecipient;
             _aiRevise.Checked = d.ReviseDrafts;
+            _aiRelated.Checked = d.RelatedMail;
+            _aiReason.Checked = d.ReasonLine;
             _aiMeeting.Checked = d.MeetingTimes;
             _aiMeetingCount.Enabled = d.MeetingTimes;
             _aiMeetingCount.Text = d.MeetingTimeOptions.ToString(CultureInfo.InvariantCulture);
@@ -305,6 +318,7 @@ internal sealed partial class SettingsForm
     {
         FillAiMailboxes();
         RefreshStyleStatus();
+        RefreshFactsStatus();
         RefreshAiToday();
         if (_aiChecked) return;
         _aiChecked = true;
@@ -475,6 +489,21 @@ internal sealed partial class SettingsForm
         catch (Exception)
         {
             if (!IsDisposed) _aiStyleStatus.Text = "";
+        }
+    }
+
+    private async void RefreshFactsStatus()
+    {
+        var facts = _s.Ai.Facts;
+        if (facts is null) return;
+        try
+        {
+            var text = await Task.Run(facts.StatusText);
+            if (!IsDisposed) _aiFactsStatus.Text = text;
+        }
+        catch (Exception)
+        {
+            if (!IsDisposed) _aiFactsStatus.Text = "";
         }
     }
 

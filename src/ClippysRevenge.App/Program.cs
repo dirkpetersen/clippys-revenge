@@ -162,6 +162,7 @@ internal static class Program
         ClaudeCliModel? cliModel = null;
         StyleSkill? styleSkill = null;
         FactsTemplateStarter? factsStarter = null;
+        FactsEditor? factsEditor = null;
         try
         {
             EmailIndex.Logger = loggerFactory.CreateLogger<EmailIndex>();
@@ -215,6 +216,8 @@ internal static class Program
                 ct => AiOwner.ResolveAsync(aiMailboxRef, indexesRef, WorkPriority.Background, ct),
                 hub, loggerFactory.CreateLogger<StyleGuideSource>());
             var factsFile = new FactsFile(FactsPaths.Default(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), dataDir));
+            factsEditor = new FactsEditor(factsFile,
+                ct => OwnerNameAsync(aiMailboxRef, ct));
             var facts = new FactsReporter(factsFile, hub, loggerFactory.CreateLogger<FactsReporter>());
             factsStarter = new FactsTemplateStarter(factsFile, () => settings.AiDrafting,
                 async ct => (await aiMailboxRef.GetIdentityAsync(WorkPriority.Background, ct).ConfigureAwait(false))?.DisplayName,
@@ -238,6 +241,7 @@ internal static class Program
                 aiUsage = null;
                 styleSkill = null;
                 factsStarter = null;
+                factsEditor = null;
             }
             factsStarter?.Kick();
             if (styleSkill is not null)
@@ -268,13 +272,15 @@ internal static class Program
         AiStatusChecker? aiChecker = draftModel is null ? null
             : new AiStatusChecker(draftModel, () => { cliModel?.InvalidateStatus(); apiModel?.InvalidateModelCache(); }, s => drafts?.ReportStatus(s),
                 loggerFactory.CreateLogger<AiStatusChecker>());
+        var factsEditorForUi = factsEditor;
         var draftsForTray = drafts;   // non-null local for the lambda (nullable flow)
         AiTrayServices? aiTray = draftsForTray is null || aiMailbox is null || aiChecker is null || indexes is null ? null
             : new AiTrayServices(draftsForTray.DraftSelectedAsync, aiMailbox.ShowDraftsAsync, aiToggler, aiChecker,
                 draftsForTray.PlanRescan, draftsForTray.RescanAsync, draftsForTray.CancelRescan,
                 () => draftsForTray.CurrentRescan,
                 new DontDraftService(aiMailbox, indexes, aiToggler, () => settings.AiDrafting, hub,
-                    loggerFactory.CreateLogger<DontDraftService>()));
+                    loggerFactory.CreateLogger<DontDraftService>()),
+                factsEditorForUi);
         var aiMailboxForUi = aiMailbox;
         var indexesForUi = indexes;
         var aiSettings = new AiSettingsServices(aiToggler, () => store.LoadApiKey() is { } k && SettingsStore.IsValidApiKeyFormat(k),
@@ -282,7 +288,8 @@ internal static class Program
             TrayApp.ShellOpen, aiChecker, styleSkill,
             aiMailboxForUi is null || indexesForUi is null ? null
                 : ct => AiOwner.ResolveAsync(aiMailboxForUi, indexesForUi, WorkPriority.Interactive, ct),
-            drafts is null ? null : drafts.Today);
+            drafts is null ? null : drafts.Today,
+            factsEditorForUi);
 
         // Built before the tray: the tray's attention badge counts tracked draft invites (SPEC 22.6).
         var draftInvites = new DraftInvites(
@@ -517,6 +524,10 @@ internal static class Program
 
     /// <summary>Process entry point only: blocks the STA main thread before the message loop starts or after it ended.
     /// Task.Run avoids the WinForms SynchronizationContext.</summary>
+    /// <summary>The own mailbox owner's display name for "Edit my facts…", or null when Outlook doesn't answer within 5 s.</summary>
+    private static async Task<string?> OwnerNameAsync(OutlookAiMailbox mailbox, CancellationToken ct) =>
+        (await mailbox.GetIdentityAsync(WorkPriority.Interactive, ct).WaitAsync(TimeSpan.FromSeconds(5), ct).ConfigureAwait(false))?.DisplayName;
+
     private static T RunBlocking<T>(Func<Task<T>> work) => Task.Run(work).GetAwaiter().GetResult();
 
     private static readonly TimeSpan HostStopWait = TimeSpan.FromSeconds(10);
