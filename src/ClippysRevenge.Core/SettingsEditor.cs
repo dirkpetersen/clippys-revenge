@@ -79,6 +79,7 @@ public sealed class SettingsEditor
         var d = Draft.AiDrafting;
         if (l.ConsentedAtUtc is { } c) d.ConsentedAtUtc = c;
         if (l.RelatedMailNoticeShown) d.RelatedMailNoticeShown = true;
+        if (l.AttachmentsNoticeShown) d.AttachmentsNoticeShown = true;
         if (l.Enabled != b.Enabled && d.Enabled == b.Enabled) d.Enabled = l.Enabled;
         if (l.EnabledAtUtc != b.EnabledAtUtc && d.EnabledAtUtc == b.EnabledAtUtc) d.EnabledAtUtc = l.EnabledAtUtc;
         if (!(b.ExcludeSenders ?? []).SequenceEqual(l.ExcludeSenders ?? [], StringComparer.Ordinal)

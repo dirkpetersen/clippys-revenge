@@ -10,24 +10,24 @@ public static class RevisitTexts
 
     private const string Prefix = "AI reply draft updated (the thread moved on): ";
 
-    public static string UpdatedOldMoved(string? subject) =>
-        Prefix + Short(subject) + ". The old draft is in Deleted Items.";
+    public static string UpdatedOldMoved(string? subject, string suffix = "") =>
+        Prefix + Short(subject) + (suffix ?? "") + ". The old draft is in Deleted Items.";
 
-    public static string UpdatedOldKept(string? subject) =>
-        Prefix + Short(subject) + ". The old draft is still in Drafts because it was changed or is open.";
+    public static string UpdatedOldKept(string? subject, string suffix = "") =>
+        Prefix + Short(subject) + (suffix ?? "") + ". The old draft is still in Drafts because it was changed or is open.";
 
-    public static string Updated(string? subject) => Prefix + Short(subject) + ".";
+    public static string Updated(string? subject, string suffix = "") => Prefix + Short(subject) + (suffix ?? "") + ".";
 
     public static string Removed(string? subject) =>
         "Outdated AI reply draft moved to Deleted Items (no reply needed any more): " + Short(subject);
 
     /// <summary>The Draft event after a replace, from the old draft's move result. oldStatus null = the move threw.</summary>
-    public static string ForReplace(ObsoleteDraftStatus? oldStatus, string? newSubject) => oldStatus switch
+    public static string ForReplace(ObsoleteDraftStatus? oldStatus, string? newSubject, string suffix = "") => oldStatus switch
     {
-        ObsoleteDraftStatus.Moved => UpdatedOldMoved(newSubject),
+        ObsoleteDraftStatus.Moved => UpdatedOldMoved(newSubject, suffix),
         ObsoleteDraftStatus.Open or ObsoleteDraftStatus.Changed or ObsoleteDraftStatus.NotMarked
-            or ObsoleteDraftStatus.Movable => UpdatedOldKept(newSubject),
-        _ => Updated(newSubject),
+            or ObsoleteDraftStatus.Movable => UpdatedOldKept(newSubject, suffix),
+        _ => Updated(newSubject, suffix),
     };
 
     /// <summary>Blank gives "(no subject)"; longer than 80 chars gives the first 80 + "…".</summary>

@@ -57,7 +57,7 @@ internal sealed class DraftHarness : IDisposable
     public List<AiNotice> NoticeMarks { get; } = [];
     public Action<AiNotice>? MarkNoticeShown { get; set; }
 
-    public DraftHarness(bool withMarkNoticeShown = true)
+    public DraftHarness(bool withMarkNoticeShown = true, FakeAttachmentSource? attachments = null)
     {
         Time.Advance(Start - ManualTimeProvider.T0);
         Indexes = new MailboxIndexes(_dir, [Shared]);
@@ -71,12 +71,14 @@ internal sealed class DraftHarness : IDisposable
         Settings.AiDrafting.RelatedMail = false;
         Settings.AiDrafting.ReasonLine = false;
         Settings.AiDrafting.RelatedMailNoticeShown = true;
+        Settings.AiDrafting.AttachmentsNoticeShown = true;
         Settings.SharedMailboxes.Add(new SharedMailbox { Smtp = Shared, Enabled = true, AiDrafts = false });
         if (withMarkNoticeShown) MarkNoticeShown = NoticeMarks.Add;
         Worker = new DraftWorker(new DraftWorkerServices(() => Settings, Indexes, Mailbox, Writer, Model, Style,
             () => SignatureHtml, Hub, Balloons, () => Available, () => Paused, Zone, Time, Log,
             FreeBusy: FreeBusy, CentralEurope: () => Cet(), Facts: Facts,
-            MarkNoticeShown: withMarkNoticeShown ? n => MarkNoticeShown?.Invoke(n) : null));
+            MarkNoticeShown: withMarkNoticeShown ? n => MarkNoticeShown?.Invoke(n) : null,
+            Attachments: attachments is null ? null : new DraftAttachments(attachments, Time, Log)));
     }
 
     public AiDraftingSettings Ai => Settings.AiDrafting;
@@ -96,7 +98,7 @@ internal sealed class DraftHarness : IDisposable
     /// <summary>Seeds one row. Default: Inbox of the own mailbox, 10 minutes old, from ann@contoso.example, to me@example.org.</summary>
     public IndexedEmail Seed(string id, string mailbox = "", string folder = "Inbox", TimeSpan? age = null, DateTimeOffset? at = null,
         string sender = "ann@contoso.example", string subject = "Budget", string topic = "Budget", string? imid = null,
-        string to = "Me <me@example.org>", string body = "BODYTEXT-123", string? irt = null, string? cc = null)
+        string to = "Me <me@example.org>", string body = "BODYTEXT-123", string? irt = null, string? cc = null, IReadOnlyList<AttachmentInfo>? attachments = null)
     {
         var e = new IndexedEmail
         {
@@ -112,7 +114,7 @@ internal sealed class DraftHarness : IDisposable
             InternetMessageId = imid ?? "<" + id + "@contoso.example>",
             InReplyTo = irt,
             EventTime = at ?? Time.GetUtcNow() - (age ?? TimeSpan.FromMinutes(10)),
-            Attachments = [new AttachmentInfo(1, "a.pdf", 10, false)],
+            Attachments = attachments ?? [new AttachmentInfo(1, "a.pdf", 10, false)],
         };
         Indexes.For(mailbox).UpsertBatch([e]);
         return e;

@@ -208,6 +208,43 @@ public sealed class AiDraftingTogglerTests : IDisposable
     }
 
     [Fact]
+    public void MarkNoticeShown_attachments_sets_only_its_own_flag_and_saves_once()
+    {
+        _t.MarkNoticeShown(AiNotice.Attachments);
+        Assert.True(_settings.AiDrafting.AttachmentsNoticeShown);
+        Assert.False(_settings.AiDrafting.RelatedMailNoticeShown);
+        Assert.True(Assert.Single(_saves).AiDrafting.AttachmentsNoticeShown);
+        _t.MarkNoticeShown(AiNotice.Attachments);
+        Assert.Single(_saves);
+        Assert.Equal(0, _changed);
+    }
+
+    [Fact]
+    public void MarkNoticeShown_related_mail_leaves_the_attachments_flag_alone()
+    {
+        _t.MarkNoticeShown(AiNotice.RelatedMail);
+        Assert.True(_settings.AiDrafting.RelatedMailNoticeShown);
+        Assert.False(_settings.AiDrafting.AttachmentsNoticeShown);
+    }
+
+    [Fact]
+    public void RecordConsent_marks_the_attachments_notice_shown_only_on_a_fresh_consent()
+    {
+        _t.RecordConsent();
+        Assert.True(_settings.AiDrafting.AttachmentsNoticeShown);
+        Assert.True(Assert.Single(_saves).AiDrafting.AttachmentsNoticeShown);
+    }
+
+    [Fact]
+    public void RecordConsent_with_existing_consent_leaves_the_attachments_flag_alone()
+    {
+        _settings.AiDrafting.RecordConsent(Now.AddDays(-3));
+        _t.RecordConsent();
+        Assert.False(_settings.AiDrafting.AttachmentsNoticeShown);
+        Assert.Empty(_saves);
+    }
+
+    [Fact]
     public void MarkNoticeShown_save_failure_propagates_and_live_is_unchanged()
     {
         _saveThrows = new IOException("disk");

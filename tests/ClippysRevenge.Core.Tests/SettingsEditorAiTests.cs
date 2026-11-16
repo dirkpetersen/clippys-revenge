@@ -201,6 +201,17 @@ public class SettingsEditorAiTests
     }
 
     [Fact]
+    public void Rebase_keeps_a_live_attachments_notice_flag()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        live.AiDrafting.AttachmentsNoticeShown = true;
+        Assert.False(e.Draft.AiDrafting.AttachmentsNoticeShown);
+        e.Rebase(live);
+        Assert.True(e.Draft.AiDrafting.AttachmentsNoticeShown);
+    }
+
+    [Fact]
     public void Changing_RelatedMail_is_a_change()
     {
         var live = Live();

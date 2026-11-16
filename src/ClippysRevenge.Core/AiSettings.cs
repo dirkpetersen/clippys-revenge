@@ -62,6 +62,12 @@ public sealed partial class AiDraftingSettings
     /// <summary>Internal: the one-time related-mail notice was shown (SPEC 25.3). Not in the Settings window.</summary>
     public bool RelatedMailNoticeShown { get; set; }
 
+    /// <summary>Read attachment text and synced OneDrive/SharePoint files into drafting prompts (SPEC 19.2, 26).</summary>
+    public bool ReadAttachments { get; set; } = true;
+
+    /// <summary>Internal: the one-time attachments notice was shown (SPEC 26.10). Not in the Settings window.</summary>
+    public bool AttachmentsNoticeShown { get; set; }
+
     [JsonIgnore] public bool HasConsent => ConsentedAtUtc is not null;
 
     [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9._\[\]-]*\z")]

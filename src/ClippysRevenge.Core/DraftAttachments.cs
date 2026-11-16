@@ -80,6 +80,12 @@ public sealed record AttachmentNote(AttachmentNoteKind Kind, string Name, bool S
 public sealed record AttachmentCounts(int Read, int Truncated, int Skipped, int Links, int Chars, long ElapsedMs)
 {
     public static readonly AttachmentCounts None = new(0, 0, 0, 0, 0, 0);
+
+    /// <summary>True when the prompt held attachment text: Read + Truncated > 0 (SPEC 27.2, M20.1 skips such drafts).</summary>
+    public bool UsedText => Read + Truncated > 0;
+
+    /// <summary>True when any item was considered: Read + Truncated + Skipped > 0 (SPEC 26.8 event suffix).</summary>
+    public bool Considered => Read + Truncated + Skipped > 0;
 }
 
 /// <summary>Items in tier order. Notes: every note (tiers 1-2), in item order, NOT limited to 5 (M19.5 limits).</summary>

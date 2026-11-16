@@ -89,3 +89,26 @@ public static class AttachmentNotes
         }
     }
 }
+
+/// <summary>SPEC 26.8 / 26.10 texts. Pure.</summary>
+public static class DraftAttachmentTexts
+{
+    public const string Notice =
+        "AI drafts now also read attachments and shared files synced to this PC, and send their text to Claude, to write better replies. You can turn this off in Settings → AI drafts.";
+
+    /// <summary>"" when counts is null or !counts.Considered; else " (attachments: {Read+Truncated} read, {Skipped} not read)"
+    /// (invariant integers, leading space). Never throws.</summary>
+    public static string EventSuffix(AttachmentCounts? counts)
+    {
+        try
+        {
+            if (counts is null || !counts.Considered) return "";
+            return string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $" (attachments: {counts.Read + counts.Truncated} read, {counts.Skipped} not read)");
+        }
+        catch (Exception)
+        {
+            return "";
+        }
+    }
+}
