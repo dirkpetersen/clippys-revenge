@@ -7,20 +7,21 @@
   `dotnet test --filter live=outlook` with a hard timeout, and prints a summary.
   The tests create drafts and two unsent meeting drafts (create_meeting_draft), delete them again, and check that
   nothing was sent. Results and leftovers are printed at the end.
+  M16: one AI reply draft is moved to Deleted Items by Clippy's guarded move and then removed; one test waits two minutes.
 
   Exit codes: 0 ok; 1 test or build failures; 2 preconditions; 3 Outlook not responding;
   4 timeout; 5 only leftovers.
 
-.PARAMETER TimeoutMinutes  Hard limit for the whole test run (default 20).
+.PARAMETER TimeoutMinutes  Hard limit for the whole test run (default 25).
 .PARAMETER Shared          SMTP address of a shared mailbox open in Outlook (enables the shared-mailbox tests).
 .PARAMETER AllowClosed     Run only the attach-never-launches test when Outlook is closed.
-.PARAMETER Claude          Also run the live Claude tests (sets CLIPPY_LIVE_CLAUDE=1). They use a little of your Claude usage (two small Haiku calls).
+.PARAMETER Claude          Also run the live Claude tests (sets CLIPPY_LIVE_CLAUDE=1). They use a little of your Claude usage (a few small Haiku calls and one tiny Opus call).
 .PARAMETER NoBuild         Skip `dotnet build` (use the last build).
 .PARAMETER DryRun          Print what would run, then exit 0 without running anything.
 #>
 [CmdletBinding()]
 param(
-    [int]$TimeoutMinutes = 20,
+    [int]$TimeoutMinutes = 25,
     [string]$Shared,
     [switch]$AllowClosed,
     [switch]$Claude,
