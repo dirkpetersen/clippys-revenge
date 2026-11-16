@@ -71,10 +71,16 @@ public sealed class AttachmentLinkTool
             {
                 result = AttachmentLinkResult.Create(link, _port(), _tz);
             }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException
+                                           or UriFormatException)
+            {
+                _links.Complete(_links.TryConsume(link.Token) ?? link);
+                throw new McpException(
+                    "Clippy's server isn't running, so it can't make a download link. Try again in a moment.");
+            }
             catch
             {
-                _links.TryConsume(link.Token);
-                _links.Complete(link);
+                _links.Complete(_links.TryConsume(link.Token) ?? link);
                 throw;
             }
 

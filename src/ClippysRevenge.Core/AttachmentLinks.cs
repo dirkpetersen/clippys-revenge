@@ -98,6 +98,8 @@ public sealed class AttachmentLinks : IDisposable
     private readonly TimeProvider _time;
     private readonly ILogger? _log;
     private readonly ConcurrentDictionary<string, AttachmentLink> _links = new(StringComparer.Ordinal);
+    // Consumed links whose file is still being streamed: counted until Complete.
+    private readonly ConcurrentDictionary<string, AttachmentLink> _streaming = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
     private readonly Queue<DateTimeOffset> _rate = new();
     private readonly HashSet<string> _retry = new(StringComparer.OrdinalIgnoreCase);
@@ -126,23 +128,23 @@ public sealed class AttachmentLinks : IDisposable
 
     public string Folder { get; }
 
-    /// <summary>Unexpired links in the store.</summary>
+    /// <summary>Unexpired links in the store plus downloads still streaming.</summary>
     public int OpenCount
     {
         get
         {
             var now = _time.GetUtcNow();
-            return _links.Values.Count(l => now < l.ExpiresAt);
+            return _links.Values.Count(l => now < l.ExpiresAt) + _streaming.Count;
         }
     }
 
-    /// <summary>Sum of the sizes of the unexpired links.</summary>
+    /// <summary>Sum of the sizes of the unexpired links and the downloads still streaming.</summary>
     public long OpenBytes
     {
         get
         {
             var now = _time.GetUtcNow();
-            return _links.Values.Where(l => now < l.ExpiresAt).Sum(l => l.Size);
+            return _links.Values.Where(l => now < l.ExpiresAt).Sum(l => l.Size) + _streaming.Values.Sum(l => l.Size);
         }
     }
 
@@ -221,10 +223,14 @@ public sealed class AttachmentLinks : IDisposable
         ArgumentNullException.ThrowIfNull(fileName);
         ArgumentOutOfRangeException.ThrowIfNegative(size);
         ValidateTempPath(tempPath);
-        ThrowIfDisposed();
 
         lock (_gate)
         {
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                TryDelete(tempPath);
+                throw new ObjectDisposedException(GetType().FullName);
+            }
             var now = _time.GetUtcNow();
             PurgeExpired(now);
             PruneRate(now);
@@ -260,20 +266,28 @@ public sealed class AttachmentLinks : IDisposable
     {
         if (Volatile.Read(ref _disposed) != 0) return null;
         if (!IsWellFormedToken(token)) return null;
-        if (!_links.TryRemove(token!, out var link)) return null;
-        if (_time.GetUtcNow() >= link.ExpiresAt)
+        lock (_gate)
         {
-            TryDelete(link.TempPath);
-            return null;
+            if (!_links.TryRemove(token!, out var link)) return null;
+            if (_time.GetUtcNow() >= link.ExpiresAt)
+            {
+                TryDelete(link.TempPath);
+                return null;
+            }
+            _streaming[link.Token] = link;
+            return link;
         }
-        return link;
     }
 
-    /// <summary>After a download ends: deletes the link's temp file; a failed delete is retried at the next sweep.</summary>
+    /// <summary>After a download ends (or aborts): stops counting it and deletes the link's temp file; a failed delete is retried at the next sweep.</summary>
     public void Complete(AttachmentLink link)
     {
         ArgumentNullException.ThrowIfNull(link);
-        TryDelete(link.TempPath);
+        lock (_gate)
+        {
+            _streaming.TryRemove(link.Token, out _);
+            TryDelete(link.TempPath);
+        }
     }
 
     /// <summary>Deletes a temp file from PrepareTempPath that never became a link (failed save).</summary>

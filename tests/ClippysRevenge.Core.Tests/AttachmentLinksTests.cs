@@ -141,9 +141,10 @@ public sealed class AttachmentLinksTests : IDisposable
         var got = links.TryConsume(link.Token);
         Assert.Equal(link, got);
         Assert.Null(links.TryConsume(link.Token));
-        Assert.Equal(0, links.OpenCount);
+        Assert.Equal(1, links.OpenCount);
         Assert.True(File.Exists(link.TempPath));
         links.Complete(got!);
+        Assert.Equal(0, links.OpenCount);
         Assert.False(File.Exists(link.TempPath));
         links.Complete(got!);
     }
@@ -226,7 +227,10 @@ public sealed class AttachmentLinksTests : IDisposable
         Assert.Equal(LinkRefusal.TooManyOpen, ex2.Reason);
         Assert.False(File.Exists(extra));
 
-        Assert.NotNull(links.TryConsume(open[0].Token));
+        var got = links.TryConsume(open[0].Token);
+        Assert.NotNull(got);
+        Assert.Throws<AttachmentLinkException>(links.CheckCanCreate);
+        links.Complete(got!);
         links.CheckCanCreate();
     }
 
@@ -589,6 +593,53 @@ public sealed class AttachmentLinksTests : IDisposable
         var before = _log.Lines.Count;
         _time.Advance(TimeSpan.FromMinutes(30));
         Assert.Equal(before, _log.Lines.Count);
+    }
+
+    [Fact]
+    public void Streaming_CountsAgainstCountAndBytesUntilComplete()
+    {
+        var links = Make();
+        var big = links.Add(Saved(links), "big", 100 * MiB);
+        var big2 = links.Add(Saved(links), "big2", 100 * MiB);
+        var got = links.TryConsume(big.Token)!;
+        Assert.Null(links.TryConsume(big.Token));
+        Assert.Equal(2, links.OpenCount);
+        Assert.Equal(200 * MiB, links.OpenBytes);
+        var ex = Assert.Throws<AttachmentLinkException>(links.CheckCanCreate);
+        Assert.Equal(LinkRefusal.TooManyBytes, ex.Reason);
+        links.Complete(got);
+        Assert.Equal(1, links.OpenCount);
+        Assert.Equal(100 * MiB, links.OpenBytes);
+        links.CheckCanCreate();
+        Assert.NotNull(big2);
+
+        var many = Make(folder: Path.Combine(_root, "many"));
+        var streams = Enumerable.Range(0, 10).Select(_ => many.TryConsume(Open(many).Token)!).ToList();
+        Assert.Equal(10, many.OpenCount);
+        Assert.Equal(LinkRefusal.TooManyOpen, Assert.Throws<AttachmentLinkException>(many.CheckCanCreate).Reason);
+        many.Complete(streams[0]);
+        many.CheckCanCreate();
+    }
+
+    [Fact]
+    public void Add_AfterDispose_DeletesFileAndThrows()
+    {
+        var links = Make();
+        var path = Saved(links);
+        links.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => links.Add(path, "a", 3));
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public void Add_AfterClear_StillWorksButClearedLinksStayGone()
+    {
+        var links = Make();
+        var a = Open(links);
+        links.Clear();
+        Assert.Null(links.TryConsume(a.Token));
+        Assert.Equal(0, links.OpenCount);
+        Assert.False(File.Exists(a.TempPath));
     }
 
     [Fact]

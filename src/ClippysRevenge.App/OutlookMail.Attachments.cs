@@ -97,8 +97,8 @@ internal sealed partial class OutlookMail
                                        && !ComErrors.IsOutlookGone(ex))
             {
                 DeleteQuietly(tempPath);
-                // IO messages contain the temp path: never put them in a result.
-                var reason = ex is COMException ? ex.Message.TrimEnd('.') : ex.GetType().Name;
+                // COM and IO messages can contain the temp path: never put them in a result.
+                var reason = ex is COMException ? $"Outlook error 0x{ex.HResult:X8}" : ex.GetType().Name;
                 throw new McpException(
                     $"Could not save \"{target.FileName}\" for the download link ({reason}). Try again, or use get_attachment.");
             }
