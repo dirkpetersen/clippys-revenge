@@ -57,6 +57,75 @@ internal sealed partial class OutlookMail
         }
     }
 
+    /// <summary>Worker thread only. See IAttachmentLinkSaver. abandoned: set by the caller after it gave up
+    /// (timeout/cancel); a save that finishes afterwards deletes its file.</summary>
+    internal SavedAttachment SaveAttachmentForLink(Outlook.Application app, string id, string? filename, int? position,
+        string tempPath, long maxBytes, CancellationToken abandoned)
+    {
+        if (!LinkPaths.IsTempFileName(Path.GetFileName(tempPath)) || !Path.IsPathFullyQualified(tempPath))
+            throw new ArgumentException("tempPath must be a link temp file.", nameof(tempPath));
+        abandoned.ThrowIfCancellationRequested();
+
+        var item = GetItem(app, id);
+        try
+        {
+            var live = ReadAttachments(item);
+            var target = AttachmentSelection.SelectOne(live, filename, position);
+            if (target.Size is { } est && est > maxBytes)
+                throw new AttachmentLinkException(LinkRefusal.TooBig, LinkTexts.TooBig(est));
+
+            var atts = item.Attachments;
+            Outlook.Attachment? att = null;
+            try
+            {
+                att = atts[target.Position];
+                att.SaveAsFile(tempPath);
+                var length = new FileInfo(tempPath).Length;
+                if (length > maxBytes)
+                {
+                    DeleteQuietly(tempPath);
+                    throw new AttachmentLinkException(LinkRefusal.TooBig, LinkTexts.TooBig(length));
+                }
+                if (abandoned.IsCancellationRequested)
+                {
+                    DeleteQuietly(tempPath);
+                    throw new OperationCanceledException(abandoned);
+                }
+                return new SavedAttachment(tempPath, target.FileName, length);
+            }
+            catch (Exception ex) when (ex is COMException or IOException or UnauthorizedAccessException
+                                       && !ComErrors.IsOutlookGone(ex))
+            {
+                DeleteQuietly(tempPath);
+                // IO messages contain the temp path: never put them in a result.
+                var reason = ex is COMException ? ex.Message.TrimEnd('.') : ex.GetType().Name;
+                throw new McpException(
+                    $"Could not save \"{target.FileName}\" for the download link ({reason}). Try again, or use get_attachment.");
+            }
+            finally
+            {
+                Release(att);
+                Release(atts);
+            }
+        }
+        finally
+        {
+            Release(item);
+        }
+    }
+
+    private static void DeleteQuietly(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // The Core store retries via Discard.
+        }
+    }
+
     private static SavedAttachment SaveOne(Outlook.MailItem item, AttachmentInfo target, string dir)
     {
         // Computed on the worker thread right before SaveAsFile: saves are serialized, so names can't collide.
@@ -105,5 +174,27 @@ internal sealed class OutlookAttachmentSaver(OutlookWorker worker, OutlookMail m
         await stores.EnsureResolvedAsync(WorkPriority.Interactive, ct).ConfigureAwait(false);
         return await worker.RunAsync(app => mail.SaveAttachments(app, id, wanted, dir), WorkPriority.Interactive, ct,
             OutlookStores.AttachmentTimeout).ConfigureAwait(false);
+    }
+}
+
+internal sealed class OutlookAttachmentLinkSaver(OutlookWorker worker, OutlookMail mail, OutlookStores stores)
+    : IAttachmentLinkSaver
+{
+    public async Task<SavedAttachment> SaveForLinkAsync(string id, string? filename, int? position, string tempPath,
+        long maxBytes, CancellationToken ct)
+    {
+        using var abandon = new CancellationTokenSource();
+        try
+        {
+            await stores.EnsureResolvedAsync(WorkPriority.Interactive, ct).ConfigureAwait(false);
+            return await worker.RunAsync(
+                app => mail.SaveAttachmentForLink(app, id, filename, position, tempPath, maxBytes, abandon.Token),
+                WorkPriority.Interactive, ct, OutlookStores.AttachmentTimeout).ConfigureAwait(false);
+        }
+        catch
+        {
+            abandon.Cancel();   // before Core's Discard runs: a COM save still running deletes its own file
+            throw;
+        }
     }
 }

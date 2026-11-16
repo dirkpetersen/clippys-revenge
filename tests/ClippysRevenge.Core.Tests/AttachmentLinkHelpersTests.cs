@@ -169,4 +169,45 @@ public sealed class AttachmentLinkHelpersTests
         Assert.Throws<ArgumentNullException>(() => AttachmentLinkResult.Create(null!, 8765, Utc8));
         Assert.Throws<ArgumentNullException>(() => AttachmentLinkResult.Create(link, 8765, null!));
     }
+
+    // ---- WSL token line, tool description (M17.3) ----
+
+    [Fact]
+    public void WslTokenLine_BuildsExportLine()
+    {
+        Assert.Equal("export CLIPPY_TOKEN=0123abcdef", LinkTexts.WslTokenLine("0123abcdef"));
+        var token = AuthToken.Generate();
+        var line = LinkTexts.WslTokenLine(token);
+        Assert.StartsWith("export CLIPPY_TOKEN=", line);
+        Assert.EndsWith(token, line);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("a b")]
+    [InlineData("a'b")]
+    [InlineData("a\"b")]
+    [InlineData("a$b")]
+    [InlineData("a;b")]
+    [InlineData("a\nb")]
+    [InlineData("\u00e9")]
+    public void WslTokenLine_RejectsUnsafeTokens(string? token)
+    {
+        var ex = Assert.ThrowsAny<ArgumentException>(() => LinkTexts.WslTokenLine(token!));
+        if (!string.IsNullOrEmpty(token)) Assert.DoesNotContain(token, ex.Message);
+    }
+
+    [Fact]
+    public void MaskedWslTokenLine_IsPinned() =>
+        Assert.Equal("export CLIPPY_TOKEN=\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022", LinkTexts.MaskedWslTokenLine);
+
+    [Fact]
+    public void ToolDescription_IsPinned()
+    {
+        Assert.Equal("Makes a one-time download link for one attachment of an email, for use from WSL or another shell. Use the id from search_emails; pass filename or position when the email has more than one attachment. Run the returned curl command in the shell: it saves the file in the current folder. The link works once and expires in 10 minutes. The file content is not returned to you. The shell needs CLIPPY_TOKEN set (see note in the result). To save the file on the Windows side instead, use get_attachment.",
+            LinkTexts.ToolDescription);
+        foreach (var part in new[] { "10 minutes", "curl", "CLIPPY_TOKEN", "get_attachment", "once" })
+            Assert.Contains(part, LinkTexts.ToolDescription);
+    }
 }

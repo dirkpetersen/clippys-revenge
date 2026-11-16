@@ -57,6 +57,8 @@ internal sealed partial class SettingsForm : Form
     private readonly Label _testResult = new();
     private readonly Label _testNote = new() { ForeColor = SystemColors.GrayText };
     private readonly TextBox _wsl = new() { ReadOnly = true, Multiline = true };
+    private readonly TextBox _wslToken = new() { ReadOnly = true };
+    private readonly Button _copyWslToken = new() { Text = "Copy WSL token line" };
 
     // Index
     private readonly ComboBox _picker = new() { DropDownStyle = ComboBoxStyle.DropDownList };
@@ -198,7 +200,9 @@ internal sealed partial class SettingsForm : Form
         Put(p, _testResult, 138, 266, 520, 22);
         Put(p, _testNote, 138, 290, 520, 22);
         Lbl(p, "From WSL", 8, 322, 160);
-        Put(p, _wsl, 8, 346, 650, 100);
+        Put(p, _wsl, 8, 346, 650, 72);
+        Put(p, _wslToken, 8, 424, 520, 24);
+        Put(p, _copyWslToken, 536, 423, 122, 26);
         _tabs.TabPages.Add(p);
 
         _port.TextChanged += (_, _) =>
@@ -215,6 +219,7 @@ internal sealed partial class SettingsForm : Form
         };
         _copyToken.Click += (_, _) => CopyText(TokenShown(), null);
         _copyCommand.Click += (_, _) => CopyText(FullCommand(), BalloonTexts.Copied);
+        _copyWslToken.Click += (_, _) => CopyText(LinkTexts.WslTokenLine(TokenShown()), BalloonTexts.Copied);
         _regen.Click += (_, _) =>
         {
             var answer = MessageBox.Show(this, SettingsTexts.RegenerateQuestion, BalloonTexts.Title,
@@ -747,6 +752,7 @@ internal sealed partial class SettingsForm : Form
         _token.UseSystemPasswordChar = !_tokenShown;
         _showToken.Text = _tokenShown ? "Hide" : "Show";
         _command.Text = _tokenShown ? FullCommand() : SettingsTexts.MaskedMcpAddCommand(ShownPort());
+        _wslToken.Text = _tokenShown ? LinkTexts.WslTokenLine(TokenShown()) : LinkTexts.MaskedWslTokenLine;
         var changes = _editor.Changes(_s.GetSettings());
         _testNote.Text = changes.BreaksClaudeConfig ? "Testing the running server. Press Apply first to test your changes." : "";
     }

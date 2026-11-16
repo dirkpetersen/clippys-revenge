@@ -115,6 +115,13 @@ internal static class Program
         }
 
         var hub = new ActivityHub();
+        var attachmentLinks = new AttachmentLinks(new AttachmentLinksOptions
+        {
+            Folder = LinkPaths.Default(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)).Folder,
+            EnsurePrivateFolder = PrivateFolder.Ensure,
+            Logger = loggerFactory.CreateLogger<AttachmentLinks>(),
+        });
+        attachmentLinks.CleanUpAtStart();   // before the host starts: no link exists yet, so nothing valid is deleted
         var worker = new OutlookWorker(hub, loggerFactory.CreateLogger("OutlookWorker"));
         worker.Start();
         foreach (var w in loaded.Warnings)
@@ -407,6 +414,7 @@ internal static class Program
         {
             Tokens = tokens,
             Hub = hub,
+            Links = attachmentLinks,
             ConfigureMcp = b => b.WithTools<McpTools>().WithTools<AttachmentTools>(),
             ConfigureServices = s =>
             {
@@ -424,6 +432,10 @@ internal static class Program
                     s.AddSingleton<IAttachmentSaver, OutlookAttachmentSaver>()
                         .AddSingleton(sp => new AttachmentExport(sp.GetRequiredService<IAttachmentSaver>(),
                             sp.GetRequiredService<MailboxIndexes>(), () => settings, hub));
+                    s.AddSingleton<IAttachmentLinkSaver, OutlookAttachmentLinkSaver>()
+                        .AddSingleton(sp => new Optional<AttachmentLinkTool>(new AttachmentLinkTool(attachmentLinks,
+                            sp.GetRequiredService<IAttachmentLinkSaver>(), () => hostRef?.Port ?? settings.Port,
+                            TimeZoneInfo.Local, loggerFactory.CreateLogger<AttachmentLinkTool>())));
                     // Index-backed tools take Optional<T> so they stay listed (and explain the problem) when the index failed to open.
                     s.AddSingleton(new Optional<MailboxIndexes>(indexes))
                         .AddSingleton(new Optional<OutlookMail>(mail))
@@ -435,13 +447,14 @@ internal static class Program
                     s.AddSingleton(new Optional<MailboxIndexes>(null))
                         .AddSingleton(new Optional<OutlookMail>(null))
                         .AddSingleton(new Optional<ReplyDraftTool>(null))
-                        .AddSingleton(new Optional<AttachmentExport>(null));
+                        .AddSingleton(new Optional<AttachmentExport>(null))
+                        .AddSingleton(new Optional<AttachmentLinkTool>(null));
                 }
             },
             ConfigureLogging = b => b.AddDebug().AddProvider(fileLog),
         });
         hostRef = host;
-        applier = new SettingsApplier(new SettingsApplyTargets(settings, store, tokens, p => host.RestartAsync(p), () => host.Port,
+        applier = new SettingsApplier(new SettingsApplyTargets(settings, store, tokens, p => RestartHostAsync(host, attachmentLinks, p), () => host.Port,
             e => StartupRegistration.Apply(e), indexes,
             sync is null ? null : sync.NotifySettingsChanged, sync is null ? null : sync.SyncNow,
             drafts is null ? null : drafts.NotifySettingsChanged), logger);
@@ -466,6 +479,7 @@ internal static class Program
         var pendingHandover = Volatile.Read(ref handover);
         // Then the MCP host, before anything else: the new version needs its port, and no new requests are wanted.
         var hostStopped = WaitBounded(() => host.DisposeAsync().AsTask(), HostStopWait, logger, "MCP host");
+        attachmentLinks.Dispose();   // stops the sweep timer and deletes every open link's file (SPEC 24.3)
         WaitBounded(async () =>
         {
             if (drafts is not null)
@@ -590,6 +604,18 @@ internal static class Program
             }
             _ = updates.StartAsync(CancellationToken.None);
         }, null);
+    }
+
+    private static async Task<bool> RestartHostAsync(McpHttpHost host, AttachmentLinks links, int port)
+    {
+        try
+        {
+            return await host.RestartAsync(port).ConfigureAwait(false);
+        }
+        finally
+        {
+            links.Clear();   // SPEC 24.3: the URLs name the old port
+        }
     }
 
     private static async Task<bool> StartHostAsync(McpHttpHost host, int port, ILogger logger, TimeSpan bindRetryFor)
