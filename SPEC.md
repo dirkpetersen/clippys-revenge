@@ -230,7 +230,14 @@ src/ClippysRevenge.Core/        net10.0: no Windows, no COM, testable on Linux/W
     DraftAttachments.Plan.cs  PlannedAttachment, DraftAttachmentPlan (Build, MayOpenShared, IsMentioned) (§26.1, M19.4)
     DraftAttachments.Budget.cs  BudgetItem, AttachmentBudget (Allocate, Cut) (§26.5, M19.4)
     DraftAttachments.Notes.cs  AttachmentNoteTexts, AttachmentNotes (the §26.7 draft notes) (M19.5); the
-                            <attachments> block and AttachmentsNote live in DraftPrompt.cs (§26.6)
+                            <attachments> block and AttachmentsNote live in DraftPrompt.cs (§26.6);
+                            DraftAttachmentTexts (notice, event suffix) (§26.8, §26.10, M19.6)
+    DraftAttachments.Com.cs AiAttachmentCom: pure helpers for the COM read (cloud test, URL pick, attached-item
+                            record) (§26.9, M19.7)
+    DraftWorker.Attachments.cs  partial DraftWorker: the gate, CollectAttachmentsAsync, the one-time notice (§26.8,
+                            M19.6)
+    AiFiles.cs              AiFilePaths, AiFilesOptions, AiFiles (ai-files\ temp paths, discard with retry,
+                            start-up cleanup), AiFolderUnusableException (§26.9, M19.7)
     EditLearning.cs         ai_draft_texts recording, sent-draft matching, EditDiff, the <my_edits> block (§27, M20)
     DontDraft.cs            "Don't draft for this sender/domain": DontDraftKind, DontDraftTexts, DontDraftRules,
                             DontDraftPrepared, DontDraftService (checks, texts, settings change) (§27.7, M20.3)
@@ -254,9 +261,9 @@ src/ClippysRevenge.App/         net10.0-windows (WinExe): COM, tray, host
     OutlookMail.Attachments.cs  partial: SaveAttachment, SaveAttachmentForLink and OutlookAttachmentLinkSaver
                             (IAttachmentLinkSaver, §24.2); from M19 also ReadAttachmentForAi (SaveAsFile into
                             ai-files, OpenSharedItem for attached items; §26.9)
-    OutlookAttachmentSource.cs  IAttachmentSource on OutlookWorker + OneDriveRegistry (§26.8, M19)
-    OneDriveRegistry.cs     IOneDriveRegistryData over the HKCU reads; Read() calls Core OneDriveScopes.Build
-                            (§26.3, M19)
+    OutlookAttachmentSource.cs  IAttachmentSource on OutlookWorker + OneDriveRegistry (§26.8, M19.7)
+    OneDriveRegistry.cs     IOneDriveRegistryData over the HKCU reads (read-only); Read() calls Core
+                            OneDriveScopes.Build (§26.3, M19.7)
     OutlookCalendar.Events.cs, .FreeBusy.cs  partials of OutlookCalendar: events, free/busy
     OutlookCalendar.Invites.cs  partial: CreateMeeting (saved unsent, with the category; §8, §22.1, §22.2)
     OutlookCalendar.DraftInvites.cs  partial: the tracked-meeting check and the Categories-only write (§22.3)
@@ -4182,12 +4189,15 @@ the M11.7 brief):
 
 **Consent dialog** (once; sets `ConsentedAtUtc`). Shown when AI drafts are
 first turned on (tray or Settings), and before the first manual draft or
-Regenerate. Title `Turn on AI drafts?`. Text:
-`Clippy will send new emails from your Inbox, earlier messages in the same thread, and samples of your sent mail to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.`
-Buttons **Turn on** and **Cancel** (default; Esc). From M18 the text
-also names "up to 5 related earlier emails" (§25.3), from M19 "the text
-of their attachments and of shared files synced to this PC" (§26.10),
-from M20 "how you edited Clippy's drafts" (§27.6).
+Regenerate. Title `Turn on AI drafts?`. Text (`AiConsent.Text`, current
+since M19.6, §26.10):
+`Clippy will send new emails from your Inbox, earlier messages in the same thread, the text of their attachments and of shared files synced to this PC, up to 5 related earlier emails, and samples of your sent mail to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.`
+Buttons **Turn on** and **Cancel** (default; Esc). History: the M11 text
+had neither the attachments nor the related-mail part; M18 added "up to
+5 related earlier emails" (§25.3), M19 "the text of their attachments
+and of shared files synced to this PC" (§26.10). M20 will add "how you
+edited Clippy's drafts" (§27.6). Users who consented to an older text
+aren't asked again; they get the one-time notices of §25.3 and §26.10.
 
 **Tray submenu** (§6.2): *Draft replies automatically* toggles `Enabled`
 (consent first; a backend that isn't ready opens the AI drafts tab
@@ -6143,6 +6153,11 @@ like other `Draft` events; `RevisitTexts`):
   `AI reply draft updated (the thread moved on): <subject>.`
   `RevisitTexts.ForReplace` holds this mapping; subjects use the 80-char
   rule of `DraftTexts.DraftCreated`.
+- From M19.6 (§26.8), each replace text gets the attachments suffix
+  right after the subject and before the period, when any attachment
+  item was considered (`RevisitTexts.*` take `suffix = ""` last), e.g.
+  `AI reply draft updated (the thread moved on): <subject> (attachments: <r> read, <n> not read). The old draft is in Deleted Items.`
+  The remove text below is unchanged.
 - remove: `Outdated AI reply draft moved to Deleted Items (no reply needed any more): <subject>`
 
 `Ai` event when a move fails (`NoDeletedItems` or a COM error):
@@ -6328,9 +6343,15 @@ link serves can't change between link and download.
   fails. Nothing is read into memory by Clippy.
 - Save failure (M17.3): the tool fails with
   `Could not save "<name>" for the download link (<reason>). Try again, or use get_attachment.`
-  (`<reason>` = the COM message without a trailing period, or the
-  exception type name; never the temp path). A save that finishes after
-  the tool gave up (timeout or cancellation) deletes its own file.
+  (`<reason>` = `Outlook error 0x<HRESULT>` (8 upper-case hex digits) for
+  a COM error, else the exception type name; never Outlook's message,
+  which can contain the temp path (M17 review fix)). A save that
+  finishes after the tool gave up (timeout or cancellation) deletes its
+  own file.
+- Port unusable (M17 review fix): when the result URL can't be built
+  from the current port (no host running yet, invalid port), the new
+  link is consumed and its file deleted, and the tool fails with
+  `Clippy's server isn't running, so it can't make a download link. Try again in a moment.`
 - `PrivateFolder.Ensure` (M17.3) creates the folder with the DACL in one
   step, re-applies the DACL on every call, verifies it by reading it
   back, and refuses junctions/symlinks/reparse points before and after;
@@ -6378,6 +6399,12 @@ link serves can't change between link and download.
   already ≥ 200 MiB, and registering a saved file refuses when open +
   size > 200 MiB (the file is deleted). The rolling window counts
   successful creations only, and clearing the store doesn't reset it.
+  A link that was consumed but whose download is still streaming counts
+  toward the 10-open and 200 MiB limits until the download ends
+  (`Complete`), since its temp file is still on disk (M17 review fix).
+  `Add` on a disposed store deletes the saved file before it throws
+  `ObjectDisposedException`, so a save that races app exit leaves no
+  copy behind (M17 review fix).
   `<n>` MB = bytes ÷ 1,048,576 rounded **up**. `<n>` min = minutes until
   the oldest counted creation leaves the window, rounded up, at least 1.
 - Port change, host restart and app exit clear the store (files
@@ -6493,7 +6520,7 @@ link serves can't change between link and download.
   their log calls name no token, temp path, URL, file name, folder,
   link or id (with planted-violation checks); `SaveAsFile(` occurs
   exactly **twice** in `OutlookMail.Attachments.cs` (`SaveOne`,
-  `SaveAttachmentForLink`; three after M19.7's `ReadAttachmentForAi`)
+  `SaveAttachmentForLink`; three from M19.7 with `ReadAttachmentForAi`, §26.11)
   and nowhere else; `FilesEndpoint.Map(` occurs once, in
   `McpHttpHost.cs`, and the endpoint's own `Map(` once, in
   `FilesEndpoint.cs`; string literals starting with `/files` appear only
@@ -7035,10 +7062,17 @@ its reply target, §23.6). Sources:
 - **Attachments of earlier thread messages**: every non-inline
   attachment of the anchor's thread in the same mailbox index
   (`conversation_topic`, NOCASE, rows at or before the anchor's time,
-  any folder, the anchor excluded), the **50** newest messages
-  (`MaxThreadMessagesScanned`). The thread and the attachment list come
-  from the index (`EmailIndex.ThreadAttachments`, §26.8); the content
-  comes from Outlook.
+  any folder except Deleted Items, the anchor excluded), the **50**
+  newest messages (`MaxThreadMessagesScanned`). The thread and the
+  attachment list come from the index (`EmailIndex.ThreadAttachments`,
+  §26.8); the content comes from Outlook. Decided 2026-11-16 (the
+  coordinator's decision): a row whose index folder is `Deleted Items`
+  or below it (`Deleted Items\…`, case-insensitive, the same predicate
+  as §25.3's related mail) is never an attachment source; the user threw
+  that message away. Rows in Drafts stay allowed (a draft the user is
+  writing can carry the file being discussed), except the old AI draft
+  of a revisit, which M19.6 excludes by entry id. Localized folder names
+  are not matched (as in §25.3).
 - **Links** in the anchor's and those thread messages' bodies (index
   plain-text body; manual path: the COM-read body) whose host is one of
   Microsoft's OneDrive/SharePoint hosts (§26.3, after Safe Links
@@ -7477,6 +7511,14 @@ before the email being answered, which stays last.
   `read`/`truncated` item is three or more lines (open tag, escaped
   text, close tag; empty text gives an empty line, like `<thread>`);
   its text is not cut again (the §26.5 budget already applies).
+- Skipped-item cap (M19.5): at most **30** `status="skipped"` items are
+  listed (`DraftPrompt.MaxSkippedListed`), counted over all skipped
+  items whatever their reason or tier, in render order. Every further
+  skipped item is left out and counted in one line
+  `<skipped_more count="N"/>` (invariant integer) right before
+  `</attachments>`. `read` and `truncated` items are never dropped. (The
+  20-item read cap of §26.1 doesn't bound skipped items: images, links
+  from outside and unmappable links use no slot.)
 - The ` (link)` suffix (M19.5): `PromptAttachment` carries the message's
   `EntryId` and the attachment's index `FileName`. For every `cloud`
   item, the first name in that message's `attachments="…"` list (the
@@ -7590,7 +7632,9 @@ Synced files are read in Core (`SyncedFileReader`, plain `System.IO`,
 newest first, read-only (the existing tables; no schema change). In
 `EmailIndex.ThreadAttachments.cs` (with the record); `maxMessages`
 1–100; messages without attachments are included (for their links);
-inline rows are returned flagged; unknown sizes stay null.
+inline rows are returned flagged; unknown sizes stay null. Rows in
+Deleted Items (§26.1) are left out in the SQL, before the limit
+(M19.7).
 
 **Files and types** (M19.4): `DraftAttachments.cs` (`AttachmentKind`,
 `AttachmentOrigin`, `AttachmentRequest`, `IAttachmentSource`,
@@ -7633,12 +7677,45 @@ passes, `Interactive` for manual, rescan and revisits in a rescan). The
 time is part of the candidate's processing; the `Drafting` scope is
 already held.
 
+Details (M19.6):
+- Seam: `DraftWorkerServices.Attachments` (`DraftAttachments?`, last,
+  optional). Null means attachments are never read and the prompts are
+  byte-identical to M18's. The gate is `ReadAttachments` on, a wired
+  source and consent; with the gate closed there is no index query, no
+  source call, no notice and no log line.
+- Order: collection runs after the daily-limit and backoff checks and
+  inside the `Drafting` scope (automatic step 5 opens the scope before
+  building the prompt). It uses the path's cancellation token, so
+  **Cancel rescan** stops it. Cancellation during collection ends the
+  step like `Failed(Cancelled)`: no decision row, no revisit attempt,
+  no model call.
+- An unexpected exception (for example from the index thread query)
+  logs Warning `AI drafts: reading attachments failed (<Type>).` and the
+  draft goes on without attachments (and without the Debug line).
+- The anchor's sender rule (§26.3) uses the pass's resolved user SMTP:
+  the identity's address, else the index `mailbox_smtp`.
+- A revisit passes its old AI draft's entry id, and those thread rows
+  are dropped, so Clippy's own draft is never a source.
+- The flag M20.1 reads is `AttachmentCounts.UsedText` (`Read +
+  Truncated > 0`), in scope at every save (automatic, manual, rescan,
+  revisit replace); `Considered` (`Read + Truncated + Skipped > 0`)
+  decides the event suffix. Neither is stored.
+
 **Activity and logs** (counts only, never names, text or paths):
 - The `Draft` event text gains, when any item was considered,
   ` (attachments: <r> read, <n> not read)` (`<r>` = read + truncated).
   E.g. `AI reply draft created: Re:: Budget (attachments: 3 read, 1 not read)`.
+  The suffix is `DraftAttachmentTexts.EventSuffix(counts)`, `""` unless
+  something was considered; in a revisit's replace event it sits after
+  the subject, before the period (§23.9). `Removed` events, the pass and
+  rescan summaries and their log lines are unchanged (no attachment
+  counts). Drafts that aren't saved (`no_reply`, low confidence,
+  failures, `keep`) get no notes and no event.
 - Debug log per prompt:
   `AI drafts: attachments <r> read, <t> truncated, <s> skipped, <l> links, <c> chars in <ms> ms`.
+  Here `<r>` is `read` only (unlike the event). Logged once per
+  collection that ran, including one with 0 items; not logged when the
+  gate is closed or collection failed (M19.6).
 - No file names, URLs, local paths, extracted text or reasons in logs or
   events. A reader exception logs Warning with the exception type only.
 
@@ -7655,7 +7732,11 @@ file, §24.6) and runs on the worker thread:
 - Otherwise `SaveAsFile` into the private folder
   `%LOCALAPPDATA%\ClippysRevenge\ai-files\` (`AiFilePaths.Folder`) under
   `<32 lower-case hex random>.bin` (`.msg` for `olEmbeddeditem`), after
-  `PathPolicy.Check(path, [AiFilePaths.Folder], Write)`. The folder is
+  `PathPolicy.Check(AiFilePaths.Folder, [AiFilePaths.Folder], Write)` on
+  the **folder** (as §24.2 since M17.1: `Write` mode creates the checked
+  path as a directory, so the file path itself is never checked that
+  way; the file name is generated and matches
+  `^[0-9a-f]{32}\.(bin|msg)$`, so no input reaches the path). The folder is
   made with the M17 `PrivateFolder.Ensure` (user-only protected DACL,
   junction/symlink refused; §24.2) at start-up and before each save; a
   folder that fails it → `Failed`.
@@ -7676,6 +7757,63 @@ file, §24.6) and runs on the worker thread:
 `OneDriveRegistry.Read()` (App, `OneDriveRegistry.cs`): the HKCU reads
 of §26.3, read-only, no other key.
 
+Details (M19.7):
+- Core does the folder and file-name work: `AiFilePaths`
+  (`FolderName = "ai-files"`, `Default(localAppData)`,
+  `NewFileName(bool item)`, `IsTempFileName`), and `AiFiles`
+  (`PrepareTempPath(bool item)`, `Discard(path)`, `CleanUpAtStart()`)
+  over the M17 `ILinkFileSystem`, with `PrivateFolder.Ensure` passed in
+  as `Action<string>` (like `AttachmentLinksOptions`). An unusable
+  folder (Ensure fails, it is a junction/symlink, or `PathPolicy`
+  refuses it) throws `AiFolderUnusableException`, which the COM read
+  turns into `Failed("AiFolderUnusableException")`. The start-up cleanup
+  deletes only files directly in the folder whose names match
+  `^[0-9a-f]{32}\.(bin|msg)$`, and is skipped (Warning) when the folder
+  can't be made private or is a junction/symlink, like §24.2. Failed
+  deletes are kept in memory and retried before each save; the start-up
+  cleanup picks up whatever is left after a crash.
+- `ReadAttachmentForAi` takes the `AiFiles` instance as its last
+  parameter. The item is opened with the §8 chain (`OutlookMail.Resolve`); the
+  `mailbox` argument isn't needed for that (the index locates the item)
+  and is only validated. `ItemNotFoundException` → null.
+- Order on the matched attachment: cloud test first (`PR_ATTACH_METHOD`
+  = 7 or `Type` = `olByReference` (4)), then `Size > maxBytes` →
+  `TooLarge(size)`, then by type: `olByValue` (1) → `File`,
+  `olEmbeddeditem` (5) → `Item`; any other type (`olOLE`) →
+  `Failed("UnsupportedAttachmentType")`, nothing saved. An unknown
+  `Size` doesn't stop the save; the length check afterwards applies.
+- The cloud URL is the first of `PR_ATTACH_LONG_FILENAME_W`,
+  `PR_ATTACH_LONG_PATHNAME_W` that is a string holding an absolute
+  `https` URL (trimmed); none → `Cloud(null, DisplayName)`. The pure
+  helpers live in Core `AiAttachmentCom` (`DraftAttachments.Com.cs`).
+- Attached item: `From` is `Name <address>` (or whichever of the two is
+  non-blank, else null); `Sent` from `SentOn` through
+  `OutlookDates.FromLocal` (Outlook's "none" date → null); `Body` cut to
+  20,000 characters (`AttachmentText.MaxFileChars`, not splitting a
+  surrogate pair); at most **50** attachment names
+  (`AiAttachmentCom.MaxItemAttachmentNames`), each via
+  `InlineAttachments.FileNameFor`. `OpenSharedItem` returning anything
+  other than a `MailItem` → `Failed("NotAMailItem")` (the object is only
+  released). The item is closed with `Close(olDiscard)` in `finally`
+  before the temp file is discarded.
+- Errors: `COMException` that is not "Outlook gone", `IOException`,
+  `UnauthorizedAccessException` and `AiFolderUnusableException` →
+  `Failed(<type name>)`; "Outlook gone" COM errors propagate (the worker
+  turns them into `OutlookUnavailableException`). Exception messages are
+  never used (they can hold the temp path).
+- `OutlookAttachmentSource.ReadAsync` runs `EnsureResolvedAsync` and
+  then one `OutlookWorker.RunAsync` work item at the given priority with
+  the worker's usual timeout for that priority; `SyncedRoots()` is
+  `OneDriveRegistry.Read()` (never throws). Neither logs anything but
+  exception type names.
+- `OneDriveRegistry`: values are read with `GetValue(name)?.ToString()`
+  (so the DWORD `IsFolderScope` becomes `"1"`); every key is opened
+  read-only and disposed in the loop; `ReadPersonal` returns null when
+  the key or either value is missing.
+- Settings → AI drafts: the checkbox sits right after the reason-line
+  checkbox and facts status line, before the meeting-times row; the
+  rows below move down by 30 px.
+
 ### 26.10 Settings, consent and UI
 
 - §19.2 gains `ReadAttachments` (default `true`; the user asked for
@@ -7691,6 +7829,18 @@ of §26.3, read-only, no other key.
   info balloon
   `AI drafts now also read attachments and shared files synced to this PC, and send their text to Claude, to write better replies. You can turn this off in Settings → AI drafts.`
   then `AttachmentsNoticeShown = true` (the §25.3 pattern).
+  Details (M19.6): the notice fires right before the first collection
+  in the process, from any path, and only while a source is wired, the
+  setting is on and consent exists; at most once per process even when
+  saving the flag fails (Warning
+  `AI drafts: couldn't save that the attachments notice was shown (<Type>).`,
+  the notice still shows). `AiNotice { RelatedMail, Attachments }`;
+  `MarkNoticeShown(AiNotice.Attachments)` sets the flag (no save when it
+  is already set); `RecordConsent` sets `AttachmentsNoticeShown`
+  together with `RelatedMailNoticeShown` for a new consent, because the
+  new text names attachments; `SettingsEditor.Rebase` adopts a flag set
+  meanwhile. Texts: `DraftAttachmentTexts.Notice`,
+  `AiTabTexts.ReadAttachmentsText`, `AiConsent.Text`.
 - §19.1's list of what leaves the PC gains "the text of attachments of
   the email and its thread, and of OneDrive/SharePoint files they link
   to that are synced to this PC (§26)".
@@ -7717,6 +7867,24 @@ of §26.3, read-only, no other key.
   user or the user's own domain (sender rule, standing default). Every
   other link is never touched. Clippy still makes no network request for
   any link; it reads only the local synced copy.
+- Scan details (M19.7, `SafetySourceScanTests`, each matcher with
+  planted violations): `SaveAsFile(` exactly **3** times in
+  `OutlookMail.Attachments.cs` and nowhere else; `OpenSharedItem(`
+  exactly once, in that file; in that file every `.Close(` is
+  `Close(Outlook.OlInspectorClose.olDiscard)`, and there is no `.Save(`,
+  `.Display(`, `.Send(`, `.Move(`/`.MoveTo(`, `.Copy(` and no
+  `Delete(` other than `File.Delete(`, and no logger call. The §26.11
+  file set (`AttachmentText*.cs`, `OneDrive*.cs`, `DraftAttachments*.cs`,
+  `OutlookAttachmentSource.cs`, `AiFiles.cs`) has none of the forbidden
+  references above; their log calls (strings blanked, `GetType().Name`
+  removed) name no path, URL, file name, mount, folder, link, entry id,
+  subject, body or text. `OneDriveRegistry.cs` has no `CreateSubKey`,
+  `SetValue`, `DeleteValue`, `DeleteSubKey`, `DeleteSubKeyTree` or
+  `writable: true`. `OutlookAttachmentSource` counts as an AI file
+  (§19.12 scan). `Program.cs` calls `aiFiles.CleanUpAtStart(` before
+  `new DraftWorker(` and passes `Attachments:` to `DraftWorkerServices`.
+  `SettingsForm.Ai.cs` binds `AiTabTexts.ReadAttachmentsText` to
+  `ReadAttachments`.
 
 ### 26.12 Tests
 
@@ -7852,11 +8020,15 @@ CREATE INDEX ix_ai_edits_sent ON ai_edits(sent);
   `ReplyPlan.HtmlFragment` and never `top`).
 - No row without a source internet message id. Rows need
   `LearnFromEdits` on at save time.
-- **Drafts built from attachment text** (§26): pending user decision
-  (see the M20 report). Default until then: when the draft's prompt
-  contained any `read` or `truncated` attachment item, **no**
-  `ai_draft_texts` row is written, so no model output derived from
-  attachment content is stored in the index (§1.6 read strictly).
+- **Drafts built from attachment text** (§26): decided by the user
+  (2026-11-16): skip. When the draft's prompt contained any `read` or
+  `truncated` attachment item (`AttachmentCounts.UsedText`, M19.6,
+  available at every save: automatic, manual, rescan, revisit
+  replace), **no** `ai_draft_texts` row is written, so no model output
+  derived from attachment content is stored in the index (§1.6 read
+  strictly). Prompts whose attachment items were all `skipped` don't
+  count (no extracted text reached the model). The flag itself is never
+  stored.
 - `pending` rows unmatched after **30 days** → `expired` and their text
   set to `''`; expired rows are deleted after another 30 days.
 
