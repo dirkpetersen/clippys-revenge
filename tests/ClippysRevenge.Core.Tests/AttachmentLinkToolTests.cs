@@ -163,6 +163,28 @@ public sealed class AttachmentLinkToolTests : IDisposable
         Assert.StartsWith("http://127.0.0.1:54321/files/", b.Url);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(70000)]
+    public async Task InvalidPort_DiscardsFile_ActionableError(int port)
+    {
+        using var links = NewLinks();
+        _port = port;
+        var ex = await Assert.ThrowsAsync<McpException>(() => NewTool(links).CreateAsync("abc", null, null, CancellationToken.None));
+        Assert.Equal("Clippy's server isn't running, so it can't make a download link. Try again in a moment.", ex.Message);
+        Assert.Equal(0, links.OpenCount);
+        Assert.False(File.Exists(Assert.Single(_saver.Calls).TempPath));
+    }
+
+    [Fact]
+    public async Task DisposedStore_AddDeletesFile()
+    {
+        var links = NewLinks();
+        _saver.OnSave = links.Dispose;
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => NewTool(links).CreateAsync("abc", null, null, CancellationToken.None));
+        Assert.False(File.Exists(Assert.Single(_saver.Calls).TempPath));
+    }
+
     [Fact]
     public async Task ShellUnsafeName()
     {
@@ -211,6 +233,7 @@ public sealed class AttachmentLinkToolTests : IDisposable
         public long? ReportedSize { get; set; }
         public Exception? Throw { get; set; }
         public bool WriteBeforeThrow { get; set; }
+        public Action? OnSave { get; set; }
 
         public Task<SavedAttachment> SaveForLinkAsync(string id, string? filename, int? position, string tempPath,
             long maxBytes, CancellationToken ct)
@@ -222,6 +245,7 @@ public sealed class AttachmentLinkToolTests : IDisposable
                 throw Throw;
             }
             File.WriteAllBytes(tempPath, Bytes);
+            OnSave?.Invoke();
             return Task.FromResult(new SavedAttachment(tempPath, Name, ReportedSize ?? Bytes.Length));
         }
     }
