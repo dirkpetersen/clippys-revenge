@@ -55,7 +55,7 @@ internal sealed partial class OutlookMail
             {
                 FolderRoot.Inbox => (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderInbox),
                 FolderRoot.SentItems => (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderSentMail),
-                FolderRoot.Drafts => (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderDrafts),
+                FolderRoot.Drafts => (Outlook.Folder?)TryDrafts(store) ?? throw new MailFolderNotFoundException(key, p.Canonical),
                 FolderRoot.DeletedItems => (Outlook.Folder?)TryDeletedItems(store) ?? throw new MailFolderNotFoundException(key, p.Canonical),
                 _ => (Outlook.Folder)store.GetRootFolder(),
             };
@@ -372,14 +372,14 @@ internal sealed partial class OutlookMail
             store = parent.Store;
             inbox = (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderInbox);
             sent = (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderSentMail);
-            drafts = (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderDrafts);
+            drafts = (Outlook.Folder?)TryDrafts(store);
             deleted = (Outlook.Folder?)TryDeletedItems(store);
             var parentId = parent.EntryID;
             var path = parentId == inbox.EntryID ? MailFolderPath.Inbox
                 : parentId == sent.EntryID ? MailFolderPath.SentItems
-                : parentId == drafts.EntryID ? MailFolderPath.Drafts
+                : drafts is not null && parentId == drafts.EntryID ? MailFolderPath.Drafts
                 : deleted is not null && parentId == deleted.EntryID ? MailFolderPath.DeletedItems
-                : MailFolderPath.FromOutlook(parent.FolderPath, inbox.Name, sent.Name, drafts.Name, deleted?.Name) ?? parent.Name;
+                : MailFolderPath.FromOutlook(parent.FolderPath, inbox.Name, sent.Name, drafts?.Name, deleted?.Name) ?? parent.Name;
             var parsed = MailFolderPath.Parse(path);
             var storeId = store.StoreID;
             var mailbox = "";

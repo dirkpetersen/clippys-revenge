@@ -189,7 +189,9 @@ public sealed class EditLearning
 
         int stored = 0, unchanged = 0, failed = 0;
         string? firstFailure = null;
-        foreach (var row in rows)
+        // Newest-first only chose which rows to take; match oldest-first so two sent replies to one email pair
+        // D1-S1 then D2-S2 instead of S2 superseding D1.
+        foreach (var row in rows.Reverse().OrderBy(r => r.EventTime))
         {
             ct.ThrowIfCancellationRequested();
             try
