@@ -129,6 +129,7 @@ The submenu for [AI drafts](ai-drafts.md):
 | **Rescan emails from the last 24 hours…** | Goes through the last day of mail, oldest first, drafts replies where one is needed and re-checks Clippy's own drafts in those threads. Works with automatic drafting off. See below | Greyed out while Outlook isn't running, while the index isn't available and while the rescan is starting |
 | **Show Drafts in Outlook** | Opens your Drafts folder in Outlook | Hidden while Outlook isn't running |
 | **AI drafts settings…** | Opens Settings on the AI drafts tab | |
+| **Edit my facts…** | Opens your [facts file](ai-drafts.md#facts-about-you) (`%USERPROFILE%\.claude\skills\my-email-context\SKILL.md`) in Notepad. If the file is missing, Clippy creates the template first, even without AI drafts consent, because nothing is sent. If Notepad can't start, a balloon says `Couldn't open the file: <reason>` | Greyed out while the AI drafts services aren't available |
 
 **Rescan emails from the last 24 hours…** works like this:
 

@@ -142,6 +142,23 @@ time in seconds. A rescan that ends early starts `Rescan stopped (<reason>) afte
 
 The usual `Draft` and low-confidence events appear for each email as well.
 
+### Facts about you
+
+See [Facts about you](ai-drafts.md#facts-about-you). These texts never contain the file's content or path.
+
+| Kind | Text |
+|---|---|
+| `Ai` (warning) | `Facts about you: my-email-context SKILL.md not found or unreadable — drafts go without it. Use "Edit my facts…" in the AI drafts menu.` Shown once when the file goes missing, becomes unreadable, is larger than 16 KiB or isn't valid UTF-8 |
+| `Ai` | `Facts about you: using my-email-context SKILL.md again.` The file is back |
+
+An untouched template is normal and reports nothing.
+
+### Related mail
+
+| Kind | Text |
+|---|---|
+| `Ai` | `AI drafts now also send up to 5 related earlier emails from your mailbox to Claude, to write better replies. You can turn this off in Settings → AI drafts.` Shown once (with a balloon), if you consented before v0.1.1 and **Include related earlier emails** is on |
+
 ### Writing style
 
 | Kind | Text |

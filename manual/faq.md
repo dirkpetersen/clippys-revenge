@@ -115,10 +115,32 @@ in Outlook and use **Draft a reply to the selected email** in the tray menu. See
 
 ## Does AI drafting send my mail to Anthropic?
 
-Yes, while it is on: the email being answered, thread excerpts, attachment names and
-your style guide go to Claude through your own Claude Code (or your API key).
+Yes, while it is on: the email being answered, thread excerpts, up to 5 related
+earlier emails, attachment names, your facts file and your style guide go to Claude through your own Claude Code (or your API key).
 Attachment contents never do. See
 [what is sent](ai-drafts.md#consent-and-what-is-sent).
+
+## Can I tell the AI drafts my Zoom link or how I like to sign off?
+
+Yes. Use **Edit my facts…** in the tray, under **AI drafts**. It opens a file with
+headings for your role, links, office hours, standard answers, people and **How I want
+replies written**. Whatever you write there is used in every draft, and your reply
+preferences win over the writing style. See [Facts about you](ai-drafts.md#facts-about-you).
+
+## Does Claude see my older emails too?
+
+A few. With **Include related earlier emails** on (the default), each draft request
+carries up to 5 earlier emails from the same mailbox that match the topic or the
+sender, including your own replies to that person, so the draft fits the history. You
+can turn it off in Settings, AI drafts. See
+[Related earlier mail](ai-drafts.md#related-earlier-mail).
+
+## What is the yellow line at the top of an AI draft?
+
+The reason line: one sentence starting `Clippy:` that says why the draft was written.
+Delete it before you send. Deleting it counts as editing the draft, so Clippy won't
+replace or move that draft later. You can turn the line off in Settings, AI drafts. See
+[The reason line](ai-drafts.md#the-reason-line).
 
 ## Does Clippy sign in to Claude or read my Claude login?
 

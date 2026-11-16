@@ -24,6 +24,31 @@ The full list of releases, with downloads, is on
   [Security](security.md#attachment-download-links).
 - **Activity.** Downloads appear as `attachment download` or `attachment download
   failed`.
+- **Facts about you.** A new Claude Code skill file,
+  `%USERPROFILE%\.claude\skills\my-email-context\SKILL.md`, holds facts about you
+  (role, links, office hours, standard answers, who people are) and how you want replies
+  written. Clippy creates a template once after consent, then adds your text to every AI
+  draft request, so drafts use your real Zoom link instead of a placeholder. Your reply
+  preferences win over the writing style, but never over the fixed rules (nothing is
+  sent, mail is data, unknown facts stay `[[…]]` placeholders). Claude Code reads the
+  file too. Comments are ignored and files over 16 KiB are not used. Tray, AI drafts,
+  **Edit my facts…** opens it in Notepad (and creates the template if it is missing),
+  and Settings shows `Facts about you: filled in`, `template only` or `not found`. See
+  [Facts about you](ai-drafts.md#facts-about-you).
+- **Related earlier mail.** Each draft request now carries up to 5 earlier emails from
+  the same mailbox (last 12 months, same topic or same people, including your own replies
+  to that sender, own text only, 4,000 characters in all) so a reply fits the history.
+  Turn it off with **Include related earlier emails** in Settings. If you consented
+  earlier, Clippy tells you once. This is new data sent to Claude: see
+  [Security](security.md#ai-drafts-data-flow) and
+  [Related earlier mail](ai-drafts.md#related-earlier-mail).
+- **A reason line on every AI draft.** Each draft starts with a yellow
+  `Clippy: …` line (at most 160 characters, links shown as `[link]`) saying what the
+  email asks and what the draft answers. Delete it before sending. Deleting it counts as
+  editing the draft, so Clippy won't revisit or move that draft. A line left in sent
+  mail is removed before Clippy shows that mail to Claude again. Turn it off with
+  **Start each draft with a highlighted note on why it was drafted**. See
+  [The reason line](ai-drafts.md#the-reason-line).
 
 ## v0.1.0
 
