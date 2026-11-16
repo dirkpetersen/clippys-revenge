@@ -70,14 +70,17 @@ Clippy's own outdated AI drafts, as before.
   once; new consents name it. **This sends new data to Claude**: see
   [Attachments and shared files](ai-drafts.md#attachments-and-shared-files) and
   [Security](security.md#attachment-text-and-shared-files).
-- **Shared files: synced only, and only from you or your organization.** Clippy opens
-  only links to OneDrive and SharePoint (`*.sharepoint.com`, `onedrive.live.com`,
-  `d.docs.live.net`, `1drv.ms`), and only when the file is already synced to this PC. It
-  makes no network request (no Graph, no sign-in). An online-only file is downloaded by
-  your own OneDrive client. Other links are never touched. Links are read only from the
-  text each person wrote: links in quoted replies or forwarded mail are ignored. If your
-  own address is at a free or consumer mail provider (outlook.com, gmail.com and the
-  like), only links you sent yourself (or the shared mailbox's own address) are read.
+- **Shared files: synced only, and only from you or your organization.** Clippy looks
+  only at links to OneDrive and SharePoint (`*.sharepoint.com`, `onedrive.live.com`,
+  `d.docs.live.net`, `1drv.ms`, also inside Safe Links), at most 10 per email, and reads
+  a file only when the link points into a folder that is already synced to this PC.
+  Sharing links such as `1drv.ms`, `onedrive.live.com` or "specific people" links can't
+  be matched to a synced file and get the `not synced to this PC` note. Clippy makes no
+  network request (no Graph, no sign-in). An online-only file is downloaded by your own
+  OneDrive client. Other links are never touched. Links are read only from the text each
+  person wrote: links in quoted replies, forwarded mail and `>`-quoted lines are ignored.
+  If your own address is at a free or consumer mail provider (outlook.com, gmail.com and
+  the like), only links you sent yourself (or the shared mailbox's own address) are read.
 - **Nothing stored.** The attachment text is never written to the index, settings, logs
   or Activity. Outlook attachments pass through the private folder
   `%LOCALAPPDATA%\ClippysRevenge\ai-files\` and are deleted at once and at start-up.
@@ -115,12 +118,37 @@ Clippy's own outdated AI drafts, as before.
   translated name keeps its old entries until you add it again or rebuild the index. See
   [Drafts and Deleted Items in other languages](ai-drafts.md#drafts-and-deleted-items-in-other-languages).
 - **Shared links come from the right text.** Links are read only from the text each
-  person wrote, not from quoted replies or forwarded mail, and consumer mail domains are
-  not treated as your organization.
-- **One slow PDF at a time.** While one PDF that took too long is still being processed,
-  other PDFs are skipped with the `it took too long` note.
+  person wrote, not from quoted replies or forwarded mail. Lines that start with `>`
+  (an inline reply that keeps the quoted text) are skipped too.
+- **More consumer mail providers.** Regional and other free mail domains (for example
+  `hotmail.co.uk`, `outlook.de`, `yahoo.fr`, `ymail.com`, `mail.com`, `t-online.de`,
+  `qq.com`, `yandex.ru`, `comcast.net`, `fastmail.com`) are not treated as your
+  organization.
+- **Forward headers in more languages.** Forwarded and quoted mail with Swedish
+  (`Från:`, `Skickat:`), Polish (`Od:`, `Wysłano:`) and Japanese (`差出人:`, `送信日時:`)
+  headers is recognized, so its text and links count as quoted, not as the sender's own.
+- **Unnamed attachments.** An attachment Outlook gives no name at all (Clippy shows it as
+  `attachment-<n>`) is skipped for AI drafts with the note `Clippy can't read this kind
+  of file`.
+- **Unreadable is not damaged.** An attachment that is neither a file nor an attached
+  email now gets `Clippy can't read this kind of file` instead of `the file seems
+  damaged`.
+- **One slow PDF at a time.** A PDF that takes longer than 10 seconds is given up on,
+  but its reading can't be stopped. While it still runs, other PDFs are skipped with the
+  `it took too long` note, so slow PDFs can't pile up.
 - **Attached emails without a file name** are named `<subject>.msg`. Older index entries
-  without the `.msg` still match in `get_attachment`, bulk export and `attachment_link`.
+  without the `.msg` still match in `get_attachment`, `save_attachments` and
+  `attachment_link`, and are still read for AI drafts.
+- **Shared mailboxes without access to Drafts.** A shared mailbox where you can open
+  the Inbox and Sent Items but not Drafts no longer makes folder lookups fail.
+- **Two replies to one email.** When you send two replies to the same email that both
+  began as AI drafts, each sent reply is now matched to its own draft, oldest first,
+  for learning from edits.
+- **Learn from how I edit Clippy's drafts** is greyed out in Settings whenever the
+  writing-style controls are (no index yet), since it only works through the writing
+  style.
+- **Starting Clippy a second time** reliably opens Settings in the copy that is already
+  running. Before, a second start right after another one could do nothing.
 
 ## v0.1.0
 

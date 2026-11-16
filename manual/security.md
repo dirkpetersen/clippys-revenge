@@ -141,11 +141,12 @@ be inside an allowed folder:
 
 - the attachment folder, `%USERPROFILE%\Downloads\Clippy's Revenge` by default,
   which is always allowed
-- `%USERPROFILE%\Documents`
+- `%USERPROFILE%\Documents`, which is in the list by default (you can remove it)
 - any folders you add in Settings, General
 
-Paths with `..`, UNC paths, `\\?\` paths, alternate data streams and junction
-escapes are refused. This stops a prompt-injected email from making Claude write
+Relative paths, `..` that leads out of an allowed folder, UNC and device paths
+(`\\server\...`, `\\?\...`), alternate data streams, reserved device names and paths
+through a junction or symbolic link are refused. This stops a prompt-injected email from making Claude write
 into places like the Startup folder, or read files such as `~/.ssh`. A refused path
 is shown as `Blocked` in the Activity window.
 
@@ -192,17 +193,18 @@ Where your data goes, in one table.
 | Logs (7 days) | `%LOCALAPPDATA%\ClippysRevenge\logs` |
 | Facts file | `%USERPROFILE%\.claude\skills\my-email-context\SKILL.md` (written by you; Clippy only creates the template once), plus `facts-state.json` in `%APPDATA%\ClippysRevenge\my-email-style\` |
 | Writing-style skill | `%USERPROFILE%\.claude\skills\my-email-style\SKILL.md`, plus Clippy's copy and `state.json` in `%APPDATA%\ClippysRevenge\my-email-style\` |
-| Temporary files for Claude Code | `%LOCALAPPDATA%\ClippysRevenge\ai\` (one system-prompt file per run, deleted afterwards; mail text is never written there) |
+| Temporary files for Claude Code | `%LOCALAPPDATA%\ClippysRevenge\ai\` (one `sp-<random>.md` system-prompt file per run, holding Clippy's instructions, your style guide and facts; deleted when the run ends, leftovers older than an hour at the first run after Clippy starts. Mail text goes to `claude` through standard input and is never written there) |
 | Saved attachments | `%USERPROFILE%\Downloads\Clippy's Revenge` (default) |
 | Attachment copies for AI drafts | `%LOCALAPPDATA%\ClippysRevenge\ai-files\` (your user only; each copy is deleted as soon as its text is read, and leftovers at app start; normally empty) |
 | Download-link copies | `%LOCALAPPDATA%\ClippysRevenge\links\` (your user only; deleted after download, on expiry and at app start; normally empty) |
 | Draft-invite tracking | `%APPDATA%\ClippysRevenge\draft-invites.json` (Outlook ids only) |
 
-**To wipe it:** use **Rebuild index...** in the tray to delete and recreate only the
+**To wipe it:** use **Rebuild index…** in the tray to delete and recreate only the
 index. To remove everything, uninstall with `-Purge` (see
-[Uninstall](install.md#uninstall)), which deletes settings, token, index and
-logs (check afterwards that `%APPDATA%\ClippysRevenge` is gone, as it also holds the
-saved API key). Then delete by hand what lives outside Clippy's folders: the style skill folder
+[Uninstall](install.md#uninstall)), which deletes the whole `%APPDATA%\ClippysRevenge`
+and `%LOCALAPPDATA%\ClippysRevenge` folders: settings, token, API key, index, logs,
+draft-invite tracking and the temporary folders. Then delete by hand what lives
+outside Clippy's folders: the style skill folder
 `%USERPROFILE%\.claude\skills\my-email-style`, the facts folder `%USERPROFILE%\.claude\skills\my-email-context` and any saved attachments. Drafts that
 Clippy saved are ordinary Outlook drafts; they stay in your mailbox until you delete
 them.
@@ -214,7 +216,8 @@ are off by default and need your consent. While on, Clippy sends to Anthropic (t
 your Claude Code or your API key):
 
 - the email being answered, with its quoted history (cut at 20,000 characters)
-- up to 8 earlier messages of the same thread from the local index, your own text only
+- up to 8 earlier messages of the same thread from the local index, own text only
+  (quotes and signatures cut), each cut at 4,000 characters
 - up to 5 related earlier emails from the same mailbox, your own text only, at most 4,000
   characters in all (see [Related earlier mail](ai-drafts.md#related-earlier-mail)); you can
   turn this off with **Include related earlier emails**
@@ -225,14 +228,15 @@ your Claude Code or your API key):
   OneDrive/SharePoint files they link to that are already synced to your PC (at most
   40,000 characters per draft). See [Attachment text](#attachment-text-and-shared-files)
 - your name and address, today's date, and your writing-style guide
-- once a week, about 150 to 300 samples of your sent mail for the style guide, with
-  addresses, links and phone numbers removed
+- once a week, up to 200 samples of your sent mail from the last 12 months for the
+  style guide, each cut at 1,500 characters, with addresses, links and phone numbers
+  removed
 - with that weekly style update (or **Regenerate**), up to 20 pairs of an AI draft and
   the reply you sent after editing it, redacted and cut to 1,500 characters each, when
   at least 3 exist and **Learn from how I edit Clippy's drafts** is on. See
   [Learning from your edits](#learning-from-your-edits)
 - when Clippy re-checks an [outdated draft](ai-drafts.md#outdated-drafts), the text of
-  its own earlier draft and the newer messages of the thread
+  its own earlier draft (cut at 4,000 characters) and the newer messages of the thread
 
 **Never sent:** images, any file itself (only extracted text), other mail or folders from the index,
 your calendar, mail from shared mailboxes you haven't turned on, your Claude
@@ -280,10 +284,13 @@ What Clippy does and doesn't do when it reads files for a draft
 - **Only from your organization.** Links and cloud attachments are opened only when the
   email was sent by you, by the shared mailbox's own address, or by an address in your own
   domain (or a subdomain of it), so a stranger can't make Clippy put a file from your
-  OneDrive into a draft for them. A free or consumer mail provider (such as outlook.com,
-  hotmail.com, gmail.com, yahoo.com, icloud.com or GMX) is not an organization: with such
-  an address only links you sent yourself count. Links are read only from the text each
-  person wrote, never from quoted replies or forwarded mail.
+  OneDrive into a draft for them. A free or consumer mail provider is not an
+  organization: with such an address only links you sent yourself count. Clippy knows
+  about 40 of them, such as outlook.com, hotmail.com, live.com, gmail.com, yahoo.com,
+  icloud.com, aol.com, Proton, GMX, web.de, t-online.de, mail.ru, qq.com, comcast.net
+  and fastmail.com, plus country versions such as hotmail.co.uk or yahoo.fr. Links are
+  read only from the text each person wrote, never from quoted replies, forwarded mail
+  or lines that start with `>`.
 - **Prompt injection.** The model is told that file text is data, never instructions, and
   it still has no tools. The worst a malicious file can do is produce a bad draft.
 - **Off switch.** Untick **Read attachments and synced shared files for drafts** and
@@ -304,14 +311,14 @@ What Clippy does and doesn't do with your edited drafts
 - **Small and purged.** Texts are kept for the newest 20 edited pairs only; unmatched
   draft texts expire after 30 days; the remaining numbers go after 90 days. No tool,
   including `query_index`, can read these records, and they are deleted with the index
-  (**Rebuild index...**).
+  (**Rebuild index…**).
 - **Never logged.** Logs and Activity hold counts and exception type names only.
 - **Leaves the PC once a week at most.** Only the writing-style update sends pairs (up
   to 20, redacted) to Claude, as data it is told never to follow. The model still
   has no tools.
 - **Off switch.** Untick **Learn from how I edit Clippy's drafts**: nothing new is
   recorded or matched and no pairs are sent. Existing records age out or go with
-  **Rebuild index...**.
+  **Rebuild index…**.
 - **The result is part of your style skill.** The "Edits I usually make to drafts"
   section Claude writes lives in the same Claude Code skill file as the rest of the
   guide, with the same warning below. It is told to include no names, addresses, links

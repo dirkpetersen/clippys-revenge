@@ -47,7 +47,7 @@ Turn on [AI drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/) a
 - **Facts about you.** Tray, **AI drafts**, **Edit my facts…** opens a skill file (`%USERPROFILE%\.claude\skills\my-email-context\SKILL.md`) with your Zoom link, office hours, standard answers, who people are and how you want replies written. Clippy adds it to every draft request. See [Facts about you](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#facts-about-you).
 - **Related earlier mail.** Up to 5 related earlier emails from the same mailbox go with each draft request so replies fit the history. On by default; **Include related earlier emails** in Settings turns it off. See [Related earlier mail](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#related-earlier-mail).
 - **Reason line.** Each AI draft starts with a yellow `Clippy: …` line saying why it was drafted. Delete it before sending. See [The reason line](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#the-reason-line).
-- **Attachments and shared files.** Drafts use what attachments say. Clippy reads the text of PDF, Word, Excel, PowerPoint, text and HTML attachments of the email and its thread, and of OneDrive/SharePoint files linked in them that are already synced to your PC (only links from you or your own organization, nothing fetched from the network), and sends it to Claude for that one draft. Nothing is stored. Files it couldn't read get a yellow note at the top. On by default; **Read attachments and synced shared files for drafts** in Settings turns it off. See [Attachments and shared files](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#attachments-and-shared-files).
+- **Attachments and shared files.** Drafts use what attachments say. Clippy reads the text of PDF, Word, Excel, PowerPoint, text, HTML and `.eml` attachments and attached emails of the email and its thread (up to 20 files and 40,000 characters per draft), and of OneDrive/SharePoint files linked in them that are already synced to your PC (only links from you or your own organization, nothing fetched from the network), and sends it to Claude for that one draft. Nothing is stored. Files it couldn't read get a yellow note at the top. On by default; **Read attachments and synced shared files for drafts** in Settings turns it off. See [Attachments and shared files](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#attachments-and-shared-files).
 - **Token tally.** A greyed `Today: 18 AI calls, ~210k tokens (in 190k / out 20k)` line in the tray's AI drafts menu and in Activity. See [Token tally](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#token-tally).
 - **Don't draft for this sender.** Two tray items add the selected email's sender or domain to **Never draft for**; undo it by deleting the line in Settings. See [Don't draft for this sender](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#dont-draft-for-this-sender).
 - **Learning from your edits.** When you send a reply that began as an AI draft, Clippy keeps a redacted draft/sent pair in its local index (newest 20 with text, purged after 30 to 90 days; drafts that used attachment text are never kept). With the weekly writing-style update, up to 20 pairs (at least 3 needed) go to Claude, which adds an "Edits I usually make to drafts" section to your style. On by default; **Learn from how I edit Clippy's drafts** in Settings turns it off. See [Learning from how you edit drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#learning-from-how-you-edit-drafts).
@@ -123,7 +123,8 @@ Clippy attaches to a running Outlook and never starts it by itself. If
 Outlook isn't running, indexing waits. The tray's **Start Outlook** item
 (shown only then) is the one place that starts it. Other tray items: Sync
 now, Pause indexing, Rebuild index, Shared mailboxes, AI drafts, Draft invites,
-Activity, Settings, Open log folder, Open data folder, About. Every item is
+Copy auth token, Regenerate auth token, Activity, Settings, Open log folder,
+Open data folder, About, Start with Windows and Exit. Every item is
 explained in the [tray menu reference](https://dirkpetersen.github.io/clippys-revenge/tray/).
 
 ## WSL setup
@@ -224,7 +225,7 @@ no extra encryption layer.
 Mailboxes mounted in your Outlook profile appear under tray menu **Shared
 mailboxes**. Checking one starts indexing it into its own index file;
 unchecking asks whether to delete that index. Tools reach it with
-`mailbox="helpdesk@example.edu"`, or search all of them with `mailbox="all"`.
+`mailbox="<the shared mailbox's address>"`, or search all of them with `mailbox="all"`.
 
 ## Troubleshooting
 

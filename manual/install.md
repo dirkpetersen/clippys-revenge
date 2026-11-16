@@ -83,12 +83,14 @@ on disk.
 |---|---|
 | Program | `%LOCALAPPDATA%\Programs\ClippysRevenge\ClippysRevenge.exe` |
 | Settings, token and API key (encrypted) | `%APPDATA%\ClippysRevenge\` |
-| Index and logs | `%LOCALAPPDATA%\ClippysRevenge\` |
+| Index, logs and update state | `%LOCALAPPDATA%\ClippysRevenge\` |
+| Short-lived files: an attachment waiting for its [download link](tools.md#attachment_link) (`links\`, deleted after the download or when the link expires) and an attachment being read for an AI draft (`ai-files\`, deleted right after reading) | `%LOCALAPPDATA%\ClippysRevenge\` |
 | Saved attachments | `%USERPROFILE%\Downloads\Clippy's Revenge` |
 
 Your writing-style skill for [AI drafts](ai-drafts.md#your-writing-style) is stored
-under `%USERPROFILE%\.claude\skills\my-email-style` and is not removed by the
-uninstaller.
+under `%USERPROFILE%\.claude\skills\my-email-style`, and your
+[facts file](ai-drafts.md#facts-about-you) under
+`%USERPROFILE%\.claude\skills\my-email-context`. The uninstaller removes neither.
 
 ## Next step
 

@@ -9,8 +9,8 @@ send it from Outlook.
 ## Listing events
 
 `list_events` returns events in a window, with recurring events expanded, at most
-500. Without arguments it covers the next 7 days (`days` can be 1 to 366). Each event
-has its subject, start, end, all-day flag, location, organizer, whether it recurs and
+500, sorted by start. Without arguments it covers 7 days from today 00:00 (`days`
+can be 1 to 366, or Claude passes `start` and `end`). Each event has its id, subject, start, end, all-day flag, location, organizer, whether it recurs and
 its busy status. Pass `mailbox` to read a [shared mailbox's](indexing.md#shared-mailboxes)
 calendar. It only reads; nothing is changed.
 
@@ -47,7 +47,8 @@ Things to know:
 - Besides the blocks, the result has **offers** of exactly the meeting length and an
   `offer_text` with one option per line, ready to paste into an email. For someone
   in Europe, Claude sets `offer_cet` and each line also shows the time in CET, with
-  the options inside European office hours first. See
+  the options between 08:00 and 18:00 CET first and the others in a second list
+  headed `Outside European office hours:`. See
   [`find_free_times`](tools.md#find_free_times).
 - Clippy's [AI drafts](ai-drafts.md#meeting-times) use the same offers when an email
   asks for a meeting.
@@ -74,8 +75,9 @@ The workflow:
 6. Within a few minutes Clippy sees that the invite has gone out and removes its
    category. Any other category you set stays, and the badge count goes down.
 
-Before anything is created, every recipient must resolve in Outlook. If one doesn't,
-nothing is created.
+Before anything is created, every recipient must resolve in Outlook, and a
+`reply_to_id` must name an email Clippy can find. If either check fails, nothing is
+created and Claude is told which recipients or which id to fix.
 
 ### Invite mode
 
@@ -141,11 +143,17 @@ Below the note is an empty paragraph for your own text. Delete the note before y
 send the reply. If an [AI draft](ai-drafts.md) already answers the email, it is left
 alone, and the note is a second reply draft.
 
+For a meeting in a shared mailbox's calendar the note says `in the calendar of
+<address>` and `or that calendar` instead.
+
 If the note can't be saved, the meeting is still saved and the result has a
-`note_error` that says why.
+`note_error` that says why, for example `The meeting was saved, but the note in
+Drafts couldn't be created: <reason>.`
 
 ### Shared mailboxes
 
 With `mailbox`, the meeting is saved in that shared mailbox's calendar, and free/busy
-checks include that mailbox instead of yours. The category is set on the meeting, but
+checks include that mailbox instead of yours. You need delegate or editor rights on
+that calendar; without them nothing is created and Claude is told to ask you to get
+access or to leave `mailbox` empty. The category is set on the meeting, but
 Outlook shows it without the orange color unless that mailbox's category list has it.
