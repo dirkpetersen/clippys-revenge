@@ -438,7 +438,7 @@ public class SafetySourceScanTests
     public void OpenDraftInvite_WritesNothing()
     {
         var f = Scan.Value.Files.Single(x => x.Rel == OpenInviteApp);
-        Assert.DoesNotMatch(@"\.\s*(Save|Send|Close|Move|Delete|PermanentDelete|Copy)\s*\(", f.Code);
+        Assert.DoesNotMatch(@"\.\s*(Save|Send|Close|Move|MoveTo|Delete|PermanentDelete|Copy)\s*\(", f.Code);
         Assert.DoesNotMatch(@"\b\w+\s*\.\s*\w+\s*=(?![=>])", f.Code);
         Assert.Contains("Display(false)", f.Code);
     }
@@ -472,15 +472,280 @@ public class SafetySourceScanTests
         AssertNone(hits, "Clippy never deletes Outlook items, folders or mail (CLAUDE.md hard rule).");
     }
 
-    [Fact]
-    public void OnlyMoveIsNewReplyDraftIntoDrafts()
+    // ---- Obsolete AI draft move (M16.4, SPEC 23.5, 23.10) ----
+
+    private const string AppPrefix = "src/ClippysRevenge.App/";
+    private const string ReplyFile = AppPrefix + "OutlookMail.Reply.cs";
+    private const string ObsoleteFile = AppPrefix + "OutlookMail.ObsoleteDraft.cs";
+
+    private static List<(string Rel, string Code)> RealFiles() => Scan.Value.Files.Select(f => (f.Rel, f.Code)).ToList();
+
+    /// <summary>Any move-like call: .Move( / ?.Move( / .MoveTo( (whitespace-tolerant) or InvokeMember("Move"/"MoveTo".</summary>
+    internal const string MoveLikePattern = @"\.\s*Move(To)?\s*\(|InvokeMember\s*\(\s*""Move(To)?""";
+
+    private static readonly Regex AppMoveRegex = new(
+        @"(?<recv>\w*)\s*\??\s*\.\s*Move(To)?\s*\(\s*\w*|InvokeMember\s*\(\s*""Move(To)?""\s*", RegexOptions.CultureInvariant);
+
+    /// <summary>Outlook move calls in App code (File./Directory. exempt by receiver token), as "rel:line: match".</summary>
+    internal static List<string> AppMoveHits(IEnumerable<(string Rel, string Code)> files)
     {
-        var hits = Find(f => f.Code, @"\b\w+\s*\.\s*Move\s*\(\s*\w*",
-                f => !f.Rel.StartsWith("src/ClippysRevenge.App/", StringComparison.Ordinal))
-            .Where(h => !Regex.IsMatch(h, @": (File|Directory)\s*\.")).ToList();
-        Assert.True(hits.Count == 1 && hits[0].StartsWith("src/ClippysRevenge.App/OutlookMail.Reply.cs:", StringComparison.Ordinal)
-                && hits[0].EndsWith("reply.Move(drafts", StringComparison.Ordinal),
-            "The only Outlook .Move( allowed is the new reply draft into Drafts, found:" + Environment.NewLine + string.Join(Environment.NewLine, hits));
+        var hits = new List<string>();
+        foreach (var (rel, code) in files)
+        {
+            if (!rel.StartsWith(AppPrefix, StringComparison.Ordinal)) continue;
+            foreach (Match m in AppMoveRegex.Matches(code))
+            {
+                // Only .NET IO calls by receiving token are exempt; casts, indexers and ?. receivers are not.
+                if (m.Groups["recv"].Value is "File" or "Directory") continue;
+                hits.Add($"{rel}:{LineOf(code, m.Index)}: {m.Value.Trim()}");
+            }
+        }
+        return hits;
+    }
+
+    /// <summary>Files (other than the two allowed) whose code contains olFolderDeletedItems.</summary>
+    internal static List<string> DeletedItemsFolderViolations(IEnumerable<(string Rel, string Code)> files) =>
+        files.Where(f => f.Code.Contains("olFolderDeletedItems", StringComparison.Ordinal)
+                && f.Rel != DraftInvitesApp && f.Rel != ObsoleteFile)
+            .Select(f => f.Rel).ToList();
+
+    /// <summary>Violations of the SPEC 23.10 rules for OutlookMail.ObsoleteDraft.cs; empty when it complies.</summary>
+    internal static List<string> ObsoleteDraftViolations(string code)
+    {
+        var v = new List<string>();
+        var moves = Regex.Matches(code, MoveLikePattern);
+        if (moves.Count != 1) v.Add($"Expected exactly one .Move( but found {moves.Count}.");
+        var deleted = Regex.Matches(code, @"olFolderDeletedItems").Count;
+        if (deleted != 1) v.Add($"Expected exactly one olFolderDeletedItems but found {deleted}.");
+        var evals = Regex.Matches(code, @"AiDraftGuard\s*\.\s*Evaluate\s*\(");
+        if (evals.Count != 1) v.Add($"Expected exactly one AiDraftGuard.Evaluate( but found {evals.Count}.");
+        if (Regex.Matches(code, @"var\s+status\s*=\s*AiDraftGuard\s*\.\s*Evaluate\s*\(").Count != 1)
+            v.Add("Expected exactly one 'var status = AiDraftGuard.Evaluate('.");
+        if (Regex.Matches(code, @"\bstatus\s*=(?![=>])").Count != 1) v.Add("'status' must be assigned exactly once.");
+        if (evals.Count == 1 && moves.Count == 1 && evals[0].Index >= moves[0].Index) v.Add("Evaluate must come before the Move.");
+
+        var sig = Regex.Match(code, @"ObsoleteDraftMove\s+MoveObsoleteAiDraft\s*\(");
+        var bodyStart = -1;
+        var bodyEnd = -1;
+        if (!sig.Success)
+        {
+            v.Add("MoveObsoleteAiDraft not found.");
+        }
+        else
+        {
+            bodyStart = code.IndexOf('{', sig.Index);
+            if (bodyStart >= 0)
+            {
+                var depth = 0;
+                for (var i = bodyStart; i < code.Length; i++)
+                {
+                    if (code[i] == '{') depth++;
+                    else if (code[i] == '}' && --depth == 0) { bodyEnd = i; break; }
+                }
+            }
+            if (bodyStart < 0 || bodyEnd < 0) v.Add("MoveObsoleteAiDraft body not found.");
+        }
+        if (bodyEnd > 0)
+        {
+            foreach (var m in evals.Cast<Match>().Concat(moves))
+            {
+                if (m.Index < bodyStart || m.Index > bodyEnd) v.Add("Evaluate and Move must both be inside MoveObsoleteAiDraft.");
+            }
+        }
+
+        if (moves.Count == 1)
+        {
+            var guarded = false;
+            var depth = 0;
+            for (var p = moves[0].Index - 1; p >= 0 && !guarded; p--)
+            {
+                if (code[p] == '}') depth++;
+                else if (code[p] == '{')
+                {
+                    if (depth > 0) { depth--; continue; }
+                    var before = code[Math.Max(0, p - 200)..p].TrimEnd();
+                    guarded = Regex.IsMatch(before, @"if\s*\(\s*status\s*==\s*ObsoleteDraftStatus\s*\.\s*Movable\s*\)$");
+                }
+            }
+            if (!guarded) v.Add("The Move must sit inside the block of 'if (status == ObsoleteDraftStatus.Movable)'.");
+        }
+
+        if (Regex.IsMatch(code, @"\.\s*(Save|Send|Display|Copy|Close)\s*\(") || Regex.IsMatch(code, @"Delete\s*\("))
+            v.Add("Save, Send, Display, Copy, Close and Delete are forbidden in this file.");
+        if (Regex.IsMatch(code, @"\b\w+\s*\.\s*\w+\s*=(?![=>])")) v.Add("Property assignment is forbidden in this file.");
+        return v;
+    }
+
+    [Fact]
+    public void OnlyTwoOutlookMoves()
+    {
+        var hits = AppMoveHits(RealFiles());
+        Assert.True(hits.Count == 2
+                && hits.Any(h => h.StartsWith(ReplyFile + ":", StringComparison.Ordinal) && h.EndsWith("reply.Move(drafts", StringComparison.Ordinal))
+                && hits.Any(h => h.StartsWith(ObsoleteFile + ":", StringComparison.Ordinal) && h.EndsWith("draft.Move(deletedItems", StringComparison.Ordinal)),
+            "Only two Outlook .Move( calls are allowed (new reply draft into Drafts; obsolete AI draft into Deleted Items), found:"
+            + Environment.NewLine + string.Join(Environment.NewLine, hits));
+    }
+
+    [Fact]
+    public void ObsoleteDraftFile_FollowsTheGuardRules()
+    {
+        var f = RealFiles().SingleOrDefault(x => x.Rel == ObsoleteFile);
+        Assert.True(f.Rel is not null, ObsoleteFile + " must exist.");
+        var v = ObsoleteDraftViolations(f.Code);
+        Assert.True(v.Count == 0, string.Join(Environment.NewLine, v));
+    }
+
+    [Fact]
+    public void DeletedItemsFolder_OnlyInTwoFiles()
+    {
+        var files = RealFiles();
+        var v = DeletedItemsFolderViolations(files);
+        Assert.True(v.Count == 0, "olFolderDeletedItems only in the two allowed files: " + string.Join(", ", v));
+        Assert.Contains(files, f => f.Rel == DraftInvitesApp && f.Code.Contains("olFolderDeletedItems", StringComparison.Ordinal));
+        Assert.Contains(files, f => f.Rel == ObsoleteFile && f.Code.Contains("olFolderDeletedItems", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Fingerprint_ReadInOnePlace()
+    {
+        var app = RealFiles().Where(f => f.Rel.StartsWith(AppPrefix, StringComparison.Ordinal)).ToList();
+        var compute = app.Where(f => Regex.IsMatch(f.Code, @"DraftFingerprint\s*\.\s*Compute\s*\(")).Select(f => f.Rel).ToList();
+        Assert.Equal([ObsoleteFile], compute);
+        var defs = app.Where(f => Regex.IsMatch(f.Code, @"static\s+string\s+ReadDraftFingerprint\s*\(")).Select(f => f.Rel).ToList();
+        Assert.Equal([ObsoleteFile], defs);
+        var reply = app.Single(f => f.Rel == ReplyFile).Code;
+        var save = Regex.Match(reply, @"reply\s*\.\s*Save\s*\(");
+        var read = reply.IndexOf("TryReadDraftFingerprint(reply)", StringComparison.Ordinal);
+        Assert.True(save.Success && read > save.Index, "CreateReplyDraft must read the fingerprint after reply.Save().");
+    }
+
+    [Fact]
+    public void MoveScan_CatchesPlantedSecondMove()
+    {
+        var files = RealFiles();
+        files.Add((AppPrefix + "Other.cs", "x.Move(deletedItems);"));
+        Assert.Equal(3, AppMoveHits(files).Count);
+    }
+
+    [Theory]
+    [InlineData("((Outlook.MailItem)o).Move(f);")]
+    [InlineData("x?.Move(f);")]
+    [InlineData("items[1].Move(f);")]
+    [InlineData("folder.MoveTo(f);")]
+    [InlineData("x . Move ( f );")]
+    [InlineData("x\r\n    .Move(f);")]
+    [InlineData("var r = o.GetType().InvokeMember(\"Move\", flags, null, o, args);")]
+    [InlineData("o.GetType().InvokeMember( \"MoveTo\" , flags, null, o, args);")]
+    [InlineData("Foo.File.Move2(a); item.Move(f);")]
+    public void MoveScan_CatchesEveryPlantedForm(string code)
+    {
+        Assert.NotEmpty(AppMoveHits([(AppPrefix + "Other.cs", code)]));
+        Assert.Matches(MoveLikePattern, code);
+        Assert.NotEmpty(AiForbiddenHits(code));
+    }
+
+    [Theory]
+    [InlineData("File.Move(a, b, true);")]
+    [InlineData("System.IO.File.Move(a, b);")]
+    [InlineData("Directory.Move(a, b);")]
+    [InlineData("Directory . Move (a, b);")]
+    public void MoveScan_ExemptsDotNetIo(string code)
+    {
+        Assert.Empty(AppMoveHits([(AppPrefix + "Other.cs", code)]));
+        Assert.Empty(AiForbiddenHits(code));
+    }
+
+    private const string CompliantMethod = """
+        internal ObsoleteDraftMove MoveObsoleteAiDraft(Outlook.Application app, string mailbox, string draftEntryId,
+            string expectedFingerprint)
+        {
+            var draft = OpenDraft(app, mailbox, draftEntryId);
+            if (draft is null) return new ObsoleteDraftMove(ObsoleteDraftStatus.Gone, "");
+            Outlook.MAPIFolder? parent = null;
+            Outlook.Store? store = null;
+            Outlook.MAPIFolder? deletedItems = null;
+            object? moved = null;
+            try
+            {
+                var info = ReadDraftInfo(app, draft);
+                var status = AiDraftGuard.Evaluate(info, expectedFingerprint);
+                if (status == ObsoleteDraftStatus.Movable)
+                {
+                    parent = (Outlook.MAPIFolder)draft.Parent;
+                    store = parent.Store;
+                    deletedItems = TryDeletedItems(store);
+                    if (deletedItems is null) return new ObsoleteDraftMove(ObsoleteDraftStatus.NoDeletedItems, info.Subject);
+                    moved = draft.Move(deletedItems);
+                    return new ObsoleteDraftMove(ObsoleteDraftStatus.Moved, info.Subject);
+                }
+                return new ObsoleteDraftMove(status, info.Subject);
+            }
+            finally
+            {
+                Release(moved);
+            }
+        }
+
+        static Outlook.MAPIFolder? TryDeletedItems(Outlook.Store store)
+        {
+            try { return store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderDeletedItems); }
+            catch { return null; }
+        }
+        """;
+
+    private const string EvalLine = "var status = AiDraftGuard.Evaluate(info, expectedFingerprint);";
+    private const string MoveLine = "moved = draft.Move(deletedItems);";
+    private const string IfLine = "if (status == ObsoleteDraftStatus.Movable)";
+
+    private static string Planted(string name) => name switch
+    {
+        "a" => CompliantMethod.Replace(MoveLine, "").Replace("var info = ReadDraftInfo(app, draft);", "moved = draft.Move(deletedItems);\n var info = ReadDraftInfo(app, draft);"),
+        "b" => CompliantMethod.Replace(MoveLine, "").Replace("return new ObsoleteDraftMove(status, info.Subject);", MoveLine + "\n return new ObsoleteDraftMove(status, info.Subject);"),
+        "c" => CompliantMethod.Replace(EvalLine, EvalLine + "\n draft.Delete();"),
+        "d" => CompliantMethod.Replace(EvalLine, EvalLine + "\n draft.UnRead = false;"),
+        "e" => CompliantMethod.Replace(EvalLine, EvalLine + "\n draft.Save();"),
+        "f" => CompliantMethod + "\nstatic object? Other(Outlook.Store s) => s.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderDeletedItems);",
+        "g" => CompliantMethod.Replace(IfLine, "status = ObsoleteDraftStatus.Movable;\n " + IfLine),
+        "h" => CompliantMethod.Replace(IfLine, "if (status != ObsoleteDraftStatus.Gone)"),
+        "i" => CompliantMethod.Replace(EvalLine, "var status = Check(info, expectedFingerprint);")
+            + "\nstatic ObsoleteDraftStatus Check(AiDraftInfo i, string f) { var s2 = AiDraftGuard.Evaluate(i, f); return s2; }",
+        "j" => CompliantMethod.Replace(MoveLine, MoveLine + "\n draft.Move(other);"),
+        _ => throw new ArgumentException(name),
+    };
+
+    [Fact]
+    public void ObsoleteDraftScan_AcceptsTheCompliantShape()
+    {
+        var v = ObsoleteDraftViolations(Strip(CompliantMethod, blankStrings: true, lits: null));
+        Assert.True(v.Count == 0, string.Join(Environment.NewLine, v));
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("b")]
+    [InlineData("c")]
+    [InlineData("d")]
+    [InlineData("e")]
+    [InlineData("f")]
+    [InlineData("g")]
+    [InlineData("h")]
+    [InlineData("i")]
+    [InlineData("j")]
+    public void ObsoleteDraftScan_CatchesPlantedViolations(string variant)
+    {
+        var v = ObsoleteDraftViolations(Strip(Planted(variant), blankStrings: true, lits: null));
+        Assert.NotEmpty(v);
+    }
+
+    [Fact]
+    public void DeletedItemsScan_CatchesPlantedFile()
+    {
+        var files = RealFiles();
+        files.Add((AppPrefix + "Other.cs", "f = s.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderDeletedItems);"));
+        var v = DeletedItemsFolderViolations(files);
+        Assert.Single(v);
+        Assert.Contains("Other.cs", v[0]);
     }
 
     // ---- Draft invite category (M15.2, SPEC 22.2) ----
@@ -507,7 +772,7 @@ public class SafetySourceScanTests
         var assigns = Regex.Matches(f.Code, AnyAssign);
         var m = Assert.Single(assigns);
         Assert.Equal("Categories", m.Groups[1].Value);
-        Assert.DoesNotMatch(@"\.\s*(Close|Display|Send|Move|Delete|PermanentDelete)\s*\(", f.Code);
+        Assert.DoesNotMatch(@"\.\s*(Close|Display|Send|Move|MoveTo|Delete|PermanentDelete)\s*\(", f.Code);
     }
 
     [Fact]
@@ -657,7 +922,7 @@ public class SafetySourceScanTests
 
     private static readonly Regex CredentialLiteral = new(@"\.credentials|claudeAiOauth|oauthAccount|sk-ant-oat", RegexOptions.IgnoreCase);
 
-    private static readonly Regex AiForbiddenCall = new(@"\.\s*(Send|Display|Move)\s*\(|\bDelete\s*\(|\bPermanentDelete\s*\(");
+    private static readonly Regex AiForbiddenCall = new(@"\.\s*(Send|Display|Move|MoveTo)\s*\(|InvokeMember\s*\(\s*""(Send|Move|MoveTo)""|\bDelete\s*\(|\bPermanentDelete\s*\(");
 
     private static bool Hit(Regex re, string s) => re.IsMatch(s);
 

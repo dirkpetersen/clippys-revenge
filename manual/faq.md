@@ -29,7 +29,53 @@ you to add a link and send them. It disappears when you have sent them all.
 
 ## Can it delete or move my mail?
 
-No. It never deletes or moves email.
+No. It never deletes email, never empties Deleted Items and never moves your mail.
+There is one narrow exception, and it only concerns Clippy's own drafts: see the next
+question. Removing rows from Clippy's own search index is not touching mail.
+
+## Why did a draft go to Deleted Items?
+
+Only an AI draft that Clippy wrote itself can go there. When a newer message arrives in
+the same thread, Clippy re-checks its earlier draft. If no reply is needed any more, or
+a better one was written, Clippy moves the old draft to **Deleted Items** (from where
+you can drag it back). It does this only when you haven't edited it, opened it or sent
+it, and the Activity window records it. Nothing is ever deleted for good. You can turn
+it off with **Update or remove my AI drafts when a thread moves on** in Settings, AI
+drafts. See [Outdated drafts](ai-drafts.md#outdated-drafts).
+
+## Does Clippy ever send an email or a meeting?
+
+No, never. Clippy has no send function at all. Mail and replies, with or without AI,
+are saved as drafts. Meetings are saved unsent in your calendar. You read them and
+press Send in Outlook yourself. The code is checked for this on every build. See
+[Security](security.md#what-it-never-does).
+
+## What does "Rescan emails from the last 24 hours" do?
+
+It is in the tray, under **AI drafts**. It goes through the last day of mail, oldest
+first, drafts replies where one is needed and re-checks Clippy's own drafts in those
+threads. It asks first, showing how many Claude calls it may use, and stops at your
+daily limit. Click **Cancel rescan** to stop it. It works even when automatic drafting
+is off. See [Rescan](ai-drafts.md#rescan-emails-from-the-last-24-hours) and the
+[tray menu](tray.md#ai-drafts).
+
+## Why isn't my writing style used yet?
+
+The first writing-style skill is built from your **Sent Items**. Clippy indexes Sent
+Items before the Inbox and builds the skill as soon as they are done, so you don't have
+to wait for the whole first backfill. Until then, drafts have no personal style. See
+[Your writing style](ai-drafts.md#your-writing-style).
+
+## Which Claude model does it use?
+
+By default the **latest Opus**: the model setting is `opus`, which always means the
+newest Opus. You can type `sonnet` or `haiku` the same way, or a full model name. See
+[Settings](settings.md#ai-drafts).
+
+## Where can I see what Clippy did?
+
+In the [Activity window](activity.md): double-click the tray icon. It lists syncs, tool
+calls, drafts and updates for the current session, without mail text.
 
 ## Why do reply subjects start with "Re::"?
 

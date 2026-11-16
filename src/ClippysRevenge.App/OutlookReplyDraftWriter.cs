@@ -22,6 +22,6 @@ internal sealed class OutlookReplyDraftWriter(OutlookWorker worker, OutlookMail 
         var r = await worker.RunAsync(app => mail.CreateReplyDraft(app, plan), plan.Priority, ct).ConfigureAwait(false);
         if (!r.MarkerSet)
             log?.LogWarning("Could not set the ClippyDraft marker on a draft.");
-        return new RepliedDraft(r.EntryId, r.Subject, r.Mailbox);
+        return new RepliedDraft(r.EntryId, r.Subject, r.Mailbox, r.Fingerprint);
     }
 }

@@ -230,7 +230,7 @@ public class DraftWorkerTests
         Assert.Null(ai[0].Mailbox);
         Assert.StartsWith("AI drafts: 0 drafted, 1 low confidence (", ai[1].Summary);
         Assert.Contains(h.Log.Lines, l => l.Contains(
-            "AI drafts pass: Completed, 0 drafted, 0 no reply, 1 low confidence (0.50 < 0.60), 0 skipped, 0 failed, 1 calls in ",
+            "AI drafts pass: Completed, 0 drafted, 0 updated, 0 moved, 0 kept, 0 no reply, 1 low confidence (0.50 < 0.60), 0 skipped, 0 failed, 1 calls in ",
             StringComparison.Ordinal));
         foreach (var bad in new[] { "Budget", "ann@", "BODYTEXT", "SECRET-REASON" })
             Assert.DoesNotContain(h.AllText(), t => t.Contains(bad, StringComparison.Ordinal));

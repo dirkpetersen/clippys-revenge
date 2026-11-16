@@ -196,7 +196,7 @@ internal static class Program
                 new StyleSkillFiles(StylePaths.Default(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), dataDir)),
                 () => indexesRef.For(null), () => draftModelRef, () => settings.AiDrafting,
                 () => StyleCorpus.SignatureTexts(kind => signatures.Default(kind)), hub,
-                logger: loggerFactory.CreateLogger<StyleSkill>());
+                logger: loggerFactory.CreateLogger<StyleSkill>(), sentIndexed: () => syncRef.OwnSentBackfillComplete);
             var styleGuide = new StyleGuideSource(styleSkill,
                 ct => AiOwner.ResolveAsync(aiMailboxRef, indexesRef, WorkPriority.Background, ct),
                 hub, loggerFactory.CreateLogger<StyleGuideSource>());
@@ -207,6 +207,7 @@ internal static class Program
                 Logger: loggerFactory.CreateLogger<DraftWorker>(), FreeBusy: freeBusy));
             var draftsRef = drafts;
             sync.CycleCompleted += _ => draftsRef.Wake();
+            sync.OwnSentBackfillCompleted += () => draftsRef.Wake();
             }
             catch (Exception ex)
             {
@@ -243,8 +244,11 @@ internal static class Program
         AiStatusChecker? aiChecker = draftModel is null ? null
             : new AiStatusChecker(draftModel, () => { cliModel?.InvalidateStatus(); apiModel?.InvalidateModelCache(); }, s => drafts?.ReportStatus(s),
                 loggerFactory.CreateLogger<AiStatusChecker>());
-        AiTrayServices? aiTray = drafts is null || aiMailbox is null || aiChecker is null ? null
-            : new AiTrayServices(drafts.DraftSelectedAsync, aiMailbox.ShowDraftsAsync, aiToggler, aiChecker);
+        var draftsForTray = drafts;   // non-null local for the lambda (nullable flow)
+        AiTrayServices? aiTray = draftsForTray is null || aiMailbox is null || aiChecker is null ? null
+            : new AiTrayServices(draftsForTray.DraftSelectedAsync, aiMailbox.ShowDraftsAsync, aiToggler, aiChecker,
+                draftsForTray.PlanRescan, draftsForTray.RescanAsync, draftsForTray.CancelRescan,
+                () => draftsForTray.CurrentRescan);
         var aiMailboxForUi = aiMailbox;
         var indexesForUi = indexes;
         var aiSettings = new AiSettingsServices(aiToggler, () => store.LoadApiKey() is { } k && SettingsStore.IsValidApiKeyFormat(k),
@@ -433,6 +437,7 @@ internal static class Program
         }
 
         Application.Run(tray);
+        drafts?.CancelRescan();   // a running rescan holds the drafting gate; don't make the bounded shutdown wait for it
 
         // Process entry point after the message loop ended: the one allowed blocking wait.
         // Task.Run avoids the WinForms SynchronizationContext.

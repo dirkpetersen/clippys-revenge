@@ -38,6 +38,27 @@ public class BalloonTests
     }
 
     [Fact]
+    public void Feedback_with_an_action()
+    {
+        var (c, _, seen) = Make();
+        c.PostUserFeedback("x", BalloonAction.ShowDrafts);
+        c.PostUserFeedback("y");
+        Assert.Equal(new Balloon("x", BalloonKind.Info, BalloonAction.ShowDrafts), seen[0]);
+        Assert.Equal(new Balloon("y", BalloonKind.Info, BalloonAction.None), seen[1]);
+    }
+
+    [Fact]
+    public void Feedback_with_an_action_is_not_rate_limited()
+    {
+        var (c, _, seen) = Make();
+        Assert.True(c.Post("a"));
+        c.PostUserFeedback("b", BalloonAction.ShowDrafts);
+        c.PostUserFeedback("b", BalloonAction.ShowDrafts);
+        Assert.False(c.Post("c"));
+        Assert.Equal(3, seen.Count);
+    }
+
+    [Fact]
     public void FirstPost()
     {
         var (c, _, seen) = Make();

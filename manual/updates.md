@@ -7,7 +7,7 @@ choose how much it does by itself.
 ## The three modes
 
 Set the mode in the tray's **Settings…**, **General**, **Updates**. It applies
-at once.
+at once. All settings are listed on the [Settings page](settings.md#general).
 
 | Mode | What Clippy does |
 |---|---|
@@ -129,9 +129,21 @@ Clippy verifies a new version before it installs it, and it can undo an install.
 - **The exe is missing.** If something went wrong badly enough that both exes are
   gone, run `install.ps1` again. See [Troubleshooting](troubleshooting.md#an-update-failed-or-was-rolled-back).
 
-The Activity window lists every update event (`update check: v... available`,
+The [Activity window](activity.md#updates) lists every update event (`update check: v... available`,
 `update v... downloaded and verified`, `updated from v... to v...`,
 `update failed: ...`), and the log has the details.
+
+## Releases
+
+Every change that reaches the project's main branch is published as a new GitHub
+release, `v<version>`, with `ClippysRevenge.exe`, `install.ps1` and `SHA256SUMS.txt`.
+What changed is in the [changelog](changelog.md) and in the release notes. A version
+with a suffix (such as `0.2.0-beta`) is a pre-release. Clippy's updater ignores
+pre-releases, and `install.ps1` installs the latest full release.
+
+Only the newest releases are kept on GitHub: the latest three, plus the newest one that
+is at least three days old when all three are younger than that. Older releases and
+their tags are deleted. So you can only go back to a recent version.
 
 ## Update by hand
 

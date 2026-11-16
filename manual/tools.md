@@ -20,20 +20,46 @@ Claude can and can't do.
 | [`email_stats`](#email_stats) | Count mail by sender, domain, folder or time |
 | [`query_index`](#query_index) | Run one read-only SELECT over the index |
 
+There is no `send_meeting_invite` tool. Older versions had one; it was replaced by
+`create_meeting_draft`, which never sends.
+
+## What the tools can and can't do
+
+- **Nothing is ever sent.** Clippy has no send function. Mail tools only
+  **save drafts** in your Drafts folder, and the meeting tool only **saves a
+  meeting unsent** in your calendar. You review and send both in Outlook.
+- **Nothing is deleted.** No tool deletes or moves your mail. The only mail Clippy
+  ever moves is an outdated AI draft of its own, and that is not a tool: see
+  [Outdated drafts](ai-drafts.md#outdated-drafts).
+- **Read-only tools.** `search_emails`, `get_message`, `index_status`,
+  `email_stats`, `query_index`, `list_events` and `find_free_times` change nothing.
+  `get_attachment` and `save_attachments` write files to disk, only inside the
+  [allowed folders](security.md#file-access). `create_draft`, `reply_draft` and
+  `create_meeting_draft` create items in Outlook.
+- **Which tools need Outlook running.** `search_emails`, `email_stats`,
+  `query_index` and `index_status` use the local index and work while Outlook is
+  busy or closed. `get_message` falls back to Outlook for mail that isn't indexed.
+  Attachments, drafts, `list_events`, `find_free_times` and `create_meeting_draft`
+  always need Outlook.
+
 ## Common conventions
 
 - **`mailbox`**: empty means your own mailbox. An SMTP address means that
   [shared mailbox](indexing.md#shared-mailboxes), which must be enabled in the
-  tray. Search tools also accept `all`. Tools that take an `id` find the mailbox
+  tray. Search tools (`search_emails`, `email_stats`, `query_index`,
+  `save_attachments`) also accept `all`. Tools that take an `id` find the mailbox
   from the id.
 - **Dates**: ISO date (`2026-03-01`) or date-time (`2026-03-01T14:30`), in local
-  time. A date-only end date includes the whole day.
-- **Recipients**: `"Last, First <you@example.com>; other@example.com"`. Separate
+  time. A space may replace the `T`, and a date-time ending in `Z` or `+hh:mm` is
+  honored. A date-only end date includes the whole day.
+- **Recipients**: `"Last, First <you@example.org>; other@example.org"`. Separate
   people with `;`, never `,`, because names are often written "Last, First".
 - **File paths**: every path must be inside an allowed folder. See
   [file access](security.md#file-access). Relative paths resolve under the
-  attachment folder.
-- **Errors**: tools return a message that tells Claude what to fix.
+  attachment folder (see [Settings](settings.md)). A refused path returns an error
+  that names the allowed folders, and is recorded in [Activity](activity.md).
+- **Errors**: tools return a message that tells Claude what to fix. The most
+  common ones are in [Errors Claude may see](#errors-claude-may-see).
 
 ## Reading mail
 
@@ -47,23 +73,31 @@ indexed; use [`index_status`](#index_status) to check coverage.
 |---|---|---|
 | `query` | string | Free text over subject, body, sender, recipients and attachment file names. Words are ANDed. Use `OR` between words for alternatives, `"quotes"` for a phrase, and a trailing `*` for a prefix. |
 | `sender` | string | Substring of the sender's name or email address |
-| `recipient` | string | Substring of To or CC. Also accepts a list like `Ann <ann@example.com>; bob@example.com`, which matches mail involving any of them |
+| `recipient` | string | Substring of To or CC. Also accepts a list like `Ann <ann@example.org>; bob@example.org`, which matches mail involving any of them |
 | `subject` | string | Substring of the subject |
 | `date_from` | string | Earliest date, inclusive |
 | `date_to` | string | Latest date, inclusive |
-| `folder` | string | `inbox`, `sent`, or another indexed folder path. Subfolders are not included. Empty means all folders |
+| `folder` | string | `inbox`, `sent`, or another indexed folder path such as `Inbox\Projects` (not case-sensitive). Subfolders are not included. Empty means all folders |
 | `has_attachment` | bool | true: only mail with real (non-inline) attachments; false: only mail without |
-| `attachment_name` | string | Substring of any attachment file name |
+| `attachment_name` | string | Substring of any attachment file name (inline images included) |
 | `attachment_ext` | string | Exact attachment extension, with or without the dot (`pdf` or `.pdf`) |
 | `unread` | bool | true: only unread; false: only read |
 | `mailbox` | string | Empty, a shared mailbox address, or `all` |
 | `limit` | int | Maximum results, 1 to 200 (default 50) |
 | `offset` | int | Results to skip, for paging (default 0) |
 
+The text filters (`sender`, `recipient`, `subject`, `attachment_name`) ignore
+upper and lower case. A blank text filter means no filter. A `recipient` that
+contains `;` or `<` is read as a list of people.
+
 Each result has `id`, `mailbox`, `folder`, `date` (local time), `from`,
-`sender_email`, `to`, `subject`, `has_attachments`, `attachments[]` (name, size,
-inline flag) and `snippet`. Pass a result's `id` to `get_message` to read the
-body.
+`sender_email`, `to`, `subject`, `has_attachments`, `attachments[]` (position,
+name, size, inline flag) and `snippet`. With `query`, the snippet shows the matching
+words between `**`; otherwise it is the start of the body. Pass a result's `id` to
+`get_message` to read the body.
+
+Errors: a date that can't be read gives `date_from "<text>" is not a valid date. Use
+an ISO date like 2026-03-01 or a date-time like 2026-03-01T14:30 (local time).`
 
 ??? example "Example request"
     "Find unread mail from Ann with a PDF attached since 1 March."
@@ -81,6 +115,14 @@ which needs Outlook to be running.
 |---|---|---|
 | `id` | string, required | The id of an email, as returned by `search_emails` |
 
+The result has `id`, `mailbox`, `folder`, `date`, `from`, `sender_email`, `to`, `cc`,
+`subject`, `unread`, `has_attachments`, `attachments[]`, `internet_message_id`,
+`body` and `source` (`index` or `outlook`). A very long email is stored cut at
+2,000,000 characters and ends with the line `[Clippy indexed only the first
+2,000,000 characters of this email.]`. If Outlook has to be asked and isn't running,
+the error is `Outlook is not running. Ask the user to start Outlook (tray → Start
+Outlook) and try again.`
+
 ### index_status
 
 Shows the state of the local index: per-mailbox counts, oldest and newest indexed
@@ -91,6 +133,12 @@ search found nothing, or to check indexing progress.
 | Parameter | Type | Description |
 |---|---|---|
 | `mailbox` | string | Optional shared mailbox address. Empty means all configured mailboxes |
+
+The result has `state` (what Clippy is doing, such as `Idle` or `Backfilling`),
+`progress` (text such as `indexing Inbox 1,240 / 8,000 (2025-11 → now)`),
+`outlook_running` (true, false, or null before the first attempt) and `mailboxes[]`.
+Each mailbox has `mailbox`, `total_emails`, `folders` (count per folder),
+`oldest`, `newest`, `db_size_bytes`, `last_sync` and `backfill_complete`.
 
 ### email_stats
 
@@ -233,6 +281,25 @@ it also gives `truncated_reason`: `max_rows` or `size`.
     off, and every table and column access is checked. Only the three views above
     can be read, not sync state, settings or anything else in the database. See
     [Security](security.md#statistics-and-sql-queries).
+
+The main `query_index` errors:
+
+| Situation | Message (shortened) |
+|---|---|
+| Empty `sql` | `sql is required: one SELECT over the views mail, mail_fts and mail_attachments.` |
+| Over 20,000 characters | `sql is longer than 20,000 characters. Shorten the query.` |
+| More than one statement | `query_index runs exactly one SELECT statement. Remove everything after the first statement.` |
+| A write, `PRAGMA`, `ATTACH`, another table or column | `query_index only reads the views mail, mail_fts and mail_attachments with one SELECT. Not allowed here: <what>.` |
+| `?` parameters | `query_index takes no parameters; write the values into the SQL.` |
+| More than 100 columns | `query_index returns at most 100 columns.` |
+| Longer than 10 seconds | `The query ran longer than 10 seconds and was stopped. Add a date range, a folder or a LIMIT, or use email_stats for counts.` |
+| SQL syntax or other SQLite error | `SQL error: <SQLite's message>. query_index reads the views ...` |
+| Index not ready (not indexed yet, being rebuilt) | `The index for <mailbox> isn't available right now. Check index_status.` |
+
+`email_stats` errors: `group_by must be one of sender, sender_domain, recipient,
+recipient_domain, folder, month, week, weekday, hour.` and `order must be count or
+key.`
+
 ## Attachments
 
 Attachments are saved with a live call to Outlook, so Outlook must be running.
@@ -251,14 +318,21 @@ size.
 | `save_dir` | string | Folder to save into. Empty means the attachment folder. Relative paths go under it. Must be inside an allowed folder |
 
 If the email has more than one attachment, pass `filename` or `position`. If you
-pass neither, the error lists the attachments so Claude can choose.
+pass neither, the error lists the attachments (for example `1 "report.pdf", 2
+"image001.png" (inline)`) so Claude can choose. If you pass both, they must agree.
+Inline attachments can be fetched by name or position. The returned `filename` is
+the attachment's original name; the saved file may be called `name (2).ext`.
 
 ### save_attachments
 
 Finds emails with the same filters as `search_emails` and saves their attachments
 into one folder. `attachment_name` and `attachment_ext` also choose which
 attachments are saved. Inline images are skipped unless `include_inline` is true.
-Returns `saved[]`, `failed[]` and `count`. One failure doesn't stop the rest.
+Returns `saved[]`, `failed[]`, `count` (number saved) and a `note` when nothing
+matched or nothing was eligible. Each `saved` entry has `id`, `mailbox`, `position`,
+`filename`, `path` and `size`; each `failed` entry has `id`, `mailbox`, `position`,
+`filename` and `error`. One failure doesn't stop the rest. Emails are saved newest
+first.
 
 | Parameter | Type | Description |
 |---|---|---|
@@ -271,13 +345,17 @@ Returns `saved[]`, `failed[]` and `count`. One failure doesn't stop the rest.
 ## Drafts
 
 Drafts are only ever **saved** to the Drafts folder. You review and send them from
-Outlook. Nothing is sent by these tools.
+Outlook. Nothing is sent by these tools. Drafts made by these tools carry a hidden
+marker that says Clippy's tools created them (AI drafts have their own marker, see
+[AI drafts](ai-drafts.md)).
 
 ### create_draft
 
 Creates a new draft. The default signature is added below the text when you have
 one set. Every attachment path is checked before anything is created; if one is
-refused, nothing is created.
+refused, nothing is created, and the error ends with `Nothing was created.`
+Checks run in this order: mailbox (`all` is refused), recipients (`to` needs at
+least one), attachments. Line breaks in the subject become spaces.
 
 | Parameter | Type | Description |
 |---|---|---|
@@ -290,7 +368,14 @@ refused, nothing is created.
 | `attachments` | string[] | Full paths to existing files in allowed folders |
 | `mailbox` | string | Empty means your own mailbox, or an enabled shared mailbox. The draft goes to that mailbox's Drafts folder and is sent on its behalf |
 
-Returns `id`, `subject`, `mailbox` and `signature_added`.
+Returns `id`, `subject`, `mailbox` (empty for your own) and `signature_added`.
+
+??? example "Example request"
+    "Draft an email to Ann Lee <ann@example.org> asking for the Q3 numbers."
+
+    Claude calls `create_draft` with `to="Ann Lee <ann@example.org>"`,
+    `subject="Q3 numbers"` and a `body`. The draft appears in Drafts. You edit and
+    send it yourself.
 
 ### reply_draft
 
@@ -308,7 +393,8 @@ followed by your reply signature when one is set.
 | `html` | bool | true when `body` is HTML (default false) |
 | `mailbox` | string | Empty means the mailbox the original is in, or an enabled shared mailbox |
 
-Returns `id`, `subject`, `mailbox` and `signature_added`.
+Returns `id`, `subject`, `mailbox` and `signature_added`. `mailbox` defaults to the
+mailbox the original email is in.
 
 ## Calendar
 
@@ -327,8 +413,9 @@ instances. Sorted by start, at most 500. Defaults to the next 7 days.
 | `mailbox` | string | A shared mailbox's calendar. Empty means yours |
 
 Each event has `id`, `subject`, `start`, `end`, `all_day`, `location`,
-`organizer`, `is_recurring` and `busy_status`. The result also has `count` and
-`truncated`.
+`organizer`, `is_recurring` and `busy_status`. The result also has the resolved
+`start` and `end` of the window, `count` and `truncated` (true when the 500 limit
+was reached).
 
 ### find_free_times
 
@@ -362,17 +449,37 @@ list headed `Outside European office hours:`. Each offer has `list`: `main` or
 
 | Parameter | Type | Description |
 |---|---|---|
-| `recipients` | string, required | Attendees as `Name <email>; Name <email>` |
-| `duration_minutes` | int | Minimum free block length, 1 to 1440 (default 60) |
-| `days_ahead` | int | Calendar days to search, up to 60 (default 10) |
+| `recipients` | string, required | Attendees as `Name <email>; Name <email>`. At most 50 |
+| `duration_minutes` | int | Minimum free block length, and the exact length of each offer, 1 to 1440 (default 60) |
+| `days_ahead` | int | Calendar days to search, counted from the day of `date_from`, 1 to 60 (default 10) |
 | `date_from` | string | Start date or date-time. Default: now |
-| `earliest_hour` | int | Working-hours start, 0 to 23. Default: from [Settings](tray.md#settings) |
+| `earliest_hour` | int | Working-hours start, 0 to 23. Default: from [Settings](settings.md) |
 | `latest_hour` | int | Working-hours end, 1 to 24. Default: from Settings |
 | `business_days_only` | bool | Skip Saturdays and Sundays. Default: from Settings |
 | `include_me` | bool | Also check the calendar owner (default true) |
 | `max_suggestions` | int | 1 to 20 (default 5). Also the most `offers` returned |
 | `mailbox` | string | Empty means your calendar, or an enabled shared mailbox |
 | `offer_cet` | bool | true when the person you are writing to is in Europe: offers also show CET, Europe office hours first (default false) |
+
+The result has `suggestions[]` (`n`, `label`, `start`, `end`, `adjacent`), `text`,
+`offers[]` (`n`, `label`, `start`, `end`, `adjacent`, `list`), `offer_text`,
+`unknown_attendees[]` and `attendees[]` (the people whose free/busy was read, with
+name and email). `start` and `end` are local times with offset, for example
+`2026-10-15T13:00:00-07:00`. With no suggestions, `text` says why: no readable
+free/busy, or no free block in the days searched. The server remembers nothing
+between calls, so to book option N, Claude passes that option's `start` and `end`
+to `create_meeting_draft`.
+
+If `offer_cet` is true but the PC has no Central European time zone, the offers have
+no CET part, and a warning is written to the log once.
+
+??? example "Example request"
+    "Find an hour for me, Ann Lee <ann@example.org> and Bo Kim <bo@example.org> next
+    week. Ann is in Berlin."
+
+    Claude calls `find_free_times` with `recipients="Ann Lee <ann@example.org>; Bo
+    Kim <bo@example.org>"`, `duration_minutes=60`, `date_from` set to next Monday
+    and `offer_cet=true`, then pastes `offer_text` into the email it drafts.
 
 ### create_meeting_draft
 
@@ -385,13 +492,18 @@ The meeting gets the category **Clippy draft invite**, is listed in the tray und
 email, pass `reply_to_id` and a note is saved in Drafts.
 
 Every recipient must resolve in Outlook, or nothing is created. In **Disabled** mode
-the tool returns an error that asks you to turn it on in Settings.
+(see [Settings, Scheduling](settings.md#scheduling)) the tool refuses with `Meeting drafts
+are disabled in Clippy's Revenge. Ask the user to enable them in the tray settings
+(Meeting invites: Draft only), then try again.` Clippy checks the arguments first, then
+`reply_to_id`, then the recipients, and only then creates and saves the meeting. Each
+call adds one line to [Activity](activity.md), such as `meeting draft saved for 2
+attendees: Thu 10/15 10:00–11:00`. The body never appears there.
 
 | Parameter | Type | Description |
 |---|---|---|
 | `recipients` | string, required | Attendees as `Name <email>; Name <email>` or bare emails, separated by `;` |
 | `subject` | string, required | Meeting subject |
-| `start` | string, required | Local start date-time, e.g. `2026-03-01T14:30` |
+| `start` | string, required | Local start date-time, e.g. `2026-03-01T14:30`. A date without a time is not accepted. An offset is converted to local time |
 | `end` | string, required | Local end date-time, after `start` and in the future |
 | `body` | string | Plain-text invite body |
 | `location` | string | Location, for example a room |
@@ -423,3 +535,21 @@ The result has:
     `subject="Project sync"`, `start="2026-10-15T10:00"`, `end="2026-10-15T11:00"` and
     `reply_to_id` set to the id of Ann's email. The meeting appears unsent in your
     calendar, a note reply appears in Drafts, and the tray shows **Draft invites (1)**.
+
+## Errors Claude may see
+
+Every tool error is a plain sentence that tells Claude what to do next. Common ones:
+
+| Situation | What the message says |
+|---|---|
+| Outlook isn't running | `Outlook is not running. Ask the user to start Outlook (tray → Start Outlook) and try again.` |
+| Outlook is busy | `Outlook isn't responding. It may be busy, offline or showing a dialog box. Ask the user to check Outlook, then try again.` For a draft or meeting, it adds that Claude should check Outlook for it before retrying |
+| Index can't be opened | `The email index could not be opened; see the tray (Error state). Restart Clippy or use Rebuild index.` |
+| Unknown or disabled mailbox | `Mailbox "<input>" is not configured or not enabled.` and the list of available mailboxes, with the hint to enable it in the tray under **Shared mailboxes** |
+| `mailbox="all"` on a tool that doesn't support it | `Mailbox "all" only works with search tools. Use one mailbox: <list>.` |
+| Unknown email `id` | `Email "<id>" was not found in Outlook. It may have been deleted or moved to a folder that isn't indexed. Run search_emails again to get a current id.` |
+| Path outside the allowed folders | An error naming the allowed folders. See [file access](security.md#file-access) |
+| Meeting drafts turned off | See [create_meeting_draft](#create_meeting_draft) |
+
+Tool errors are not written to the log with their text, because they can quote what
+was searched for.

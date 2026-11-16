@@ -26,7 +26,34 @@ public static class AiMenuTexts
 }
 
 public sealed record AiDraftsMenuModel(bool AutoChecked, bool AutoEnabled, bool DraftSelectedEnabled,
-    bool ShowDraftsVisible, bool ShowDraftsEnabled);
+    bool ShowDraftsVisible, bool ShowDraftsEnabled,
+    string RescanText = RescanTexts.MenuItem,   // "Rescan emails from the last 24 hours…" or "Cancel rescan (d/t)"
+    bool RescanEnabled = true,
+    bool RescanCancels = false);                // true: a click calls CancelRescan
+
+/// <summary>SPEC 23.8: what the tray shows before and after a rescan. Pure.</summary>
+public static class RescanFlow
+{
+    /// <summary>Null: show the confirmation. Else the click-feedback balloon text.</summary>
+    /// <exception cref="ArgumentNullException">plan is null.</exception>
+    public static string? PlanBalloon(RescanPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (plan.Emails == 0) return RescanTexts.NothingToRescan;
+        if (plan.LimitReached) return RescanTexts.LimitUsedUp(plan.Cap);
+        return null;
+    }
+
+    /// <summary>Null when nothing is to be shown (not started and no message).</summary>
+    /// <exception cref="ArgumentNullException">result is null.</exception>
+    public static Balloon? ResultBalloon(RescanResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        if (!result.Started && string.IsNullOrWhiteSpace(result.Message)) return null;
+        var action = result.Started && result.ShowDrafts ? BalloonAction.ShowDrafts : BalloonAction.None;
+        return new Balloon(result.Message, BalloonKind.Info, action);
+    }
+}
 
 public static class AiDraftsMenu
 {
@@ -34,16 +61,24 @@ public static class AiDraftsMenu
     /// <param name="available">The tray has AI services (the index opened and the worker exists).</param>
     /// <param name="outlookUnavailable">OutlookWorker.State == Unavailable.</param>
     /// <param name="busy">A tray toggle is in progress.</param>
+    /// <param name="rescan">DraftWorker.CurrentRescan: non-null while a rescan runs. Ignored when !available.</param>
+    /// <param name="rescanStarting">The tray is preparing or awaiting a rescan and rescan is still null.</param>
     /// <exception cref="ArgumentNullException">live is null.</exception>
-    public static AiDraftsMenuModel Build(AiDraftingSettings live, bool available, bool outlookUnavailable, bool busy)
+    public static AiDraftsMenuModel Build(AiDraftingSettings live, bool available, bool outlookUnavailable, bool busy,
+        RescanProgress? rescan = null, bool rescanStarting = false)
     {
         ArgumentNullException.ThrowIfNull(live);
+        var running = available && rescan is not null;
+        var starting = available && rescanStarting && !running;
         return new AiDraftsMenuModel(
             AutoChecked: live.Enabled && live.HasConsent,
             AutoEnabled: available && !busy,
-            DraftSelectedEnabled: available && !outlookUnavailable,
+            DraftSelectedEnabled: available && !outlookUnavailable && !running && !starting,
             ShowDraftsVisible: !outlookUnavailable,
-            ShowDraftsEnabled: available);
+            ShowDraftsEnabled: available,
+            RescanText: running ? RescanTexts.CancelItem(rescan!.Done, rescan.Total) : RescanTexts.MenuItem,
+            RescanEnabled: running || (available && !outlookUnavailable && !starting),
+            RescanCancels: running);
     }
 }
 
@@ -111,6 +146,7 @@ public static class AiTabTexts
 
     public const string TabTitle = "AI drafts";
     public const string EnableText = "Draft replies to new email automatically";
+    public const string ReviseDraftsText = "Update or remove my AI drafts when a thread moves on";
     public const string MeetingTimesText = "Offer meeting times when an email asks for a meeting";
     public const string MeetingCountLabel = "Number of times to offer";
     public const string UseLabel = "Use:";

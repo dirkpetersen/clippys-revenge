@@ -44,6 +44,10 @@ public static class DraftModel
     public const string ReplySchema =
         """{"type":"object","additionalProperties":false,"required":["needs_reply","confidence","reason"],"properties":{"needs_reply":{"type":"boolean"},"confidence":{"type":"number","minimum":0,"maximum":1},"reply_all":{"type":"boolean"},"body_html":{"type":"string"},"reason":{"type":"string","maxLength":200},"meeting":{"type":"object","additionalProperties":false,"required":["requested"],"properties":{"requested":{"type":"boolean"},"duration_minutes":{"type":"integer","minimum":15,"maximum":480},"earliest_date":{"type":"string","maxLength":10},"latest_date":{"type":"string","maxLength":10},"outside_hours_heading":{"type":"string","maxLength":80}}}}}""";
 
+    /// <summary>SPEC 23.7 revisit schema, compact. "meeting" is byte-identical to ReplySchema's meeting object.</summary>
+    public const string RevisitSchema =
+        """{"type":"object","additionalProperties":false,"required":["action","confidence","reason"],"properties":{"action":{"type":"string","enum":["keep","replace","remove"]},"confidence":{"type":"number","minimum":0,"maximum":1},"reply_all":{"type":"boolean"},"body_html":{"type":"string"},"reason":{"type":"string","maxLength":200},"meeting":{"type":"object","additionalProperties":false,"required":["requested"],"properties":{"requested":{"type":"boolean"},"duration_minutes":{"type":"integer","minimum":15,"maximum":480},"earliest_date":{"type":"string","maxLength":10},"latest_date":{"type":"string","maxLength":10},"outside_hours_heading":{"type":"string","maxLength":80}}}}}""";
+
     /// <summary>SPEC 19.6 style schema (used by M11.6).</summary>
     public const string StyleSchema =
         """{"type":"object","additionalProperties":false,"required":["body_markdown"],"properties":{"body_markdown":{"type":"string"},"meeting_phrasing":{"type":"string","maxLength":600}}}""";

@@ -39,6 +39,7 @@
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookMail.Attachments.cs"  Link="AppLinked\OutlookMail.Attachments.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookMail.Drafts.cs"       Link="AppLinked\OutlookMail.Drafts.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookMail.Reply.cs"        Link="AppLinked\OutlookMail.Reply.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookMail.ObsoleteDraft.cs" Link="AppLinked\OutlookMail.ObsoleteDraft.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookMailSource.cs"        Link="AppLinked\OutlookMailSource.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookDraftWriter.cs"       Link="AppLinked\OutlookDraftWriter.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookReplyDraftWriter.cs"  Link="AppLinked\OutlookReplyDraftWriter.cs" />

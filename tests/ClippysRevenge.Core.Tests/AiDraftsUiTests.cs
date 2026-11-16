@@ -161,6 +161,110 @@ public sealed class AiDraftsUiTests : IDisposable
     }
 
     [Fact]
+    public void Menu_rescan_defaults()
+    {
+        var m = AiDraftsMenu.Build(Ai(), true, false, false);
+        Assert.Equal("Rescan emails from the last 24 hours…", m.RescanText);
+        Assert.True(m.RescanEnabled);
+        Assert.False(m.RescanCancels);
+    }
+
+    [Fact]
+    public void Menu_rescan_running()
+    {
+        var m = AiDraftsMenu.Build(Ai(), true, false, false, new RescanProgress(3, 12));
+        Assert.Equal("Cancel rescan (3/12)", m.RescanText);
+        Assert.True(m.RescanEnabled);
+        Assert.True(m.RescanCancels);
+        Assert.False(m.DraftSelectedEnabled);
+        Assert.True(m.AutoEnabled);
+        Assert.True(m.ShowDraftsEnabled);
+    }
+
+    [Fact]
+    public void Menu_rescan_running_while_outlook_unavailable()
+    {
+        var m = AiDraftsMenu.Build(Ai(), true, outlookUnavailable: true, busy: false, rescan: new RescanProgress(0, 0));
+        Assert.Equal("Cancel rescan (0/0)", m.RescanText);
+        Assert.True(m.RescanEnabled);
+        Assert.True(m.RescanCancels);
+    }
+
+    [Fact]
+    public void Menu_rescan_starting()
+    {
+        var m = AiDraftsMenu.Build(Ai(), true, false, false, rescan: null, rescanStarting: true);
+        Assert.Equal(RescanTexts.MenuItem, m.RescanText);
+        Assert.False(m.RescanEnabled);
+        Assert.False(m.RescanCancels);
+        Assert.False(m.DraftSelectedEnabled);
+    }
+
+    [Fact]
+    public void Menu_rescan_running_wins_over_starting()
+    {
+        var m = AiDraftsMenu.Build(Ai(), true, false, false, new RescanProgress(1, 2), rescanStarting: true);
+        Assert.True(m.RescanCancels);
+        Assert.True(m.RescanEnabled);
+    }
+
+    [Fact]
+    public void Menu_rescan_idle_unavailable_cases()
+    {
+        var m = AiDraftsMenu.Build(Ai(), true, outlookUnavailable: true, busy: false);
+        Assert.False(m.RescanEnabled);
+        Assert.Equal(RescanTexts.MenuItem, m.RescanText);
+        var n = AiDraftsMenu.Build(Ai(), available: false, outlookUnavailable: false, busy: false, rescan: new RescanProgress(1, 2));
+        Assert.False(n.RescanEnabled);
+        Assert.False(n.RescanCancels);
+        Assert.Equal(RescanTexts.MenuItem, n.RescanText);
+    }
+
+    [Fact]
+    public void Menu_busy_does_not_touch_rescan()
+    {
+        var m = AiDraftsMenu.Build(Ai(), true, false, busy: true);
+        Assert.True(m.RescanEnabled);
+        Assert.False(m.AutoEnabled);
+    }
+
+    [Fact]
+    public void PlanBalloon_cases()
+    {
+        Assert.Equal("There are no emails from the last 24 hours to rescan.", RescanFlow.PlanBalloon(new RescanPlan(0, 30, 30, true)));
+        Assert.Equal("There are no emails from the last 24 hours to rescan.", RescanFlow.PlanBalloon(new RescanPlan(0, 30, 0, true)));
+        Assert.Equal("Today's AI draft limit (30) is used up.", RescanFlow.PlanBalloon(new RescanPlan(5, 30, 0, true)));
+        Assert.Null(RescanFlow.PlanBalloon(new RescanPlan(5, 30, 3, false)));
+        Assert.Null(RescanFlow.PlanBalloon(new RescanPlan(1, 1, 1, true)));
+        Assert.Throws<ArgumentNullException>(() => RescanFlow.PlanBalloon(null!));
+    }
+
+    private static RescanResult Result(bool started, int d, int u, int m, string msg) =>
+        new(started, null, 5, new RescanCounts(5, d, u, m, 0, 0, 0, 0, 0), 1, TimeSpan.Zero, msg);
+
+    [Fact]
+    public void ResultBalloon_cases()
+    {
+        Assert.Null(RescanFlow.ResultBalloon(Result(false, 0, 0, 0, "")));
+        Assert.Equal(new Balloon(AiDraftingSettings.ConsentRequiredMessage, BalloonKind.Info, BalloonAction.None),
+            RescanFlow.ResultBalloon(Result(false, 0, 0, 0, AiDraftingSettings.ConsentRequiredMessage)));
+        Assert.Equal(new Balloon("Rescan: 5 emails, 1 draft (0 s)", BalloonKind.Info, BalloonAction.ShowDrafts),
+            RescanFlow.ResultBalloon(Result(true, 1, 0, 0, "Rescan: 5 emails, 1 draft (0 s)")));
+        Assert.Equal(BalloonAction.ShowDrafts, RescanFlow.ResultBalloon(Result(true, 0, 1, 0, "x"))!.Action);
+        Assert.Equal(BalloonAction.None, RescanFlow.ResultBalloon(Result(true, 0, 0, 1, "x"))!.Action);
+        var stopped = "Rescan stopped (cancelled) after 0 of 5 emails: 0 drafts (0 s)";
+        Assert.Equal(new Balloon(stopped, BalloonKind.Info, BalloonAction.None), RescanFlow.ResultBalloon(Result(true, 0, 0, 0, stopped)));
+        Assert.Throws<ArgumentNullException>(() => RescanFlow.ResultBalloon(null!));
+    }
+
+    [Fact]
+    public void Rescan_texts()
+    {
+        Assert.Equal("Update or remove my AI drafts when a thread moves on", AiTabTexts.ReviseDraftsText);
+        Assert.Equal("I couldn't start the rescan: x", RescanTexts.StartFailed("x"));
+    }
+
+    [Fact]
     public void Toggle_steps()
     {
         Assert.Equal(AiToggleStep.TurnOff, AiToggle.Next(Ai(consent: true, enabled: true)));
@@ -249,6 +353,8 @@ public sealed class AiDraftsUiTests : IDisposable
         public Task<SelectedEmail?> GetSelectedAsync(CancellationToken ct) => throw new NotSupportedException();
         public Task<LiveEmail?> ReadEmailAsync(string entryId, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> ShowDraftsAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<AiDraftInfo?> ReadAiDraftAsync(string mailbox, string draftEntryId, WorkPriority priority, CancellationToken ct) => throw new NotSupportedException();
+        public Task<ObsoleteDraftMove> MoveObsoleteAiDraftAsync(string mailbox, string draftEntryId, string expectedFingerprint, WorkPriority priority, CancellationToken ct) => throw new NotSupportedException();
     }
 
     private MailboxIndexes Indexes(string? smtpMeta)

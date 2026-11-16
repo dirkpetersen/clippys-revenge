@@ -39,6 +39,38 @@ public class LiveSafetyScanTests
         Assert.True(hits.Count == 0, "Live test sources break a hard rule:" + Environment.NewLine + string.Join(Environment.NewLine, hits));
     }
 
+    private static List<(string Name, string Text)> LiveSources() =>
+        [.. Directory.EnumerateFiles(LiveDir(), "*.cs", SearchOption.AllDirectories)
+            .Select(f => (Path.GetFileName(f), File.ReadAllText(f)))];
+
+    [Fact]
+    public void Live_tests_never_trigger_send_receive()
+    {
+        var files = LiveSources();
+        Assert.NotEmpty(files);
+        var hits = files.Where(f => f.Text.Contains("SendAndReceive", StringComparison.Ordinal)).Select(f => f.Name).ToList();
+        Assert.True(hits.Count == 0, "A live test triggers Send/Receive (it could deliver an Outbox): " + string.Join(", ", hits));
+    }
+
+    [Fact]
+    public void Live_inspector_is_hidden_and_discarded()
+    {
+        var files = LiveSources();
+        var users = files.Where(f => f.Text.Contains("GetInspector", StringComparison.Ordinal)).Select(f => f.Name).ToList();
+        Assert.Equal(["LiveObsoleteDrafts.cs"], users);
+        var helper = files.Single(f => f.Name == "LiveObsoleteDrafts.cs").Text;
+        Assert.Contains("OlInspectorClose.olDiscard", helper, StringComparison.Ordinal);
+        var windows = files.Where(f => f.Text.Contains(".Activate(", StringComparison.Ordinal)).Select(f => f.Name).ToList();
+        Assert.True(windows.Count == 0, "A live test activates a window: " + string.Join(", ", windows));
+    }
+
+    [Fact]
+    public void Live_tests_never_move_items()
+    {
+        var hits = LiveSources().Where(f => f.Text.Contains(".Move(", StringComparison.Ordinal)).Select(f => f.Name).ToList();
+        Assert.True(hits.Count == 0, "A live test moves items itself: " + string.Join(", ", hits));
+    }
+
     [Fact]
     public void Linked_app_sources_exclude_launcher()
     {

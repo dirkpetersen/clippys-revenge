@@ -34,6 +34,18 @@ public interface IAiMailbox
     /// <summary>Interactive. Shows the own Drafts folder in the active Explorer. False when there is no Explorer or
     /// Outlook isn't running. Never throws for those.</summary>
     Task<bool> ShowDraftsAsync(CancellationToken ct);
+
+    /// <summary>Read-only (SPEC 23.5): opens the draft, reads AiDraftInfo. Null when it can't be opened (gone).</summary>
+    /// <exception cref="OutlookUnavailableException">Outlook is gone or not responding.</exception>
+    Task<AiDraftInfo?> ReadAiDraftAsync(string mailbox, string draftEntryId, WorkPriority priority, CancellationToken ct);
+
+    /// <summary>One work item (SPEC 23.5): open, read, AiDraftGuard.Evaluate, and only when Movable move it into its own
+    /// store's Deleted Items (Status Moved). Gone gives (Gone, ""). Folder missing gives NoDeletedItems, nothing moved.
+    /// Never sets a property, never saves, never deletes.</summary>
+    /// <exception cref="OutlookUnavailableException">Outlook is gone or not responding.</exception>
+    /// <exception cref="Exception">Any other COM error (the caller treats it as "left").</exception>
+    Task<ObsoleteDraftMove> MoveObsoleteAiDraftAsync(string mailbox, string draftEntryId, string expectedFingerprint,
+        WorkPriority priority, CancellationToken ct);
 }
 
 public sealed record DraftWorkerServices(
@@ -61,9 +73,10 @@ public enum DraftPassEnd
 }
 
 /// <summary>NoReply is needs_reply = false only; LowConfidence counts low_confidence skips.
-/// ModelCalls counts calls made in this pass.</summary>
+/// ModelCalls counts calls made in this pass. Updated = replace outcomes (new draft saved), Moved = removes that moved
+/// the draft, Kept = keep and low-confidence revisits (SPEC 23.6 "Counting").</summary>
 public sealed record DraftPassResult(DraftPassEnd End, int Drafted, int NoReply, int LowConfidence, int Skipped,
-    int Failed, int ModelCalls);
+    int Failed, int ModelCalls, int Updated = 0, int Moved = 0, int Kept = 0);
 
 /// <summary>Today's Claude calls and created drafts (Settings "Today" line).</summary>
 public sealed record AiDraftsToday(int Calls, int Drafts);
@@ -124,9 +137,13 @@ public static class DraftTexts
         _ => " (highest " + Confidence(highest) + " < " + Confidence(minimum) + ")",
     };
 
-    public static string Summary(int drafted, int noReply, int lowConfidence, int skipped, int failed, TimeSpan duration)
+    public static string Summary(int drafted, int noReply, int lowConfidence, int skipped, int failed, TimeSpan duration,
+        int updated = 0, int moved = 0, int kept = 0)
     {
         var s = Fmt($"AI drafts: {drafted} drafted");
+        if (updated > 0) s += Fmt($", {updated} updated");
+        if (moved > 0) s += Fmt($", {moved} moved to Deleted Items");
+        if (kept > 0) s += Fmt($", {kept} kept");
         if (noReply > 0) s += Fmt($", {noReply} no reply needed");
         if (lowConfidence > 0) s += Fmt($", {lowConfidence} low confidence");
         if (skipped > 0) s += Fmt($", {skipped} skipped");
@@ -140,7 +157,7 @@ public static class DraftTexts
 /// Every draft is a saved reply draft made through <see cref="IReplyDraftWriter"/>; nothing is ever sent.
 /// Logs and activity events never hold mail text, prompts, style text, model output or addresses (SPEC 19.11).
 /// </summary>
-public sealed class DraftWorker : BackgroundService
+public sealed partial class DraftWorker : BackgroundService
 {
     public static readonly TimeSpan TickInterval = TimeSpan.FromMinutes(15);
     public const int MaxCandidatesPerMailbox = 50;
@@ -387,6 +404,22 @@ public sealed class DraftWorker : BackgroundService
         public int Failed { get; set; }
         public int Calls { get; set; }
         public int Rows { get; set; }
+        public int Updated { get; set; }
+        public int Moved { get; set; }
+        public int Kept { get; set; }
+        public int Revisits { get; set; }   // revisits that made a model call
+        public bool Rescan { get; init; }
+        public WorkPriority Priority { get; init; } = WorkPriority.Background;
+        public CancellationToken? CallToken { get; init; }   // rescan: cancelled by CancelRescan; null = the pass's ct
+        public int FailedCallsInRow { get; set; }            // model-call failures since the last parsed Ok
+    }
+
+    /// <summary>A parsed model result: ends the failure streak and, in a rescan, the NotSignedIn hold.</summary>
+    private void CallSucceeded(PassState p)
+    {
+        _consecutiveFailures = 0;
+        p.FailedCallsInRow = 0;
+        if (p.Rescan) ReleaseHold();
     }
 
     /// <summary>One automatic pass, serialized with the loop and the manual path. Exposed for tests.</summary>
@@ -481,15 +514,18 @@ public sealed class DraftWorker : BackgroundService
             p.Scope?.Dispose();
             p.Scope = null;
             var elapsed = _time.GetElapsedTime(p.Start);
-            if (p.Rows > 0)
-                _s.Hub.Event(ActivityKind.Ai, DraftTexts.Summary(p.Drafted, p.NoReply, p.LowConfidence, p.Skipped, p.Failed, elapsed),
+            if (p.Rows > 0 || p.Revisits > 0)
+                _s.Hub.Event(ActivityKind.Ai,
+                    DraftTexts.Summary(p.Drafted, p.NoReply, p.LowConfidence, p.Skipped, p.Failed, elapsed, p.Updated, p.Moved, p.Kept),
                     duration: elapsed);
-            if (p.Drafted > 0) _s.Balloons.Post(BalloonTexts.AiDrafted(p.Drafted), BalloonKind.Info, BalloonAction.ShowDrafts);
-            _log?.LogInformation("AI drafts pass: {End}, {Drafted} drafted, {NoReply} no reply, {LowConfidence} low confidence{LowConfidenceDetail}, {Skipped} skipped, {Failed} failed, {Calls} calls in {Ms} ms",
-                end, p.Drafted, p.NoReply, p.LowConfidence, DraftTexts.LowConfidenceLogDetail(p.LowConfidence, p.HighestLow, p.LowMinimum),
+            if (p.Drafted + p.Updated > 0)
+                _s.Balloons.Post(BalloonTexts.AiDrafted(p.Drafted + p.Updated), BalloonKind.Info, BalloonAction.ShowDrafts);
+            _log?.LogInformation("AI drafts pass: {End}, {Drafted} drafted, {Updated} updated, {Moved} moved, {Kept} kept, {NoReply} no reply, {LowConfidence} low confidence{LowConfidenceDetail}, {Skipped} skipped, {Failed} failed, {Calls} calls in {Ms} ms",
+                end, p.Drafted, p.Updated, p.Moved, p.Kept, p.NoReply, p.LowConfidence,
+                DraftTexts.LowConfidenceLogDetail(p.LowConfidence, p.HighestLow, p.LowMinimum),
                 p.Skipped, p.Failed, p.Calls, (long)elapsed.TotalMilliseconds);
         }
-        return new DraftPassResult(end, p.Drafted, p.NoReply, p.LowConfidence, p.Skipped, p.Failed, p.Calls);
+        return new DraftPassResult(end, p.Drafted, p.NoReply, p.LowConfidence, p.Skipped, p.Failed, p.Calls, p.Updated, p.Moved, p.Kept);
     }
 
     private string UserSmtp(AiIdentity identity)
@@ -532,6 +568,13 @@ public sealed class DraftWorker : BackgroundService
         {
             var index = _s.Indexes.For(key);
             var mailboxSmtp = key.Length == 0 ? userSmtp : key;
+            var cur0 = _s.Settings().Clone();
+            if (cur0.AiDrafting.ReviseDrafts)
+            {
+                var halt = await RevisitMailboxAsync(p, new RevisitScope(index, key, mailboxSmtp, cur0, identity, userSmtp,
+                    WorkPriority.Background), ct).ConfigureAwait(false);
+                if (halt is { } h) return h;
+            }
             foreach (var c in index.DraftCandidates(cutoff, MaxCandidatesPerMailbox))
             {
                 if (ct.IsCancellationRequested) return DraftPassEnd.Cancelled;
@@ -587,7 +630,7 @@ public sealed class DraftWorker : BackgroundService
         CandidateFacts? facts;
         try
         {
-            facts = await _s.Mailbox.GetFactsAsync(key, c.EntryId, WorkPriority.Background, ct).ConfigureAwait(false);
+            facts = await _s.Mailbox.GetFactsAsync(key, c.EntryId, p.Priority, ct).ConfigureAwait(false);
         }
         catch (OutlookUnavailableException)
         {
@@ -600,6 +643,11 @@ public sealed class DraftWorker : BackgroundService
         catch (Exception ex)
         {
             _log?.LogWarning("AI drafts: reading a mail's properties failed ({Type}, HResult {HResult}).", ex.GetType().Name, ex.HResult);
+            if (p.Rescan)
+            {
+                p.Failed++;
+                return null;
+            }
             return DraftPassEnd.Failed;
         }
         factsImid = facts?.InternetMessageId;
@@ -625,7 +673,7 @@ public sealed class DraftWorker : BackgroundService
         }
 
         // 4. Backoff.
-        if (_retryAt is { } retry && retry > now) return DraftPassEnd.Backoff;
+        if (!p.Rescan && _retryAt is { } retry && retry > now) return DraftPassEnd.Backoff;
 
         // 5. Model call.
         var detail = index.Get(c.EntryId);
@@ -639,12 +687,20 @@ public sealed class DraftWorker : BackgroundService
         var request = BuildRequest(ai, cur, index, key, email, c.ConversationTopic ?? facts!.ConversationTopic, c.EventTime,
             c.EntryId, identity, userSmtp, manual: false);
 
-        p.Scope ??= _s.Hub.Begin(ActivityState.Drafting, ActivityHub.DraftingLabel);
-        p.Total++;
-        _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
-        var result = await _s.Model.RunAsync(request, ct).ConfigureAwait(false);
-        p.Done++;
-        _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
+        var callCt = p.CallToken ?? ct;
+        if (callCt.IsCancellationRequested) return DraftPassEnd.Cancelled;
+        if (!p.Rescan)
+        {
+            p.Scope ??= _s.Hub.Begin(ActivityState.Drafting, ActivityHub.DraftingLabel);
+            p.Total++;
+            _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
+        }
+        var result = await _s.Model.RunAsync(request, callCt).ConfigureAwait(false);
+        if (!p.Rescan)
+        {
+            p.Done++;
+            _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
+        }
 
         // 6. Result.
         now = _time.GetUtcNow();
@@ -663,13 +719,13 @@ public sealed class DraftWorker : BackgroundService
                 }
                 if (!reply.NeedsReply)
                 {
-                    _consecutiveFailures = 0;
+                    CallSucceeded(p);
                     Write(p, index, c, factsImid, prior, AiOutcome.NoReply, calls: 1, confidence: reply.Confidence);
                     return null;
                 }
                 if (reply.Confidence < ai.MinConfidence)
                 {
-                    _consecutiveFailures = 0;
+                    CallSucceeded(p);
                     Write(p, index, c, factsImid, prior, AiOutcome.LowConfidence, calls: 1, confidence: reply.Confidence);
                     p.HighestLow = Math.Max(p.HighestLow, reply.Confidence);
                     p.LowMinimum = ai.MinConfidence;
@@ -683,7 +739,7 @@ public sealed class DraftWorker : BackgroundService
                     failure = ModelFailure.BadOutput;
                     break;
                 }
-                _consecutiveFailures = 0;
+                CallSucceeded(p);
                 break;
 
             case ModelResult.RateLimited rl:
@@ -696,7 +752,7 @@ public sealed class DraftWorker : BackgroundService
                 EnterHold();
                 return DraftPassEnd.NotSignedIn;
 
-            case ModelResult.Failed { Kind: ModelFailure.Cancelled } when ct.IsCancellationRequested:
+            case ModelResult.Failed { Kind: ModelFailure.Cancelled } when callCt.IsCancellationRequested:
                 return DraftPassEnd.Cancelled;
 
             case ModelResult.Failed f:
@@ -713,6 +769,8 @@ public sealed class DraftWorker : BackgroundService
         if (failure is { } kind)
         {
             Write(p, index, c, factsImid, prior, AiOutcome.Failed, calls: 1, failed: 1);
+            p.FailedCallsInRow++;
+            if (p.Rescan) return null;
             _consecutiveFailures++;
             var minutes = FailureBackoffMinutes[Math.Min(_consecutiveFailures - 1, FailureBackoffMinutes.Count - 1)];
             _retryAt = now + TimeSpan.FromMinutes(minutes);
@@ -727,7 +785,7 @@ public sealed class DraftWorker : BackgroundService
             {
                 var europe = SenderRegion.IsEurope(c.SenderEmail, facts!.TransportHeaders);
                 var mt = await _meetings.ApplyAsync(new MeetingTimesRequest(html, reply!.Meeting, userSmtp, key, c.SenderEmail,
-                    c.To, c.Cc, reply.ReplyAll ?? false, europe, now, cur), WorkPriority.Background, ct).ConfigureAwait(false);
+                    c.To, c.Cc, reply.ReplyAll ?? false, europe, now, cur), p.Priority, ct).ConfigureAwait(false);
                 html = mt.Html;
                 LogMeetingTimes(mt);
             }
@@ -747,7 +805,7 @@ public sealed class DraftWorker : BackgroundService
         CandidateFacts? facts2;
         try
         {
-            facts2 = await _s.Mailbox.GetFactsAsync(key, c.EntryId, WorkPriority.Background, ct).ConfigureAwait(false);
+            facts2 = await _s.Mailbox.GetFactsAsync(key, c.EntryId, p.Priority, ct).ConfigureAwait(false);
         }
         catch (OutlookUnavailableException)
         {
@@ -763,7 +821,7 @@ public sealed class DraftWorker : BackgroundService
         {
             _log?.LogWarning("AI drafts: re-reading a mail's properties failed ({Type}, HResult {HResult}).", ex.GetType().Name, ex.HResult);
             Write(p, index, c, factsImid, prior, AiOutcome.Failed, calls: 1, failed: 1);
-            return DraftPassEnd.Failed;
+            return p.Rescan ? null : DraftPassEnd.Failed;
         }
         rule = DraftRules.EvaluateBeforeCreate(facts2);
         if (rule is not null)
@@ -776,11 +834,22 @@ public sealed class DraftWorker : BackgroundService
         // 8. Create.
         try
         {
-            var made = await _s.Writer.ReplyAsync(MakePlan(c.EntryId, reply!.ReplyAll ?? false, html, WorkPriority.Background), ct)
+            var made = await _s.Writer.ReplyAsync(MakePlan(c.EntryId, reply!.ReplyAll ?? false, html, p.Priority), ct)
                 .ConfigureAwait(false);
             var created = _time.GetUtcNow();
             Write(p, index, c, factsImid, prior, AiOutcome.Drafted, calls: 1, confidence: reply.Confidence,
                 draftId: made.EntryId, draftCreated: created);
+            if (made.Fingerprint is not null && DraftFingerprint.IsValid(made.Fingerprint))
+            {
+                try
+                {
+                    index.RecordAiDraft(made.EntryId, c.EntryId, created, made.Fingerprint, c.EventTime, created);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _log?.LogWarning("AI drafts: couldn't record an AI draft ({Type}).", ex.GetType().Name);
+                }
+            }
             _s.Hub.Event(ActivityKind.Draft, DraftTexts.DraftCreated(made.Subject),
                 mailbox: string.IsNullOrEmpty(made.Mailbox) ? null : made.Mailbox);
             return null;
@@ -842,16 +911,22 @@ public sealed class DraftWorker : BackgroundService
             DraftBody.SignatureContent(sig) is not null, DraftMarker.Ai, priority);
     }
 
-    private ModelRequest BuildRequest(AiDraftingSettings ai, Settings settings, EmailIndex index, string key, PromptEmail email,
-        string? topic, DateTimeOffset eventTime, string entryId, AiIdentity identity, string userSmtp, bool manual)
+    /// <summary>now, zone, label and signature text, as every drafting prompt gets them.</summary>
+    private DraftPromptInput PromptInput(Settings settings, string key, PromptEmail email, IReadOnlyList<ThreadMessage> thread)
     {
         var now = _time.GetUtcNow();
-        var thread = index.Thread(topic, eventTime, DraftPrompt.MaxThreadMessages, entryId);
         var sig = DraftBody.SignatureContent(_s.ReplySignatureHtml());
         var sigText = sig is null ? null : DraftHtml.ToPlainText(sig);
         var localNow = TimeZoneInfo.ConvertTime(now, _s.Zone);
         var label = TimeZoneLabels.Resolve(settings.TimeZoneLabel, _s.Zone, localNow.DateTime);
-        var input = new DraftPromptInput(now, _s.Zone, label, key, sig is not null, thread, email, sigText);
+        return new DraftPromptInput(now, _s.Zone, label, key, sig is not null, thread, email, sigText);
+    }
+
+    private ModelRequest BuildRequest(AiDraftingSettings ai, Settings settings, EmailIndex index, string key, PromptEmail email,
+        string? topic, DateTimeOffset eventTime, string entryId, AiIdentity identity, string userSmtp, bool manual)
+    {
+        var thread = index.Thread(topic, eventTime, DraftPrompt.MaxThreadMessages, entryId);
+        var input = PromptInput(settings, key, email, thread);
         return new ModelRequest(
             DraftPrompt.SystemPrompt(identity.DisplayName, userSmtp, manual, _s.Style.ReadForPrompt(), ai.MeetingTimes),
             DraftPrompt.UserPrompt(input), DraftModel.ReplySchema, ai.Model, ai.Effort,
