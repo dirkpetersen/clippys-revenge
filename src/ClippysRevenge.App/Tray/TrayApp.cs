@@ -10,7 +10,11 @@ internal sealed record AiTrayServices(
     Func<CancellationToken, Task<ManualDraftResult>> DraftSelected,   // drafts.DraftSelectedAsync
     Func<CancellationToken, Task<bool>> ShowDrafts,                  // aiMailbox.ShowDraftsAsync
     AiDraftingToggler Toggler,
-    AiStatusChecker Checker);
+    AiStatusChecker Checker,
+    Func<RescanPlan> PlanRescan,                                     // drafts.PlanRescan
+    Func<CancellationToken, Task<RescanResult>> Rescan,              // drafts.RescanAsync
+    Action CancelRescan,                                             // drafts.CancelRescan
+    Func<RescanProgress?> CurrentRescan);                            // () => drafts.CurrentRescan
 
 internal sealed record DraftInviteTrayServices(
     DraftInvites Invites,
@@ -348,6 +352,12 @@ internal sealed partial class TrayApp : ApplicationContext
         {
             _s.Balloons.Post(balloon.Text, balloon.Kind);
         }
+
+        // Keep "Cancel rescan (d/t)" current while the submenu is open.
+        if (_ai.DropDown.Visible)
+        {
+            ApplyAiMenu();
+        }
     }
 
     private void SetIcon(TrayIconKey key)
@@ -448,13 +458,17 @@ internal sealed partial class TrayApp : ApplicationContext
         _aiSettings.Enabled = _s.CreateSettingsForm is not null;
         _aiSettings.Click += (_, _) => ShowSettings(SettingsTab.AiDrafts);
         _ai.DropDownOpening += (_, _) => ApplyAiMenu();
-        _ai.DropDownItems.AddRange([_aiAuto, _aiDraftSelected, _aiShowDrafts, new ToolStripSeparator(), _aiSettings]);
+        _aiRescan.Click += (_, _) => RescanClicked();
+        _ai.DropDownItems.AddRange([_aiAuto, _aiDraftSelected, _aiRescan, _aiShowDrafts, new ToolStripSeparator(), _aiSettings]);
     }
 
     private void ApplyAiMenu()
     {
-        var m = AiDraftsMenu.Build(_s.GetSettings().AiDrafting, _s.Ai is not null, _s.IsOutlookUnavailable(),
-            Volatile.Read(ref _aiBusy) == 1);
+        var ai = _s.Ai;
+        var m = AiDraftsMenu.Build(_s.GetSettings().AiDrafting, ai is not null, _s.IsOutlookUnavailable(),
+            Volatile.Read(ref _aiBusy) == 1, ai?.CurrentRescan(), Volatile.Read(ref _rescanPhase) == 1);
+        _aiRescan.Text = m.RescanText;
+        _aiRescan.Enabled = m.RescanEnabled;
         _aiAuto.Checked = m.AutoChecked;
         _aiAuto.Enabled = m.AutoEnabled;
         _aiDraftSelected.Enabled = m.DraftSelectedEnabled;

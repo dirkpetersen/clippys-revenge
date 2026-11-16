@@ -80,7 +80,10 @@ public sealed class BalloonCenter
         return true;
     }
 
-    public void PostUserFeedback(string text) => Raise(new Balloon(Clean(text), BalloonKind.Info));
+    /// <summary>Direct feedback to a click: not rate-limited, doesn't count toward the limit (SPEC 6.5).</summary>
+    /// <exception cref="ArgumentException">text is null or white space.</exception>
+    public void PostUserFeedback(string text, BalloonAction action = BalloonAction.None)
+        => Raise(new Balloon(Clean(text), BalloonKind.Info, action));
 
     private static string Clean(string text)
     {

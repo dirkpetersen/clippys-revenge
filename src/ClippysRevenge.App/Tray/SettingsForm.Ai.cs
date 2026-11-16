@@ -39,6 +39,7 @@ internal sealed partial class SettingsForm
     private readonly CheckBox _aiMeeting = new() { Text = AiTabTexts.MeetingTimesText };
     private readonly TextBox _aiMeetingCount = new();
     private readonly CheckBox _aiDirect = new() { Text = "Only when I'm in To or CC" };
+    private readonly CheckBox _aiRevise = new() { Text = AiTabTexts.ReviseDraftsText };
     private readonly TextBox _aiExclude = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
     private readonly TextBox _aiInclude = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
     private readonly CheckBox _aiOwnBox = new() { Text = SettingsEditor.OwnMailboxLabel, Enabled = false };
@@ -100,31 +101,33 @@ internal sealed partial class SettingsForm
         Put(p, _aiMaxAge, 180, 362, 60, 24);
         Put(p, _aiDirect, 270, 362, 300, 24);
 
-        Put(p, _aiMeeting, 8, 394, 370, 24);
-        Lbl(p, AiTabTexts.MeetingCountLabel, 384, 398, 150);
-        Put(p, _aiMeetingCount, 540, 394, 60, 24);
+        Put(p, _aiRevise, 8, 394, 620, 24);
 
-        Lbl(p, "Never draft for", 8, 430, 200);
-        Lbl(p, "Only draft for", 330, 430, 200);
-        Put(p, _aiExclude, 8, 456, 310, 80);
-        Put(p, _aiInclude, 330, 456, 300, 80);
-        var listHint = Lbl(p, AiTabTexts.ListHint, 8, 538, 400);
+        Put(p, _aiMeeting, 8, 424, 370, 24);
+        Lbl(p, AiTabTexts.MeetingCountLabel, 384, 428, 150);
+        Put(p, _aiMeetingCount, 540, 424, 60, 24);
+
+        Lbl(p, "Never draft for", 8, 460, 200);
+        Lbl(p, "Only draft for", 330, 460, 200);
+        Put(p, _aiExclude, 8, 486, 310, 80);
+        Put(p, _aiInclude, 330, 486, 300, 80);
+        var listHint = Lbl(p, AiTabTexts.ListHint, 8, 568, 400);
         listHint.ForeColor = SystemColors.GrayText;
 
-        Lbl(p, "Mailboxes", 8, 566, 120);
-        Put(p, _aiOwnBox, 8, 592, 300, 22);
-        Put(p, _aiMailboxes, 8, 618, 622, 70);
+        Lbl(p, "Mailboxes", 8, 596, 120);
+        Put(p, _aiOwnBox, 8, 622, 300, 22);
+        Put(p, _aiMailboxes, 8, 648, 622, 70);
 
-        Lbl(p, "Writing style", 8, 696, 100);
-        Put(p, _aiStyleStatus, 110, 700, 520, 20);
-        Put(p, _aiWeekly, 8, 724, 200, 24);
-        Put(p, _aiView, 8, 754, 70, 26);
-        Put(p, _aiRegen, 84, 754, 110, 26);
-        Put(p, _aiOpen, 200, 754, 120, 26);
-        Put(p, _aiStyleNote, 8, 786, 620, 34);
+        Lbl(p, "Writing style", 8, 726, 100);
+        Put(p, _aiStyleStatus, 110, 730, 520, 20);
+        Put(p, _aiWeekly, 8, 754, 200, 24);
+        Put(p, _aiView, 8, 784, 70, 26);
+        Put(p, _aiRegen, 84, 784, 110, 26);
+        Put(p, _aiOpen, 200, 784, 120, 26);
+        Put(p, _aiStyleNote, 8, 816, 620, 34);
 
-        Put(p, _aiToday, 8, 828, 620, 20);
-        Put(p, _aiManual, 8, 852, 620, 20);
+        Put(p, _aiToday, 8, 858, 620, 20);
+        Put(p, _aiManual, 8, 882, 620, 20);
         _tabs.TabPages.Add(p);
 
         foreach (var e in AiDraftingSettings.Efforts) _aiEffort.Items.Add(e);
@@ -180,6 +183,7 @@ internal sealed partial class SettingsForm
             _editor.TrySetInt("AiDrafting.MeetingTimeOptions", _aiMeetingCount.Text, v => AiDraft.MeetingTimeOptions = v);
         };
         _aiDirect.CheckedChanged += (_, _) => { if (!_binding) AiDraft.RequireDirectRecipient = _aiDirect.Checked; };
+        _aiRevise.CheckedChanged += (_, _) => { if (!_binding) AiDraft.ReviseDrafts = _aiRevise.Checked; };
         _aiWeekly.CheckedChanged += (_, _) => { if (!_binding) AiDraft.AutoRegenerateStyle = _aiWeekly.Checked; };
         _aiExclude.TextChanged += (_, _) => { if (!_binding) AiDraft.ExcludeSenders = AiSettingsLines.Parse(_aiExclude.Text); };
         _aiInclude.TextChanged += (_, _) => { if (!_binding) AiDraft.IncludeOnlySenders = AiSettingsLines.Parse(_aiInclude.Text); };
@@ -254,6 +258,7 @@ internal sealed partial class SettingsForm
             _aiMinConf.Text = d.MinConfidence.ToString("0.##", CultureInfo.InvariantCulture);
             _aiMaxAge.Text = d.MaxAgeDays.ToString(CultureInfo.InvariantCulture);
             _aiDirect.Checked = d.RequireDirectRecipient;
+            _aiRevise.Checked = d.ReviseDrafts;
             _aiMeeting.Checked = d.MeetingTimes;
             _aiMeetingCount.Enabled = d.MeetingTimes;
             _aiMeetingCount.Text = d.MeetingTimeOptions.ToString(CultureInfo.InvariantCulture);

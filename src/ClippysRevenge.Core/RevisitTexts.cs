@@ -74,6 +74,9 @@ public static class RescanTexts
 
     public static string NotReady(string statusText) => DraftTexts.ManualNotReady(statusText);
 
+    /// <summary>"I couldn't start the rescan: " + reason.</summary>
+    public static string StartFailed(string reason) => "I couldn't start the rescan: " + reason;
+
     /// <exception cref="ArgumentOutOfRangeException">Undefined value.</exception>
     public static string StopReason(RescanStop stop, int cap) => stop switch
     {
