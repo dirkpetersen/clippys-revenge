@@ -5710,16 +5710,20 @@ time adds nothing a content hash doesn't already prove.
   SHA-256 over UTF-8 of, in this order, each as
   `<name>=<UTF-16 length>:<value>\n`: `subject`, `to`, `cc`, `bcc`,
   `html` (`HTMLBody`), `categories`, `importance` (the integer),
-  `attachments` (file names joined with `\n`, in position order). Null
+  `attachments` (file names joined with `\n`, in position order),
+  then `from` (`SentOnBehalfOfName`) and `sensitivity` (the integer),
+  added by the M16 review (2026-11-15) so a draft whose only edit is
+  the From address or the sensitivity also counts as changed. Null
   is `""`. No trimming or other normalization: any change counts.
   Input record: `DraftFingerprintInput(Subject, To, Cc, Bcc, HtmlBody,
-  Categories, Importance, AttachmentNames)`; `importance` is written as
-  the invariant decimal integer; a null attachment list and an empty one
-  hash the same. `DraftFingerprint.IsValid(string?)` checks the 64
+  Categories, Importance, AttachmentNames, From, Sensitivity)`;
+  `importance` and `sensitivity` are written as invariant decimal
+  integers; a null attachment list and an empty one hash the same. `DraftFingerprint.IsValid(string?)` checks the 64
   lower-case hex form. Test vectors: the M16.2 brief.
 - Read on the COM side from the saved item: `Subject`, `To`, `CC`,
   `BCC`, `HTMLBody`, `Categories`, `(int)Importance`, `Attachments`
-  file names (`OutlookMail.ReadDraftFingerprint`, the one place, used
+  file names, `SentOnBehalfOfName`, `(int)Sensitivity`
+  (`OutlookMail.ReadDraftFingerprint`, the one place, used
   both at creation and at every check). An attachment whose `FileName`
   is null or empty counts as `?` (else one unnamed attachment would hash
   like "no attachments"). No `ComSafe` wrapping: any COM read failure
@@ -6115,8 +6119,10 @@ Core (Linux and Windows):
 Live (opt-in, never in CI, never sends): `[Trait("live","outlook")]`
 creates a synthetic email (as §19.12), makes an AI reply draft through
 the production reply path with marker `ai`, and checks: the returned
-fingerprint equals a fresh `ReadAiDraftAsync` read, also after a Send/Receive and two
-minutes; changing the body through COM and saving gives `Changed`; a
+fingerprint equals a fresh `ReadAiDraftAsync` read right away and again
+after two minutes (cached-mode sync runs on its own; a live test never
+triggers Send/Receive, because that could deliver whatever sits in an
+Outbox, and a scan test forbids `SendAndReceive` in live tests); changing the body through COM and saving gives `Changed`; a
 `Movable` draft moves to the own Deleted Items with `Sent == false`, and
 Sent Items and Outbox counts are unchanged; a draft without the marker
 gives `NotMarked` and stays. It removes only the items it created
