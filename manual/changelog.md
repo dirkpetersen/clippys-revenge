@@ -3,6 +3,39 @@
 The full list of releases, with downloads, is on
 [GitHub](https://github.com/dirkpetersen/clippys-revenge/releases).
 
+## v0.1.0
+
+2026-11-15
+
+- **Outdated AI drafts are re-checked.** When a newer message arrives in a thread where
+  Clippy left an unsent AI draft, Clippy looks at the draft again. It keeps it if it is
+  still right, replaces it with a fresh draft, or moves it to **Deleted Items** when no
+  reply is needed any more. It only touches a draft that you haven't edited, opened or
+  sent, and it never empties Deleted Items. The Activity window records each move. This
+  is the one case where Clippy moves anything in your mailbox. See
+  [Outdated drafts](ai-drafts.md#outdated-drafts).
+- **New tray item: Rescan emails from the last 24 hours…** (AI drafts submenu). It goes
+  through the last day of mail, drafts replies where one is needed and re-checks
+  Clippy's drafts in those threads. It asks first, shows how many Claude calls it may
+  use, stops at your daily limit, and turns into **Cancel rescan (d/t)** while it runs.
+  See [Rescan](ai-drafts.md#rescan-emails-from-the-last-24-hours).
+- **New setting: Update or remove my AI drafts when a thread moves on** (Settings, AI
+  drafts, on by default). Turn it off to leave all AI drafts as they are. See
+  [Settings](settings.md#ai-drafts).
+- **Sent Items are indexed first.** On the first run (and after a rebuild), Clippy now
+  indexes Sent Items before the Inbox, so your writing-style skill is built early and
+  drafts sound like you sooner, without waiting for the whole Inbox.
+- **Latest Opus by default.** AI drafts use the model `opus` (the newest Opus). This
+  arrived in v0.0.9, below.
+- **Clearer summaries.** The AI drafts line in Activity now also counts drafts that were
+  updated, moved to Deleted Items or kept.
+- **Docs.** The manual has new pages: [Settings](settings.md) lists every setting with
+  its default, and [Activity](activity.md) lists the messages you can see there. The
+  [Tray menu](tray.md) page now covers every item.
+- **Index upgrade.** Clippy upgrades the index database to remember its own drafts. If
+  you go back to an older version, it reports that the index is too new, and you rebuild
+  it from the tray.
+
 ## v0.0.9
 
 2026-11-15

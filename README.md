@@ -39,7 +39,13 @@ User documentation: <https://dirkpetersen.github.io/clippys-revenge/>.
 
 ## AI drafts (optional)
 
-Turn on [AI drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/) and Clippy writes reply drafts to new mail in your own style, using your signed-in Claude Code or an Anthropic API key. Off by default, asks for consent, saves drafts only (never sends), and the model gets no tools. When an email asks for a meeting, the draft offers free times that Clippy picks from your calendar.
+Turn on [AI drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/) and Clippy writes reply drafts to new mail in your own style, using your signed-in Claude Code or an Anthropic API key. The default model is the latest Opus. Off by default, asks for consent, saves drafts only (never sends), and the model gets no tools. When an email asks for a meeting, the draft offers free times that Clippy picks from your calendar.
+
+- **Outdated drafts.** When a newer message arrives in a thread where Clippy left an unsent AI draft, Clippy re-checks it: it keeps the draft, replaces it, or moves it to **Deleted Items** when no reply is needed any more. It only does this for a draft you haven't edited, opened or sent, and never empties Deleted Items. Turn it off with **Update or remove my AI drafts when a thread moves on** in Settings. See [Outdated drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#outdated-drafts).
+- **Rescan.** Tray, **AI drafts**, **Rescan emails from the last 24 hours…** drafts replies for the last day of mail, with a confirmation, a daily limit and **Cancel rescan**.
+- **Writing style.** Built from your Sent Items, which Clippy indexes before the Inbox, so it is ready early.
+
+More in the manual: [tray menu](https://dirkpetersen.github.io/clippys-revenge/tray/), [every setting](https://dirkpetersen.github.io/clippys-revenge/settings/) and [Activity messages](https://dirkpetersen.github.io/clippys-revenge/activity/).
 
 ## Updates
 
@@ -109,8 +115,9 @@ asking.
 Clippy attaches to a running Outlook and never starts it by itself. If
 Outlook isn't running, indexing waits. The tray's **Start Outlook** item
 (shown only then) is the one place that starts it. Other tray items: Sync
-now, Pause indexing, Rebuild index, Shared mailboxes, Activity, Settings,
-Open log folder, Open data folder.
+now, Pause indexing, Rebuild index, Shared mailboxes, AI drafts, Draft invites,
+Activity, Settings, Open log folder, Open data folder, About. Every item is
+explained in the [tray menu reference](https://dirkpetersen.github.io/clippys-revenge/tray/).
 
 ## WSL setup
 
@@ -169,6 +176,9 @@ a configured shared mailbox's address; search tools also accept `all`).
   Outlook. Clippy has no send call at all. Unsent meetings get the orange
   category `Clippy draft invite`, are listed under **Draft invites** in the tray and show
   as a yellow badge on the tray icon until you send them.
+- **Never deletes email.** Clippy never calls delete and never empties Deleted
+  Items. It never moves your mail. The one exception is its own outdated, unedited AI
+  drafts (see above), which go to Deleted Items and can be dragged back.
 - **Attachments' content is never indexed.** Only file names are stored.
 - **File access is restricted by `PathPolicy`.** Every path a tool reads or
   writes must be inside an allowed folder: the attachment folder

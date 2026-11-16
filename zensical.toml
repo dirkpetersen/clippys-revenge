@@ -17,6 +17,8 @@ nav = [
   { "Use" = [
     "tools.md",
     "tray.md",
+    "settings.md",
+    "activity.md",
     "indexing.md",
     "calendar.md",
     "ai-drafts.md",

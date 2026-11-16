@@ -9,8 +9,10 @@ send it from Outlook.
 ## Listing events
 
 `list_events` returns events in a window, with recurring events expanded, at most
-500. Without arguments it covers the next 7 days. Pass `mailbox` to read a
-[shared mailbox's](indexing.md#shared-mailboxes) calendar.
+500. Without arguments it covers the next 7 days (`days` can be 1 to 366). Each event
+has its subject, start, end, all-day flag, location, organizer, whether it recurs and
+its busy status. Pass `mailbox` to read a [shared mailbox's](indexing.md#shared-mailboxes)
+calendar. It only reads; nothing is changed.
 
 ## Finding a free time
 
@@ -31,11 +33,17 @@ Things to know:
 - People whose free/busy can't be read, such as people outside your Exchange
   organization, are listed as unknown and ignored. Check with them yourself.
 - Working hours, business-days-only, the time-zone label and whether tentative
-  counts as busy come from [Settings, Scheduling](tray.md#scheduling). Claude can
+  counts as busy come from [Settings, Scheduling](settings.md#scheduling). Claude can
   override the hours and business days per call.
 - Suggestions are whole free blocks, in local time. They are ranked: times right
-  before or after your own meetings come first, then times next to tentative
-  meetings, then the rest.
+  before or after your own meetings come first (within 15 minutes, on the same
+  day), then times next to tentative meetings, then the rest, each group in date
+  order. Free/busy can't tell a meeting from other busy time, so "next to a meeting"
+  means "next to busy time". If your own calendar isn't checked (`include_me` off, or
+  your free/busy can't be read), no time is ranked above another.
+- At most 50 attendees, and at most 60 days ahead.
+- The tool offers free time from now on, with no extra lead time. AI drafts add a
+  lead time of their own; see [AI drafts](ai-drafts.md#meeting-times).
 - Besides the blocks, the result has **offers** of exactly the meeting length and an
   `offer_text` with one option per line, ready to paste into an email. For someone
   in Europe, Claude sets `offer_cet` and each line also shows the time in CET, with
@@ -71,7 +79,7 @@ nothing is created.
 
 ### Invite mode
 
-Set it in [Settings, Scheduling](tray.md#scheduling), **Meeting invites**:
+Set it in [Settings, Scheduling](settings.md#scheduling), **Meeting invites**:
 
 | Mode | What happens |
 |---|---|
@@ -95,15 +103,30 @@ Outlook and tries again later.
 ### Draft invites in the tray
 
 **Draft invites (n)** is in the [tray menu](tray.md#tray-menu) while at least one
-meeting draft is waiting. Each line shows the day, time and subject. Click a line to
-open the meeting in Outlook.
+meeting draft is waiting, and hidden when there is none. Each line shows the day,
+time and subject, for example `Tue 11/18 10:00–11:00  Project kickoff`. Meetings in a
+shared mailbox's calendar add the mailbox name. The list is sorted by start and shows
+at most 15 lines, then a greyed `and <n> more`. Click a line to open the meeting in
+Outlook. Clicking only opens it; it writes nothing. After you restart Clippy, lines
+may read `Draft invite saved <day and time>` until the first check.
 
 Clippy checks the list when you open the menu and after sync cycles, at most every
 five minutes. A meeting you deleted is dropped from the list. A meeting that ended
 more than 30 days ago and was never sent is dropped too, but it keeps its category.
+If a meeting has gone from your calendar when you click it, a balloon says `That
+draft invite is no longer in your calendar.` and the line is removed.
 
 While Outlook isn't running, the lines are greyed out and the last line says
-**Start Outlook to open them**.
+**Start Outlook to open them**. While Outlook is not responding they are greyed out
+without that line.
+
+### The badge on the tray icon
+
+While draft invites are waiting, a small yellow badge with their number sits in the
+top-right corner of the tray icon: `1` to `9`, then `9+`. The tooltip adds `· 2 draft
+invites need your attention`. The badge keeps its last count while Outlook is closed,
+because the meetings still need you, and disappears when the count reaches zero.
+See [the badge on the tray page](tray.md#attention-badge).
 
 ### The note in Drafts
 

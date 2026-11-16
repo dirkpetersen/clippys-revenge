@@ -117,6 +117,69 @@ within 15 s`. See [Updates](updates.md) for how updating works.
   different port in **Settings, Connection**, then run the new `claude mcp add`
   command.
 
+## AI drafts
+
+See [AI drafts](ai-drafts.md) for how it works. Open the [Activity window](activity.md)
+first: it says why a mail got no draft.
+
+### No drafts appear
+
+- Check that **Draft replies automatically** is ticked in the tray's **AI drafts**
+  submenu, and that Settings, AI drafts shows a ready status after **Check**.
+- If Activity shows `AI drafts: Claude isn't signed in`, sign in to Claude Code in a
+  terminal (run `claude`), then press **Check** in Settings. Clippy never signs in for
+  you.
+- `AI drafts: daily limit of <n> reached` means the **Daily limit** is used up. It
+  continues tomorrow, or raise the limit in Settings. Rescans and re-checks of old
+  drafts count too.
+- `AI drafts: Claude's usage limit was reached` is your Claude plan's limit. Clippy
+  tries again at the time shown.
+- `no draft for the email received …: Claude's confidence … is below your minimum`
+  means Claude wasn't sure a reply was needed. Select the email in Outlook and use
+  **Draft a reply to the selected email**, or lower **Minimum confidence**.
+- Mail that arrived before you turned AI drafts on, mail older than **Ignore mail older
+  than (days)**, mail where you are not in To or CC, newsletters and automatic mail get
+  no draft. See [Rules](ai-drafts.md#rules).
+- Drafting waits while Outlook isn't running or indexing is paused.
+
+### Where did my draft go?
+
+If Clippy's AI draft vanished from Drafts, look in **Deleted Items**. When a newer
+message arrived in the thread and the draft was no longer right, Clippy re-checked it.
+It either replaced it with a new draft or moved it to Deleted Items because no reply
+was needed any more. The Activity window says which, for example `Outdated AI reply
+draft moved to Deleted Items (no reply needed any more): <subject>`. You can drag the
+draft back to Drafts. Clippy only does this for an AI draft that you haven't edited,
+opened or sent, and never deletes anything for good. To stop it, turn off **Update or
+remove my AI drafts when a thread moves on** in Settings, AI drafts. See
+[Outdated drafts](ai-drafts.md#outdated-drafts).
+
+### An old draft is still in Drafts after a new one appeared
+
+Clippy keeps an old draft when you edited it or have it open, and says so in Activity:
+`The old draft is still in Drafts because it was changed or is open.` Delete it
+yourself when you no longer need it. If a move to Deleted Items fails, Activity says
+`AI drafts: an outdated draft couldn't be moved to Deleted Items. It's still in Drafts.`
+
+### Rescan emails from the last 24 hours is greyed out
+
+It needs Outlook running and the email index available. While a rescan runs, the item
+reads **Cancel rescan (d/t)** and **Draft a reply to the selected email** is greyed out.
+If a click only shows a balloon, read it: `There are no emails from the last 24 hours
+to rescan.`, `Today's AI draft limit (<n>) is used up.` or `Claude isn't ready: …`. A
+rescan stops early for the reasons in [Activity](activity.md#rescan).
+
+### The writing style isn't there yet
+
+Clippy builds your writing-style skill from your sent mail, and waits until your **Sent
+Items** are indexed. Sent Items are indexed before the Inbox, so it normally appears
+early in the first backfill: finishing Sent Items wakes the drafting worker, which
+builds the skill if **Draft replies automatically** and **Update weekly** are on. Check progress with `index_status` or the Activity window
+(`Sent: backfill complete`). Until then, drafts have no personal style. If Activity says
+`writing style not updated: only <n> sent emails (need 20)`, there is too little sent
+mail yet: Clippy tries again after 24 hours, or press **Regenerate…** in Settings when
+you have more. An edited skill is never overwritten without asking.
+
 ## Logs
 
 Logs are in `%LOCALAPPDATA%\ClippysRevenge\logs`, one file per day

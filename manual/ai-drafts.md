@@ -8,14 +8,19 @@ sent to Claude, and how to set it up and fix it.
 
 - **Drafts only.** A reply is saved in your Drafts folder. Clippy never sends it.
   You read it, edit it and send it from Outlook.
-- **Never deletes or moves mail.** The only move is the new reply draft going into
-  Drafts, the same as for [`reply_draft`](tools.md#reply_draft).
+- **Never sends, never deletes mail.** Nothing is ever permanently deleted and
+  Deleted Items is never emptied. Clippy moves only two kinds of item: the new reply
+  draft going into Drafts (the same as for [`reply_draft`](tools.md#reply_draft)), and,
+  since version 0.1.0, one of **its own unedited AI drafts** that a newer message in
+  the thread has made obsolete, which goes to Deleted Items so you can still get it
+  back. See [Outdated drafts](#outdated-drafts).
 - **Reply subjects start with `Re:: `** (double colon), like every reply draft.
   The model can't change the subject or the recipients. It can only choose reply or
   reply all.
 - **Only new mail.** It looks at mail that arrives in your Inbox **after** you turn
   it on, and never at mail older than the age limit (2 days by default). There is no
-  backlog pass.
+  backlog pass. The one thing that looks further back is the manual
+  [rescan of the last 24 hours](#rescan-emails-from-the-last-24-hours).
 - **Your mailbox only**, unless you turn on a shared mailbox one by one.
 - **Not every email gets a draft.** Newsletters, notifications, automatic mail and
   mail that needs no answer are skipped. See [Rules](#rules).
@@ -25,6 +30,8 @@ sent to Claude, and how to set it up and fix it.
 - **Check every draft.** The model can make mistakes. Where a reply needs a fact,
   such as a date or a number, it is told to leave a placeholder like `[[date]]`
   instead of inventing one.
+- **Nothing is ever sent.** Clippy has no send function at all, and the model has no
+  tools: its answer can only become a saved draft.
 
 When a pass creates drafts, the tray shows a balloon: "It looks like you got mail. I
 drafted 2 replies — they're in your Drafts folder." Click it to open Drafts.
@@ -57,12 +64,37 @@ path** to the full path of `claude.exe`.
 Choose **Anthropic API key**, paste the key and press **Save key**. The key is stored
 encrypted with Windows DPAPI for your Windows user, is never shown again, and is
 never written to settings or logs. **Remove key** deletes it. Press **Check**: it
-reads the model from the API, which uses no tokens.
+reads the model list from the API, which uses no tokens. Clippy talks only to
+`api.anthropic.com`, and never uses a key from environment variables.
+
+Either way, Clippy never reads Claude Code's stored sign-in and never asks you to
+sign in to claude.ai inside Clippy.
 
 ### Model, effort and cost
 
-The default model is **Opus 5.5 at medium effort**. You can change **Model** and
-**Effort** in the tab. Usage and cost come from your Claude plan or your API
+The default model is the alias **`opus`, the latest Opus**, at **medium** effort, for
+drafting and for the writing style alike. Because it is an alias, drafts move to a
+newer Opus without a Clippy update. You can change **Model** and **Effort** in the
+tab. Next to the Model box, a small hint reads `latest Opus` (or `latest Sonnet`,
+`latest Haiku`) while the box holds `opus`, `sonnet` or `haiku`. A specific model name
+such as `claude-opus-5-5` is used exactly as typed. If you had the old default
+`claude-opus-5-5` saved, Clippy changes it to `opus` once; any other model you chose
+stays.
+
+How the alias is resolved depends on the way you reach Claude:
+
+- **Claude Code:** the alias is passed to `claude`, which picks its newest model of
+  that family.
+- **API key:** the API needs a concrete model name, so Clippy asks the API for the
+  list of models available to your key and takes the newest active model of that
+  family. It remembers the answer for 24 hours (in memory only). **Check** always
+  looks it up fresh and shows, for example, `✓ API key works (opus → <model name>)`.
+  If the lookup fails (not because of a rejected key), Clippy uses a built-in
+  fallback model, logs a warning without any key or mail text, and tries the lookup
+  again after 10 minutes. Saving or removing the key, and pressing **Check**, also
+  start a new lookup.
+
+Usage and cost come from your Claude plan or your API
 account, not from Clippy. Each email that Clippy evaluates is one Claude call,
 whether or not it ends up as a draft. **Daily limit** (default 30) caps the calls
 per day across all mailboxes. The tab shows `Today: 3 of 30 Claude calls, 1 draft`.
@@ -93,6 +125,7 @@ the API:
 |---|---|
 | The email being answered | Sender, recipients, date, subject and the **full body including quoted history**, cut at 20,000 characters |
 | Thread excerpts | Up to 8 earlier messages of the same conversation from your local index, your own text only (quoted history and signatures cut), each cut at 4,000 characters |
+| Your earlier draft | Only when Clippy [re-checks an outdated draft](#outdated-drafts): the text of Clippy's own earlier draft and the newer messages of the thread. Nothing beyond what the consent text already names |
 | Attachment **names** | For the email and the thread messages. Names only |
 | Your name and address, today's date | So the draft is addressed and dated correctly |
 | Your writing style guide | The skill described [below](#your-writing-style), which contains short examples of your sent mail with addresses, links and phone numbers removed. Its meeting-times section is left out |
@@ -116,6 +149,10 @@ What Claude Code and Anthropic do with the data is governed by your Claude plan 
 API terms. See also [Security](security.md#ai-drafts-data-flow).
 
 ## Rules
+
+These rules decide which new emails get a draft. (They don't decide whether an
+existing draft is still current: any newer message in the thread triggers an
+[outdated-draft check](#outdated-drafts).)
 
 Before any email goes to Claude, cheap rules skip mail that needs no reply. The
 first rule that matches wins. No Claude call is made for skipped mail.
@@ -144,13 +181,14 @@ confidence**.
 
 | Setting | Default |
 |---|---|
-| Model | Opus 5.5 (`claude-opus-5-5`) |
+| Model | `opus` (the latest Opus) |
 | Effort | medium |
 | Daily limit | 30 Claude calls |
 | Minimum confidence | 0.6 |
 | Ignore mail older than | 2 days |
 | Only when I'm in To or CC | on |
 | Update weekly (writing style) | on |
+| Update or remove my AI drafts when a thread moves on | on |
 | Offer meeting times when an email asks for a meeting | on |
 | Number of times to offer | 5 (1 to 10) |
 
@@ -187,6 +225,7 @@ after a pass counts these emails separately, for example
 confidence seen against your minimum.
 
 ### Shared mailboxes
+
 Under **Mailboxes** in the tab, **My mailbox** is always on while AI drafts are on.
 Each [shared mailbox](indexing.md#shared-mailboxes) you index has its own checkbox,
 off by default. Drafts for a shared mailbox use your own writing style.
@@ -196,7 +235,127 @@ off by default. Drafts for a shared mailbox use your own writing style.
 Select one email in Outlook and choose **Draft a reply to the selected email** from
 the tray's **AI drafts** menu. This works even when automatic drafting is off, still
 needs your consent and a ready Claude, and counts toward the daily limit. It skips
-the rules and the confidence check, because you asked for it.
+the rules and the confidence check, because you asked for it. Drafts made this way
+are never re-checked later: see [Outdated drafts](#outdated-drafts).
+
+## Outdated drafts
+
+Replies change. Say Clippy drafted a reply to a group email, and later someone in
+the same thread writes to another person. Clippy rightly drafts nothing for that new
+message, but the earlier draft may now be pointless. Since version 0.1.0 Clippy
+re-checks its own drafts when a newer message arrives in their thread, and then does
+one of three things:
+
+- **Keep** the draft, because it still fits.
+- **Replace** it with a new draft that takes the whole thread into account.
+- **Remove** it, because you no longer need to reply. "Remove" means **moving it to
+  Deleted Items**, where you can still find it. Nothing is permanently deleted and
+  Deleted Items is never emptied.
+
+If the model is unsure whether a draft is outdated, it keeps it. A replace or remove
+also needs the model's confidence to reach **Minimum confidence**; otherwise the draft
+stays as it is.
+
+**Which drafts.** Only drafts that Clippy made through automatic drafting or a
+[rescan](#rescan-emails-from-the-last-24-hours), and only up to 14 days after they
+were created. Drafts from **Draft a reply to the selected email**, drafts made by
+[`reply_draft`](tools.md#reply_draft), meeting notes, and AI drafts made before
+version 0.1.0 are never touched.
+
+**When.** At the start of each automatic pass, when a message newer than the one the
+draft answers has reached your Inbox (or a folder under it) in the same thread. It
+counts whoever the message is from and whoever it is addressed to, including mail
+that isn't for you and mailing-list mail. Each re-check is one Claude call and counts
+toward the **Daily limit**. At most 10 drafts per mailbox are re-checked in one pass,
+and only the newest draft of a thread.
+
+**When Clippy leaves a draft alone for good.** Before it moves or replaces anything,
+Clippy checks the draft again. It acts only if all of these are true:
+
+- the draft carries Clippy's own AI marker (`ClippyDraft = ai`);
+- it is **unchanged** since Clippy saved it. Clippy compares a fingerprint of the
+  subject, recipients, text, categories, importance and attachment names, so any edit
+  you make, even one letter, counts;
+- it is **unsent** and still in your **Drafts** folder;
+- it is **not open** in a window (or as an inline reply in the reading pane);
+- **you haven't replied** in the thread, and you haven't sent the draft itself.
+
+If you edited the draft, Clippy never touches it again and adds no note to it. If the
+draft is open, Clippy tries again at the next pass. If it was sent, moved or deleted,
+or you answered the thread yourself, it is left alone. When a replace happens, the new
+draft is **saved first**, and only then is the old one moved. If the old draft was
+changed or opened in between, it stays in Drafts next to the new one, and the Activity
+window says so.
+
+**What you see in the Activity window** (the subject is shortened to 80 characters):
+
+- `AI reply draft updated (the thread moved on): <subject>. The old draft is in Deleted Items.`
+- `AI reply draft updated (the thread moved on): <subject>. The old draft is still in Drafts because it was changed or is open.`
+- `Outdated AI reply draft moved to Deleted Items (no reply needed any more): <subject>`
+- `AI drafts: an outdated draft couldn't be moved to Deleted Items. It's still in Drafts.`
+
+The summary line after a pass adds `updated`, `moved to Deleted Items` and `kept`
+counts, and the tray balloon counts new and updated drafts together.
+
+**Turning it off.** Clear **Update or remove my AI drafts when a thread moves on** in
+Settings, **AI drafts**. Clippy then never re-checks, replaces or moves a draft.
+
+### Worked example
+
+Dana Example sends a group email to you, Sam Sample and Lee Example, at
+`dana@example.org`: "Who is coming skiing on Saturday? Please say yes or no." On
+Thursday, Clippy's automatic pass drafts your reply: "Yes, count me in." You don't
+open it. On Friday, Lee replies to everyone: "Sam, can you bring the roof rack?" That
+message is for Sam, so Clippy drafts nothing for it. But the next pass notices that a
+newer message arrived in the thread where Clippy has an unsent draft of its own. It
+checks that the draft is unedited, still in Drafts, closed, and that you haven't
+replied. Then it asks Claude, which sees the draft and the whole thread. Claude
+answers that nothing is asked of you any more, and with enough confidence Clippy
+moves the draft to Deleted Items. The Activity window shows: `Outdated AI reply draft
+moved to Deleted Items (no reply needed any more): Re:: Skiing on Saturday`. Had Lee
+instead asked you a new question, Claude would answer "replace", and Clippy would save
+a fresh draft first and then move the old one.
+
+## Rescan emails from the last 24 hours
+
+In the tray, **AI drafts**, **Rescan emails from the last 24 hours...** runs the
+drafting workflow once over the last day of mail, so you can watch it work. Use it to
+catch up after Claude was unavailable, or after you changed the rules.
+
+- It needs your consent, a ready Claude and a running Outlook, like **Draft a reply
+  to the selected email**. It works while **Draft replies automatically** is off.
+- It covers your own mailbox and the shared mailboxes you turned on. It takes Inbox
+  mail from the last 24 hours, **oldest first**, ignoring the "newer than I turned it
+  on" and age settings and the rule that each email is decided only once. The other
+  rules still apply, and an email that already has a Clippy draft is skipped.
+- Before it starts, a dialog titled **Rescan the last 24 hours?** shows how many
+  emails will be looked at and how many Claude calls are left today, for example:
+  `Clippy will go through 12 emails from the last 24 hours, oldest first, and draft a
+  reply where one is needed. Each email is one Claude call: up to 12 calls, and 25 of
+  today's 30 are left. The rescan stops at the daily limit. Outdated Clippy drafts in
+  those threads may be replaced or moved to Deleted Items. Nothing is sent.` (The
+  sentence about outdated drafts appears only while that setting is on.) Buttons:
+  **Rescan** and **Cancel** (the default). With no emails to look at, or no calls
+  left today, you get a short balloon instead.
+- If a thread already has an open draft of Clippy's, and a later email in it is
+  being rescanned, the rescan [re-checks that draft](#outdated-drafts) instead of
+  drafting again.
+- While it runs, the tray item reads **Cancel rescan (3/12)**. Cancel stops before
+  the next email and cancels a call in progress. An email whose answer has already
+  arrived is finished first, so nothing is left half done. **Draft a reply to the
+  selected email** is disabled meanwhile, and no automatic pass runs alongside.
+- Every call counts toward the **Daily limit**, and the rescan stops when it is
+  reached.
+- At the end, a summary appears in Activity and as a balloon (click it to open
+  Drafts), for example: `Rescan: 12 emails, 3 drafts, 1 outdated draft moved to
+  Deleted Items, 8 no reply needed (94 s)`.
+- It can stop early, with `Rescan stopped (<reason>) after 5 of 12 emails: ...`. The
+  reasons are: `cancelled`, `daily limit of 30 reached`, `Claude's usage limit was
+  reached`, `Claude isn't signed in`, `Outlook isn't running` and `3 Claude calls
+  failed in a row`.
+
+Drafts made by a rescan are tracked like automatic ones, so a later newer message can
+make them obsolete too.
 
 ## Meeting times
 
@@ -231,7 +390,7 @@ check, so confirm with them yourself.
 email names, if later) for 10 days, or until the latest date the email names, and
 never more than 60 days ahead. The length comes from the email and is 60 minutes
 when it doesn't say. Working hours, business days and whether tentative counts as
-busy come from [Settings, Scheduling](tray.md#scheduling).
+busy come from [Settings, Scheduling](settings.md#scheduling).
 
 **Ranking.** The options are ranked by your calendar: times right before or after
 one of your meetings first (within 15 minutes, on the same day), then times next to
@@ -290,6 +449,7 @@ the options. Like all placeholders, check these before sending.
 - **Number of times to offer**: 1 to 10, default 5.
 
 This works in automatic passes and in **Draft a reply to the selected email**.
+
 ## Your writing style
 
 Clippy learns your style from your own sent mail and keeps it in a Claude Code
@@ -327,7 +487,31 @@ edited your writing style skill. Replace your edits with a new version?` with
 
 **Refresh.** With **Update weekly** on, Clippy creates the skill before the first
 drafting pass if there isn't one, and then refreshes it at most once every 7 days
-when at least 20 new sent emails have appeared. Style generation doesn't count
+when at least 20 new sent emails have appeared.
+
+**The first skill is built as soon as your Sent Items are indexed.** The style comes
+from Clippy's index, so Clippy indexes **Sent Items first**, before the Inbox, and
+waits until that is complete. On the first run, drafting then starts and builds the
+first skill right away, without waiting for the Inbox backlog. Until then, automatic
+drafting doesn't build a style from a half-indexed Sent Items. If the first attempt
+finds too few sent emails or fails, the next automatic attempt is 24 hours later;
+**Regenerate** in Settings doesn't wait for any of this.
+
+**Where the style comes from (`StyleSource`).** Every draft, whether automatic,
+manual, rescan or re-check, uses one of three sources, in this order:
+
+1. **Your file**: `%USERPROFILE%\.claude\skills\my-email-style\SKILL.md`, if it can
+   be read and is at most 64 KiB. This is the normal case, and your edits count.
+2. **Clippy's own copy** in `%APPDATA%\ClippysRevenge`, if your file is missing or
+   unreadable. The Activity window says `Writing style: your SKILL.md is missing or
+   unreadable, so drafts use Clippy's saved copy. Regenerate it from AI drafts, or
+   fix the file.`
+3. **None**: drafts use "write plainly, briefly and politely". The Activity window
+   says `Writing style: SKILL.md not found or unreadable — drafts use no style
+   guide. Regenerate it from AI drafts.`
+
+These messages appear when the source **changes**, not for every draft. When your file
+works again you see `Writing style: using your SKILL.md again.` Style generation doesn't count
 toward the daily limit. In Settings you also have **View** (read-only), **Regenerate**
 (runs now and takes a few minutes) and **Open in editor**. The status reads
 `Generated 2026-11-13 from 200 sent emails`, `Edited by you` or `Not generated yet`.
@@ -393,6 +577,8 @@ then press **Check**.
 | `AI drafts: Claude's usage limit was reached. I'll try again at 14:05.` | Wait. It retries by itself |
 | `AI drafts: a Claude call failed (<kind>). I'll try again in 4 min.` | Usually temporary. If it keeps failing, press **Check** |
 | `AI drafts: daily limit of 30 reached. I'll continue tomorrow.` | Raise **Daily limit** or wait |
+| `Rescan stopped (...) after 5 of 12 emails: ...` | See [Rescan](#rescan-emails-from-the-last-24-hours) for the reasons. Fix the cause and rescan again |
+| `AI drafts: an outdated draft couldn't be moved to Deleted Items. It's still in Drafts.` | Clippy couldn't open that mailbox's Deleted Items. Delete the old draft yourself if you want |
 | `AI drafts: no draft for the email received ...: Claude's confidence 0.55 is below your minimum of 0.60.` | Draft it by hand from the tray, or lower **Minimum confidence**. See [Emails Clippy decides not to draft](#emails-clippy-decides-not-to-draft) |
 | `[[add meeting times: ...]]` in a draft | Clippy couldn't offer times. See [Meeting times](#meeting-times) |
 | `AI drafts: a reply draft couldn't be saved in Outlook. I'll try again later.` | Check that Outlook is running and Drafts is available |
@@ -407,7 +593,8 @@ then press **Check**.
 
 If an email gets no draft, the usual reasons are: it arrived before you turned AI
 drafts on, it is older than the age limit, it matched a [rule](#rules), or Claude
-decided no reply was needed or wasn't confident enough (the Activity window says so\nin the second case).
+decided no reply was needed or wasn't confident enough (the Activity window says so
+in the second case).
 
 Logs and the Activity window never contain mail text, prompts, the style skill or
 Claude's answers.

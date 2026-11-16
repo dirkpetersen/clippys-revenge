@@ -25,7 +25,11 @@ change how Clippy updates, see Settings, General, **Updates**.
 It installs to `%LOCALAPPDATA%\Programs\ClippysRevenge\`, adds a Start menu
 shortcut called "Clippy's Revenge", and starts the app. A paperclip appears in
 the system tray. The app is set to start with Windows (you can turn that off in
-the tray menu or in [Settings](tray.md)).
+the tray menu or in [Settings](settings.md#general)).
+
+The first start reads your mail from Outlook in the background: **Sent Items first**,
+then the Inbox, newest mail first within each folder. You can search the newest mail
+while it runs. See [Indexing](indexing.md#first-run-backfill).
 
 !!! note "SmartScreen"
     The exe is not code-signed yet, so Windows SmartScreen warns the first time
@@ -78,9 +82,13 @@ on disk.
 | What | Where |
 |---|---|
 | Program | `%LOCALAPPDATA%\Programs\ClippysRevenge\ClippysRevenge.exe` |
-| Settings and token | `%APPDATA%\ClippysRevenge\` |
+| Settings, token and API key (encrypted) | `%APPDATA%\ClippysRevenge\` |
 | Index and logs | `%LOCALAPPDATA%\ClippysRevenge\` |
 | Saved attachments | `%USERPROFILE%\Downloads\Clippy's Revenge` |
+
+Your writing-style skill for [AI drafts](ai-drafts.md#your-writing-style) is stored
+under `%USERPROFILE%\.claude\skills\my-email-style` and is not removed by the
+uninstaller.
 
 ## Next step
 
