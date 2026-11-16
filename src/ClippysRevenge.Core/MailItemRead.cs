@@ -75,11 +75,28 @@ public static class InlineAttachments
         return false;
     }
 
+    /// <summary>OlAttachmentType.olEmbeddeditem: an attached email (or other Outlook item).</summary>
+    public const int OlEmbeddedItem = 5;
+
     public static string FileNameFor(string? fileName, string? displayName, int position)
     {
         if (!string.IsNullOrWhiteSpace(fileName)) return fileName.Trim();
         if (!string.IsNullOrWhiteSpace(displayName)) return displayName.Trim();
         return $"attachment-{position}";
+    }
+
+    /// <summary>As <see cref="FileNameFor(string?,string?,int)"/>, but an embedded item (olEmbeddeditem) without a
+    /// FileName always gets a name ending in ".msg" (SPEC 26.1: attached emails are always read):
+    /// the cleaned subject (display name) + ".msg", or "(no name).msg".</summary>
+    public static string FileNameFor(string? fileName, string? displayName, int position, int attachmentType)
+    {
+        if (attachmentType != OlEmbeddedItem || !string.IsNullOrWhiteSpace(fileName))
+            return FileNameFor(fileName, displayName, position);
+        var cleaned = string.Concat((displayName ?? "").Select(c => char.IsControl(c) || "\\/:*?\"<>|".Contains(c) ? ' ' : c));
+        cleaned = string.Join(' ', cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (cleaned.EndsWith(".msg", StringComparison.OrdinalIgnoreCase)) return cleaned;
+        if (cleaned.Length > 100) cleaned = cleaned[..100].TrimEnd();
+        return (cleaned.Length == 0 ? "(no name)" : cleaned) + ".msg";
     }
 }
 

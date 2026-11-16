@@ -676,7 +676,8 @@ internal sealed partial class OutlookMail
             var cid = pa is null ? null : ComSafe.Try(() => pa.GetProperty(PrAttachContentId) as string);
             var mime = pa is null ? null : ComSafe.Try(() => pa.GetProperty(PrAttachMimeTag) as string);
             var fileName = InlineAttachments.FileNameFor(
-                ComSafe.Try(() => a.FileName), ComSafe.Try(() => a.DisplayName), ComSafe.Try(() => a.Index));
+                ComSafe.Try(() => a.FileName), ComSafe.Try(() => a.DisplayName), ComSafe.Try(() => a.Index),
+                (int)a.Type);
             return new AttachmentFacts((int)a.Type, hidden, cid, mime, fileName);
         }
         finally
