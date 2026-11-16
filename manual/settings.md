@@ -22,6 +22,8 @@ Open Settings from the tray menu, **Settings…**. The window has five tabs:
 | **Claude Code command** | | The full `claude mcp add` command with the token hidden until you press **Show**. **Copy command** always copies the whole command |
 | **Test connection** | | Sends a request without the token (expects `401`) and one with it (expects an MCP answer) and shows a check mark or the reason it failed. It tests the running server, not unsaved changes. See [Troubleshooting](troubleshooting.md#test-connection-messages) |
 | **From WSL** | | The `.wslconfig` snippet for [WSL](connect.md#from-wsl) |
+| **WSL token line** | | A read-only line, `export CLIPPY_TOKEN=••••••••`, with the token masked until you press **Show** for the auth token. For [attachment download links](tools.md#attachment_link) from WSL |
+| **Copy WSL token line** | | Copies `export CLIPPY_TOKEN=<token>` (the real token, even while the line is masked). Add it to `~/.bashrc` in WSL. After **Regenerate**, copy it again. See [Set CLIPPY_TOKEN](connect.md#set-clippy_token-for-downloads) |
 
 ## Index
 

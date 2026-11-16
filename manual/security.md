@@ -45,6 +45,63 @@ little as possible and to keep that access on your PC.
 - **No OAuth prompts.** The `401` carries no `WWW-Authenticate` header, so MCP
   clients don't start an OAuth flow.
 
+## Attachment download links
+
+The [`attachment_link`](tools.md#attachment_link) tool lets a shell, usually Claude Code
+in WSL, download one attachment as a file. It adds one endpoint, `GET /files/<link
+token>`, on the same server. Everything in [Network](#network) applies to it unchanged:
+loopback only, constant-time bearer check, no browsers.
+
+- **Two secrets are needed.** The request must carry your bearer token **and** the
+  link token. The link appears in the Claude Code conversation, so a leaked link
+  alone is useless. Anything else on your PC that can reach `127.0.0.1` (another
+  Windows user, other WSL processes) can't use it without the bearer token either.
+  The token reaches the shell through `CLIPPY_TOKEN`, set once by you (see
+  [Connect](connect.md#set-clippy_token-for-downloads)). It is never put in a tool
+  result.
+- **Link token.** 32 random bytes, 43 characters (`A-Z a-z 0-9 - _`). It is kept in
+  memory only, never written to disk, never shown in Activity and never logged.
+- **One download, 10 minutes.** The link is removed before the first byte is sent.
+  A second request gets `404`. A request that fails the bearer check (`401`) never
+  reaches the link, so it doesn't use it up. After 10 minutes the link is gone.
+- **Private folder.** Clippy saves the attachment into
+  `%LOCALAPPDATA%\ClippysRevenge\links\` when the link is made. The folder is
+  created for your Windows user only: no inherited permissions, full control for
+  your user account alone. Files there are named with 32 random hex characters and
+  `.bin`, never the attachment's name. If the folder is a junction or symlink, or its
+  permissions can't be set, `attachment_link` refuses.
+- **No copies left behind.** The file is deleted right after its download ends
+  (completed or interrupted), when the link expires (checked every 60 seconds), when
+  the app exits, when the port changes or the server restarts, and at app start,
+  when any leftover `<32 hex>.bin` file in that folder is removed. A file that can't
+  be deleted is retried at the next check. Other files in the folder are left alone.
+- **Limits.** 100 MiB per attachment, 10 open links, 200 MiB open in total and 20
+  links per rolling 10 minutes. See [the limits](tools.md#attachment_link-limits).
+- **Nothing is indexed.** Attachment content never enters the index, and the link
+  code doesn't touch the index at all. A test checks this.
+- **No path from the model.** The model chooses an email and an attachment, never a
+  path. The file path is made by Clippy from a random name inside its own folder.
+- **GET only.** Other methods on `/files/...` answer `405` with an empty body.
+  `HEAD` isn't served. A `Range` header is ignored: the whole file is always sent,
+  so a partial request can't use the link up.
+- **Unknown, expired or used links answer `404`** with an empty body and no detail.
+  The same goes for a token that isn't 43 characters of the allowed letters, and for
+  a link whose file has gone missing. `401` (no or wrong bearer token, or an
+  `Origin` header) has an empty body too.
+- **Safe download headers.** `Content-Type: application/octet-stream`,
+  `Content-Disposition: attachment` with a cleaned file name, `X-Content-Type-Options:
+  nosniff` and `Cache-Control: no-store`.
+- **Logs.** The link token is in the URL, so the web server's own request logging is
+  held to Warning level, and any `/files/<token>` that still reaches a log is masked
+  as `/files/[redacted]`. Clippy's own lines name only outcomes and sizes, never the
+  token, the path or the file name.
+- **Activity.** A download shows as `attachment download` or `attachment download
+  failed`, with no file name. See [Activity](activity.md#tool-calls).
+
+Clippy still never sends anything, never deletes or moves mail and never touches
+Outlook items for this: it only saves a copy of the attachment, like
+`get_attachment`, and deletes its own copy.
+
 ## Outbound connections
 
 Clippy makes exactly two kinds of outbound connection:
@@ -109,7 +166,7 @@ Where your data goes, in one table.
 | Data | Stays on your PC | Leaves your PC |
 |---|---|---|
 | Mail bodies, subjects, addresses | In the local index and in Outlook | Only for [AI drafts](ai-drafts.md), if you turned them on (see below). Never otherwise |
-| Attachment contents | Not indexed; saved only when a tool call exports them to an allowed folder | Never |
+| Attachment contents | Not indexed; saved only when a tool call exports them to an allowed folder, or as a short-lived [download link](#attachment-download-links) copy in a private folder | Never over the network. A download link is fetched over `127.0.0.1` by your own shell |
 | Attachment names | In the index | With the email, only for AI drafts |
 | Calendar and free/busy | Read from Outlook when you ask for times | Never. Meeting times in drafts are computed by Clippy after Claude has answered |
 | Bearer token | DPAPI-encrypted file | Only to the MCP client you gave it to, over `127.0.0.1` |
@@ -129,6 +186,7 @@ Where your data goes, in one table.
 | Writing-style skill | `%USERPROFILE%\.claude\skills\my-email-style\SKILL.md`, plus Clippy's copy and `state.json` in `%APPDATA%\ClippysRevenge\my-email-style\` |
 | Temporary files for Claude Code | `%LOCALAPPDATA%\ClippysRevenge\ai\` (one system-prompt file per run, deleted afterwards; mail text is never written there) |
 | Saved attachments | `%USERPROFILE%\Downloads\Clippy's Revenge` (default) |
+| Download-link copies | `%LOCALAPPDATA%\ClippysRevenge\links\` (your user only; deleted after download, on expiry and at app start; normally empty) |
 | Draft-invite tracking | `%APPDATA%\ClippysRevenge\draft-invites.json` (Outlook ids only) |
 
 **To wipe it:** use **Rebuild index...** in the tray to delete and recreate only the
@@ -210,7 +268,7 @@ before you send them, and read a meeting draft before you click **Send**.
 ## Logs
 
 Logs are in `%LOCALAPPDATA%\ClippysRevenge\logs` and kept for 7 days. They contain
-tool names, counts and errors. The token, the saved API key and any `sk-ant-…` or `Bearer …` text are masked, and mail bodies and search
+tool names, counts and errors. The token, the saved API key and any `sk-ant-…` or `Bearer …` text are masked, as is the token in an attachment `/files/<token>` link, and mail bodies and search
 text are not logged. Activity events show subjects and counts only. The SQL of a `query_index` call and the text of a tool's error message (which can quote a search or a SQL error back to Claude) are not logged either, only the kind of error. Tool calls appear as the tool name, with counts and timings.
 
 ## Unsigned executable

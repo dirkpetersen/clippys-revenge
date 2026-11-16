@@ -93,7 +93,7 @@ Both lines are greyed out and can't be clicked.
 | **Draft invites (n)** | Submenu of your unsent meeting drafts, see below | Hidden when there are none |
 | **Copy "claude mcp add" command** | Puts the full setup command on the clipboard and shows the balloon `Copied — paste it in WSL` | |
 | **Copy auth token** | Copies the token. No balloon | |
-| **Regenerate auth token…** | Asks "Regenerate the auth token?" (Cancel is the default). The old token stops working at once, so Claude Code must be set up again | |
+| **Regenerate auth token…** | Asks "Regenerate the auth token?" (Cancel is the default). The old token stops working at once, so Claude Code must be set up again, and `CLIPPY_TOKEN` in WSL must be updated ([how](connect.md#set-clippy_token-for-downloads)) | |
 | **Activity…** | Opens the [Activity window](activity.md) | |
 | **Settings…** | Opens [Settings](settings.md) on the Connection tab. If it is already open, it comes to the front | |
 | **Open log folder** | Opens `%LOCALAPPDATA%\ClippysRevenge\logs` | |

@@ -186,13 +186,54 @@ has an `Origin` header.
 ## Are attachments searchable?
 
 Attachment **file names** are searchable. Their contents are never indexed. To read
-an attachment, Claude saves it with [`get_attachment`](tools.md#get_attachment) and
-reads the file.
+an attachment, Claude saves it with [`get_attachment`](tools.md#get_attachment) (or,
+from WSL, fetches it with [`attachment_link`](tools.md#attachment_link)) and reads
+the file.
 
 ## Where does it save attachments?
 
 `%USERPROFILE%\Downloads\Clippy's Revenge` by default. Claude can only save to
 allowed folders, which you control in Settings, General.
+
+## Where do downloaded files go when Claude uses a download link?
+
+Into the folder where Claude Code ran the `curl` command, for example your WSL
+project folder. With [`attachment_link`](tools.md#attachment_link), Clippy makes a
+one-time link and the shell downloads the file itself. Clippy keeps a private copy
+in `%LOCALAPPDATA%\ClippysRevenge\links\` only until the download ends or 10 minutes
+pass, then deletes it. That folder is normally empty.
+
+## How do I get an attachment into WSL?
+
+Ask Claude Code to fetch it. It uses `attachment_link` and runs the `curl` command it
+gets back. You need `CLIPPY_TOKEN` set in WSL once: see
+[Set CLIPPY_TOKEN](connect.md#set-clippy_token-for-downloads).
+
+## curl says 401 when Claude downloads an attachment
+
+The shell doesn't have your token, or has an old one. Open **Settings, Connection**,
+press **Copy WSL token line** and put the line in `~/.bashrc` in WSL, then
+`source ~/.bashrc`. After **Regenerate auth token** you must do this again. A
+`401` does not use up the link, so the same command works once the token is right
+(if the 10 minutes haven't passed).
+
+## curl says 404 when Claude downloads an attachment
+
+The link is single use and lasts 10 minutes. A `404` means it was already used,
+has expired, was never made, or Clippy was restarted (which clears all links).
+Ask Claude for a new link. The link names the port it was made on, so after a port
+change old links no longer work either.
+
+## Can I download the same link twice?
+
+No. Each link works once. Ask Claude for a new one.
+
+## Why does Claude say the attachment is too big for a link?
+
+Links handle files up to 100 MB, with at most 10 open links, 200 MB open in total and
+20 links per 10 minutes. For a bigger file, Claude uses
+[`get_attachment`](tools.md#get_attachment) to save it on the Windows side. See the
+[limits](tools.md#attachment_link-limits).
 
 ## Can I use a shared mailbox?
 

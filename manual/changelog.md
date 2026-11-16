@@ -3,6 +3,28 @@
 The full list of releases, with downloads, is on
 [GitHub](https://github.com/dirkpetersen/clippys-revenge/releases).
 
+## Unreleased - v0.1.1
+
+- **New tool: `attachment_link`.** Claude Code in WSL (or any shell) can now get an
+  attachment as a real file in its own working folder. Clippy makes a one-time
+  download link and a `curl` command; the shell downloads the file, so the content
+  never passes through the model. A link works once and expires after 10 minutes.
+  Limits: 100 MiB per attachment, 10 open links, 200 MiB open in total, 20 links per
+  rolling 10 minutes. `get_attachment` is unchanged. See
+  [`attachment_link`](tools.md#attachment_link).
+- **Set `CLIPPY_TOKEN` in WSL.** The download needs your bearer token as well as the
+  link, so add `export CLIPPY_TOKEN=<token>` to `~/.bashrc` once. Settings,
+  Connection has a masked **WSL token line** and a **Copy WSL token line** button.
+  After **Regenerate auth token** copy the line again. See
+  [Connect](connect.md#set-clippy_token-for-downloads).
+- **Private download folder.** Clippy keeps a copy of the attachment in
+  `%LOCALAPPDATA%\ClippysRevenge\links\`, readable by your Windows user only, and
+  deletes it after the download, on expiry and at app start. Nothing is indexed, and
+  link tokens are masked in logs. See
+  [Security](security.md#attachment-download-links).
+- **Activity.** Downloads appear as `attachment download` or `attachment download
+  failed`.
+
 ## v0.1.0
 
 2026-11-15

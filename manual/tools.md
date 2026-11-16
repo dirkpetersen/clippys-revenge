@@ -1,6 +1,6 @@
 # Tools reference
 
-Clippy's Revenge gives Claude Code twelve tools. You normally don't call them
+Clippy's Revenge gives Claude Code thirteen tools. You normally don't call them
 yourself: you ask Claude in plain language and it picks the right tool. This page
 lists every tool and its parameters, which is useful when you want to know what
 Claude can and can't do.
@@ -11,6 +11,7 @@ Claude can and can't do.
 | [`get_message`](#get_message) | Read one email in full |
 | [`get_attachment`](#get_attachment) | Save one attachment to disk |
 | [`save_attachments`](#save_attachments) | Save attachments of all emails matching a search |
+| [`attachment_link`](#attachment_link) | Make a one-time download link for one attachment, for WSL or another shell |
 | [`create_draft`](#create_draft) | Save a new email draft |
 | [`reply_draft`](#reply_draft) | Save a reply draft |
 | [`list_events`](#list_events) | List calendar events |
@@ -34,7 +35,9 @@ There is no `send_meeting_invite` tool. Older versions had one; it was replaced 
 - **Read-only tools.** `search_emails`, `get_message`, `index_status`,
   `email_stats`, `query_index`, `list_events` and `find_free_times` change nothing.
   `get_attachment` and `save_attachments` write files to disk, only inside the
-  [allowed folders](security.md#file-access). `create_draft`, `reply_draft` and
+  [allowed folders](security.md#file-access). `attachment_link` also creates a file,
+  but only a short-lived private copy for a [download link](#attachment_link).
+  `create_draft`, `reply_draft` and
   `create_meeting_draft` create items in Outlook.
 - **Which tools need Outlook running.** `search_emails`, `email_stats`,
   `query_index` and `index_status` use the local index and work while Outlook is
@@ -342,6 +345,114 @@ first.
 | `limit` | int | Maximum number of **emails**, 1 to 200 (default 50) |
 | `offset` | int | Emails to skip, for paging |
 
+### attachment_link
+
+Makes a **one-time download link** for one attachment of an email. Use it when Claude
+Code runs in WSL (or any other shell) and should get the attachment as a real file in
+its own working folder, without you copying it over from the Windows side.
+
+| Tool | Where the file goes | Result |
+|---|---|---|
+| `get_attachment` | A Windows folder inside the [allowed folders](security.md#file-access) | A Windows path (`C:\...`) |
+| `save_attachments` | One Windows folder, for many emails | A list of Windows paths |
+| `attachment_link` | The shell's **current folder**, through `curl` | A link and a `curl` command |
+
+The file's bytes never pass through Claude: the tool returns only the link, and the
+shell downloads the file. Nothing about the attachment's content is indexed or put
+into the conversation. `get_attachment` is unchanged and stays the right tool when
+you want the file on the Windows side.
+
+**Setup needed once:** the shell must have `CLIPPY_TOKEN` set, because the download
+needs your auth token as well as the link. See
+[Set CLIPPY_TOKEN in WSL](connect.md#set-clippy_token-for-downloads).
+
+| Parameter | Type | Description |
+|---|---|---|
+| `id` | string, required | The id of an email, from `search_emails` |
+| `filename` | string | File name of the attachment (whole name, case-insensitive) |
+| `position` | int | 1-based position in the email's attachment list |
+
+Choosing the attachment works exactly as in [`get_attachment`](#get_attachment): with
+more than one attachment, pass `filename` or `position`; with neither, the error lists
+the attachments so Claude can choose; with both, they must agree; inline attachments
+can be fetched by name or position. There is no `save_dir`, because the file is not
+saved to a folder you choose.
+
+Result:
+
+| Field | Meaning |
+|---|---|
+| `url` | `http://127.0.0.1:<port>/files/<link token>`. The link token is 43 characters of letters, digits, `-` and `_` |
+| `filename` | The attachment's original name |
+| `size` | Size in bytes of the copy Clippy made |
+| `expires_at` | When the link stops working: 10 minutes after it was made, in your local time with the offset, for example `2026-11-15T14:35:00+01:00` |
+| `curl` | The command to run in the shell (below) |
+| `note` | `One download only. If curl answers 401, CLIPPY_TOKEN isn't set in this shell: ask the user to copy the auth token from the Clippy tray menu and add export CLIPPY_TOKEN=<token> to ~/.bashrc.` |
+
+The `curl` command has this shape:
+
+```bash
+curl -fsS -H "Authorization: Bearer $CLIPPY_TOKEN" -o 'Q3 report.pdf' 'http://127.0.0.1:8765/files/<link token>'
+```
+
+The real token is never in the result: the shell fills in `$CLIPPY_TOKEN` itself. The
+file name in the command is made safe to put in single quotes: a `'` becomes `_`, and a
+leading `-` or `.` becomes `_`, so the name can never be taken for an option or be a
+hidden file. The file is saved with that name in the folder where the command runs,
+and an existing file with the same name is overwritten by `curl`, so ask Claude to run
+it in the folder you want.
+
+How the link behaves:
+
+- **One download only.** The first successful request uses the link up. Running the
+  same command again gives `404`.
+- **Expires after 10 minutes.** After that the link is gone, even if never used.
+- **Needs both tokens.** The request must carry your bearer token (`$CLIPPY_TOKEN`)
+  and the link token. A request without the bearer token gets `401` and does **not**
+  use the link up.
+- **Made at once.** Clippy saves the attachment through Outlook when the link is
+  made, not when it is downloaded. The download then works even if Outlook closes
+  or gets busy, and Outlook problems show up as normal tool errors instead of a
+  `curl` failure.
+- **Gone after use.** Clippy deletes its private copy right after the download
+  (finished or interrupted), when the link expires, and on app restart. See
+  [Security](security.md#attachment-download-links).
+- The download is `GET` only and the whole file is always sent.
+
+#### attachment_link limits
+
+Clippy checks these before it saves anything. Expired links don't count.
+
+| Limit | Refusal text |
+|---|---|
+| 100 MiB per attachment | `The attachment is <n> MB; attachment_link handles up to 100 MB. Use get_attachment to save it on the Windows side.` (`<n>` is the size rounded up) |
+| At most 10 open links | `Too many open download links (10). Download them or wait until they expire (10 minutes), then try again.` |
+| At most 200 MiB of open links in total | `The open download links already hold 200 MB. Download them or wait until they expire, then try again.` |
+| At most 20 links per rolling 10 minutes | `Too many download links in the last 10 minutes (20). Try again in <n> min.` (`<n>` is whole minutes, at least 1) |
+
+The checks run in this order: size, number of open links, open bytes, rate. A link
+that would push the open total over 200 MiB is refused after the copy is made, and
+the copy is deleted.
+
+Other errors:
+
+| Situation | What the message says |
+|---|---|
+| No `id` | `id is required. Use the id from search_emails.` |
+| Outlook isn't running, busy, or the email is gone | The same messages as in [Errors Claude may see](#errors-claude-may-see) |
+| Several attachments and none chosen, or a name that doesn't match | The attachment list, as for `get_attachment` |
+| The private folder can't be used | `Clippy can't use its private download folder. Use get_attachment instead.` |
+
+??? example "Example request"
+    "Get the PDF attached to Ann's email about the Q3 numbers into this folder."
+
+    Claude finds the email with `search_emails`, then calls `attachment_link` with
+    its `id` and `filename="Q3 report.pdf"`. It gets back `size: 482113`, an
+    `expires_at` ten minutes from now and the `curl` command above. In WSL, Claude
+    runs the command and `Q3 report.pdf` appears in the current folder. If you ask
+    it to run the same command again, `curl` fails with `404`, because the link
+    was single use. Ask for a new link instead.
+
 ## Drafts
 
 Drafts are only ever **saved** to the Drafts folder. You review and send them from
@@ -548,6 +659,7 @@ Every tool error is a plain sentence that tells Claude what to do next. Common o
 | Unknown or disabled mailbox | `Mailbox "<input>" is not configured or not enabled.` and the list of available mailboxes, with the hint to enable it in the tray under **Shared mailboxes** |
 | `mailbox="all"` on a tool that doesn't support it | `Mailbox "all" only works with search tools. Use one mailbox: <list>.` |
 | Unknown email `id` | `Email "<id>" was not found in Outlook. It may have been deleted or moved to a folder that isn't indexed. Run search_emails again to get a current id.` |
+| `attachment_link` refused | One of the [limit messages](#attachment_link-limits) |
 | Path outside the allowed folders | An error naming the allowed folders. See [file access](security.md#file-access) |
 | Meeting drafts turned off | See [create_meeting_draft](#create_meeting_draft) |
 

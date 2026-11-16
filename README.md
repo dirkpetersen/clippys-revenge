@@ -140,6 +140,12 @@ curl -i -X POST http://127.0.0.1:8765/mcp     # expect: 401 Unauthorized
 The app listens on `127.0.0.1` only. It does not bind to the WSL virtual
 adapter, and there is no WSL interop dependency: WSL talks to it over TCP.
 
+To let Claude Code in WSL download attachments with `attachment_link`, put your
+token in the WSL shell once: press **Copy WSL token line** in Settings, Connection
+(the on-screen line is masked) and add the copied
+`export CLIPPY_TOKEN=<token>` line to `~/.bashrc`. After **Regenerate auth token**,
+copy it again. Details: [Connect](https://dirkpetersen.github.io/clippys-revenge/connect/#set-clippy_token-for-downloads).
+
 ## Tools
 
 Tool names are snake_case. `mailbox` is optional (empty = your own mailbox, or
@@ -151,6 +157,7 @@ a configured shared mailbox's address; search tools also accept `all`).
 | `get_message` | Full message by id, fetched live from Outlook |
 | `get_attachment` | Saves one attachment to a permitted folder, returns its path |
 | `save_attachments` | Saves the attachments of all messages matching a search |
+| `attachment_link` | One-time download link for one attachment (10 minutes, one download, up to 100 MB), plus the `curl` command that saves it in the shell's current folder. Needs `CLIPPY_TOKEN` in the shell. The file content never goes through the model |
 | `create_draft` | Saves a new draft (never sends), with signature and attachments |
 | `reply_draft` | Saves a reply or reply-all draft (never sends) |
 | `list_events` | Calendar events in a date range |
@@ -180,6 +187,10 @@ a configured shared mailbox's address; search tools also accept `all`).
   Items. It never moves your mail. The one exception is its own outdated, unedited AI
   drafts (see above), which go to Deleted Items and can be dragged back.
 - **Attachments' content is never indexed.** Only file names are stored.
+- **Download links need two secrets.** `GET /files/<link token>` needs your
+  bearer token and the single-use link token. The copy sits in a folder only your
+  user can read (`%LOCALAPPDATA%\ClippysRevenge\links\`) and is deleted after the
+  download, on expiry and at app start. Tokens are masked in logs.
 - **File access is restricted by `PathPolicy`.** Every path a tool reads or
   writes must be inside an allowed folder: the attachment folder
   (`%USERPROFILE%\Downloads\Clippy's Revenge` by default, always allowed) and

@@ -69,6 +69,12 @@ well.
 `Tool` events show the tool name and how long it took, for example `search_emails` with
 `8 ms`. A call that failed reads `<tool> failed`.
 
+An [attachment download](tools.md#attachment_link) shows as its own `Tool` event:
+`attachment download` with how long the transfer took, or `attachment download
+failed` when the transfer broke off (for example the shell stopped `curl`). The
+event has no file name, email id or token. Requests that were refused (`401`, `404`,
+`405`) leave no event. Making the link is an ordinary `attachment_link` tool call.
+
 ## Drafts and invites
 
 | Kind | Text |

@@ -36,6 +36,24 @@ re-add the server. Also check **Settings, Connection** for the port.
 
 A `401` from `curl` with no token is expected, and tells you the server is up.
 
+## Attachment download fails (`attachment_link`)
+
+| What you see | Cause and fix |
+|---|---|
+| `curl` answers `401` | `CLIPPY_TOKEN` isn't set in that shell, or it is an old token. Press **Copy WSL token line** in **Settings, Connection**, put the line in `~/.bashrc` in WSL and run `source ~/.bashrc`. The link isn't used up by a `401`. See [Set CLIPPY_TOKEN](connect.md#set-clippy_token-for-downloads) |
+| `curl` answers `404` | The link was already used, expired after 10 minutes, or Clippy restarted or changed port. Ask Claude for a new link |
+| `curl` answers `405` | Something other than `GET` was sent. Use the exact `curl` command from the tool result |
+| `curl: (7) Failed to connect` | Clippy isn't running, or WSL isn't in mirrored networking. See [Claude can't connect from WSL](#claude-cant-connect-from-wsl) |
+| `Too many open download links (10)...` | Download or wait for open links to expire (10 minutes), then ask again |
+| `The open download links already hold 200 MB...` | Same: download the open links or wait for them to expire |
+| `Too many download links in the last 10 minutes (20). Try again in <n> min.` | Wait that many minutes |
+| `The attachment is <n> MB; attachment_link handles up to 100 MB...` | Use `get_attachment` to save it on the Windows side |
+| `Clippy can't use its private download folder. Use get_attachment instead.` | `%LOCALAPPDATA%\ClippysRevenge\links\` is a junction or symlink, or its permissions can't be set. Remove the folder (when Clippy is closed) and restart Clippy |
+| Outlook errors | Same as for other attachment tools: start Outlook, close dialogs |
+
+A failed or interrupted download shows as `attachment download failed` in
+[Activity](activity.md#tool-calls). More: [`attachment_link`](tools.md#attachment_link).
+
 ## Claude can't connect from WSL
 
 - Check `%USERPROFILE%\.wslconfig` has `networkingMode=mirrored` under `[wsl2]`.
