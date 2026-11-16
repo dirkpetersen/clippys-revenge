@@ -978,6 +978,8 @@ public class SafetySourceScanTests
         Assert.True(IsAiFile("src/A/FactsReporter.cs"));
         Assert.True(IsAiFile("src/A/RelatedMail.cs"));
         Assert.True(IsAiFile("src/A/DraftWorker.Related.cs"));
+        Assert.True(IsAiFile("src/A/DraftReasonLine.cs"));
+        Assert.True(IsAiFile("src/A/DraftWorker.Reason.cs"));
         Assert.False(IsAiFile("src/A/OutlookMail.cs"));
     }
 

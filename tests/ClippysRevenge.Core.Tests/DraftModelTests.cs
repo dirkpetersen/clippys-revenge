@@ -13,10 +13,12 @@ public class DraftModelTests
         var root = d.RootElement;
         Assert.Equal(["type", "additionalProperties", "required", "properties"], root.EnumerateObject().Select(p => p.Name));
         var props = root.GetProperty("properties");
-        Assert.Equal(["needs_reply", "confidence", "reply_all", "body_html", "reason", "meeting"], props.EnumerateObject().Select(p => p.Name));
+        Assert.Equal(["needs_reply", "confidence", "reply_all", "body_html", "reason", "note_for_user", "meeting"], props.EnumerateObject().Select(p => p.Name));
         Assert.Equal(["needs_reply", "confidence", "reason"], root.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
         Assert.Equal(1, props.GetProperty("confidence").GetProperty("maximum").GetInt32());
         Assert.Equal(200, props.GetProperty("reason").GetProperty("maxLength").GetInt32());
+        Assert.Equal("{\"type\":\"string\",\"maxLength\":160}", props.GetProperty("note_for_user").GetRawText());
+        Assert.Equal(160, DraftModel.MaxNoteChars);
         var m = props.GetProperty("meeting");
         Assert.Equal(["requested"], m.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
         Assert.Equal(JsonValueKind.False, m.GetProperty("additionalProperties").ValueKind);
@@ -254,4 +256,40 @@ public class DraftModelTests
 
     [Fact]
     public void Parse_DefaultElement_Null() => Assert.Null(DraftReply.Parse(default));
+
+    private static string WithNote(string fieldJson, bool needsReply = true) =>
+        "{\"needs_reply\":" + (needsReply ? "true" : "false") + ",\"confidence\":0.8,\"body_html\":\"<p>Hi</p>\",\"reason\":\"r\"" + fieldJson + "}";
+
+    [Fact]
+    public void NoteForUser_absent_is_null() => Assert.Null(DraftReply.Parse(J(WithNote("")))!.NoteForUser);
+
+    [Theory]
+    [InlineData(",\"note_for_user\":null")]
+    [InlineData(",\"note_for_user\":42")]
+    [InlineData(",\"note_for_user\":true")]
+    [InlineData(",\"note_for_user\":{}")]
+    [InlineData(",\"note_for_user\":[]")]
+    [InlineData(",\"note_for_user\":\"   \"")]
+    public void NoteForUser_bad_or_blank_gives_a_valid_reply_without_a_note(string field)
+    {
+        var r = DraftReply.Parse(J(WithNote(field)));
+        Assert.NotNull(r);
+        Assert.Null(r.NoteForUser);
+        Assert.Equal(DraftReply.Parse(J(WithNote("")))!, r);
+    }
+
+    [Fact]
+    public void NoteForUser_is_trimmed_and_cut()
+    {
+        Assert.Equal("Ann asked.", DraftReply.Parse(J(WithNote(",\"note_for_user\":\"  Ann asked.  \"")))!.NoteForUser);
+        Assert.Equal(new string('x', 160) + "…",
+            DraftReply.Parse(J(WithNote(",\"note_for_user\":\"" + new string('x', 200) + "\"")))!.NoteForUser);
+    }
+
+    [Fact]
+    public void NoteForUser_is_kept_when_no_reply_is_needed()
+    {
+        var r = DraftReply.Parse(J("{\"needs_reply\":false,\"confidence\":0.8,\"reason\":\"r\",\"note_for_user\":\"n\"}"));
+        Assert.Equal("n", r!.NoteForUser);
+    }
 }

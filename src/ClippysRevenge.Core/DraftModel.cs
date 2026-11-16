@@ -53,11 +53,11 @@ public static class DraftModel
 {
     /// <summary>SPEC 19.7 reply schema, compact, property order as in SPEC.</summary>
     public const string ReplySchema =
-        """{"type":"object","additionalProperties":false,"required":["needs_reply","confidence","reason"],"properties":{"needs_reply":{"type":"boolean"},"confidence":{"type":"number","minimum":0,"maximum":1},"reply_all":{"type":"boolean"},"body_html":{"type":"string"},"reason":{"type":"string","maxLength":200},"meeting":{"type":"object","additionalProperties":false,"required":["requested"],"properties":{"requested":{"type":"boolean"},"duration_minutes":{"type":"integer","minimum":15,"maximum":480},"earliest_date":{"type":"string","maxLength":10},"latest_date":{"type":"string","maxLength":10},"outside_hours_heading":{"type":"string","maxLength":80}}}}}""";
+        """{"type":"object","additionalProperties":false,"required":["needs_reply","confidence","reason"],"properties":{"needs_reply":{"type":"boolean"},"confidence":{"type":"number","minimum":0,"maximum":1},"reply_all":{"type":"boolean"},"body_html":{"type":"string"},"reason":{"type":"string","maxLength":200},"note_for_user":{"type":"string","maxLength":160},"meeting":{"type":"object","additionalProperties":false,"required":["requested"],"properties":{"requested":{"type":"boolean"},"duration_minutes":{"type":"integer","minimum":15,"maximum":480},"earliest_date":{"type":"string","maxLength":10},"latest_date":{"type":"string","maxLength":10},"outside_hours_heading":{"type":"string","maxLength":80}}}}}""";
 
     /// <summary>SPEC 23.7 revisit schema, compact. "meeting" is byte-identical to ReplySchema's meeting object.</summary>
     public const string RevisitSchema =
-        """{"type":"object","additionalProperties":false,"required":["action","confidence","reason"],"properties":{"action":{"type":"string","enum":["keep","replace","remove"]},"confidence":{"type":"number","minimum":0,"maximum":1},"reply_all":{"type":"boolean"},"body_html":{"type":"string"},"reason":{"type":"string","maxLength":200},"meeting":{"type":"object","additionalProperties":false,"required":["requested"],"properties":{"requested":{"type":"boolean"},"duration_minutes":{"type":"integer","minimum":15,"maximum":480},"earliest_date":{"type":"string","maxLength":10},"latest_date":{"type":"string","maxLength":10},"outside_hours_heading":{"type":"string","maxLength":80}}}}}""";
+        """{"type":"object","additionalProperties":false,"required":["action","confidence","reason"],"properties":{"action":{"type":"string","enum":["keep","replace","remove"]},"confidence":{"type":"number","minimum":0,"maximum":1},"reply_all":{"type":"boolean"},"body_html":{"type":"string"},"reason":{"type":"string","maxLength":200},"note_for_user":{"type":"string","maxLength":160},"meeting":{"type":"object","additionalProperties":false,"required":["requested"],"properties":{"requested":{"type":"boolean"},"duration_minutes":{"type":"integer","minimum":15,"maximum":480},"earliest_date":{"type":"string","maxLength":10},"latest_date":{"type":"string","maxLength":10},"outside_hours_heading":{"type":"string","maxLength":80}}}}}""";
 
     /// <summary>SPEC 19.6 style schema (used by M11.6).</summary>
     public const string StyleSchema =
@@ -67,12 +67,34 @@ public static class DraftModel
     public const int StyleMaxOutputTokens = 16_000;
     public static readonly TimeSpan StyleTimeout = TimeSpan.FromSeconds(600);
     public const int MaxBodyHtmlChars = 50_000;
+
+    /// <summary>SPEC 25.4: note_for_user maxLength and parse cut.</summary>
+    public const int MaxNoteChars = 160;
+
+    /// <summary>note_for_user of a model output object: null when absent, not a string, or blank;
+    /// else DraftPrompt.Cut(value.Trim(), MaxNoteChars). Never throws.</summary>
+    internal static string? ParseNote(JsonElement output)
+    {
+        try
+        {
+            if (output.ValueKind != JsonValueKind.Object) return null;
+            if (!output.TryGetProperty("note_for_user", out var v) || v.ValueKind != JsonValueKind.String) return null;
+            var s = v.GetString();
+            return string.IsNullOrWhiteSpace(s) ? null : DraftPrompt.Cut(s.Trim(), MaxNoteChars);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 }
 
 /// <summary>The validated, used part of a reply. `reason` is validated for type and then dropped (SPEC 19.7).
 /// Meeting: null when no meeting was asked (SPEC 19.7, 21.6).</summary>
+/// <param name="NoteForUser">SPEC 25.4: the model's note for the user (trimmed, cut), or null. Untrusted plain text;
+/// only DraftReasonLine.Html may turn it into HTML. Never log it.</param>
 public sealed record DraftReply(bool NeedsReply, double Confidence, bool? ReplyAll, string? BodyHtml,
-    MeetingAsk? Meeting = null)
+    MeetingAsk? Meeting = null, string? NoteForUser = null)
 {
     /// <summary>Null when invalid (the caller treats it as BadOutput). Never throws.</summary>
     public static DraftReply? Parse(JsonElement output)
@@ -112,7 +134,7 @@ public sealed record DraftReply(bool NeedsReply, double Confidence, bool? ReplyA
             MeetingAsk? meetingAsk = null;
             if (output.TryGetProperty("meeting", out var mt)) meetingAsk = MeetingAsk.Parse(mt);
 
-            return new DraftReply(needsReply, confidence, replyAll, body, meetingAsk);
+            return new DraftReply(needsReply, confidence, replyAll, body, meetingAsk, DraftModel.ParseNote(output));
         }
         catch (Exception)
         {

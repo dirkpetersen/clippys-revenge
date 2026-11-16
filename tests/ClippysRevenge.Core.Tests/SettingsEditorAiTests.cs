@@ -209,4 +209,14 @@ public class SettingsEditorAiTests
         e.Draft.AiDrafting.RelatedMail = false;
         Assert.True(e.Changes(live).Any);
     }
+
+    [Fact]
+    public void Changing_ReasonLine_is_a_change()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        Assert.False(e.Changes(live).Any);
+        e.Draft.AiDrafting.ReasonLine = false;
+        Assert.True(e.Changes(live).Any);
+    }
 }

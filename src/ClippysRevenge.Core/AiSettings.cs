@@ -56,6 +56,9 @@ public sealed partial class AiDraftingSettings
     /// <summary>Add up to 5 related earlier emails from the local index to drafting prompts (SPEC 19.2, 25.3).</summary>
     public bool RelatedMail { get; set; } = true;
 
+    /// <summary>Start each AI draft with a highlighted note on why it was drafted (SPEC 19.2, 25.4).</summary>
+    public bool ReasonLine { get; set; } = true;
+
     /// <summary>Internal: the one-time related-mail notice was shown (SPEC 25.3). Not in the Settings window.</summary>
     public bool RelatedMailNoticeShown { get; set; }
 

@@ -4,10 +4,10 @@ namespace ClippysRevenge.Core;
 
 public enum RevisitAction { Keep, Replace, Remove }
 
-/// <summary>The validated, used part of a revisit answer (SPEC 23.7). For Keep and Remove, ReplyAll, BodyHtml and
+/// <summary>The validated, used part of a revisit answer (SPEC 23.7). For Keep and Remove, ReplyAll, BodyHtml, NoteForUser and
 /// Meeting are always null (validated, then dropped). For Replace, BodyHtml is non-blank.</summary>
 public sealed record RevisitReply(RevisitAction Action, double Confidence, bool? ReplyAll, string? BodyHtml,
-    MeetingAsk? Meeting);
+    MeetingAsk? Meeting, string? NoteForUser = null);
 
 /// <summary>SPEC 23.2, 23.6, 23.7 constants and the parser.</summary>
 public static class DraftRevisit
@@ -113,7 +113,7 @@ public static class DraftRevisit
             MeetingAsk? meetingAsk = null;
             if (output.TryGetProperty("meeting", out var mt)) meetingAsk = MeetingAsk.Parse(mt);
 
-            return new RevisitReply(RevisitAction.Replace, confidence, replyAll, body, meetingAsk);
+            return new RevisitReply(RevisitAction.Replace, confidence, replyAll, body, meetingAsk, DraftModel.ParseNote(output));
         }
         catch (Exception)
         {

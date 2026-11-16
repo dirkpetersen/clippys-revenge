@@ -145,7 +145,7 @@ public static class StyleCorpus
     /// <summary>OwnText applied once per signature text, in order (once with null when the list is empty or null).</summary>
     public static string OwnText(string? body, IReadOnlyList<string>? signatureTexts)
     {
-        var text = body ?? "";
+        var text = DraftReasonLine.StripPlain(body);
         if (signatureTexts is null || signatureTexts.Count == 0) return MailText.OwnText(text, null);
         foreach (var sig in signatureTexts) text = MailText.OwnText(text, sig);
         return text;
