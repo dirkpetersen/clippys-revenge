@@ -47,6 +47,9 @@ Turn on [AI drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/) a
 - **Facts about you.** Tray, **AI drafts**, **Edit my facts…** opens a skill file (`%USERPROFILE%\.claude\skills\my-email-context\SKILL.md`) with your Zoom link, office hours, standard answers, who people are and how you want replies written. Clippy adds it to every draft request. See [Facts about you](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#facts-about-you).
 - **Related earlier mail.** Up to 5 related earlier emails from the same mailbox go with each draft request so replies fit the history. On by default; **Include related earlier emails** in Settings turns it off. See [Related earlier mail](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#related-earlier-mail).
 - **Reason line.** Each AI draft starts with a yellow `Clippy: …` line saying why it was drafted. Delete it before sending. See [The reason line](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#the-reason-line).
+- **Attachments and shared files.** Drafts use what attachments say. Clippy reads the text of PDF, Word, Excel, PowerPoint, text and HTML attachments of the email and its thread, and of OneDrive/SharePoint files linked in them that are already synced to your PC (only links from you or your own organization, nothing fetched from the network), and sends it to Claude for that one draft. Nothing is stored. Files it couldn't read get a yellow note at the top. On by default; **Read attachments and synced shared files for drafts** in Settings turns it off. See [Attachments and shared files](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#attachments-and-shared-files).
+- **Token tally.** A greyed `Today: 18 AI calls, ~210k tokens (in 190k / out 20k)` line in the tray's AI drafts menu and in Activity. See [Token tally](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#token-tally).
+- **Don't draft for this sender.** Two tray items add the selected email's sender or domain to **Never draft for**. See [Don't draft for this sender](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#dont-draft-for-this-sender).
 
 More in the manual: [tray menu](https://dirkpetersen.github.io/clippys-revenge/tray/), [every setting](https://dirkpetersen.github.io/clippys-revenge/settings/) and [Activity messages](https://dirkpetersen.github.io/clippys-revenge/activity/).
 
@@ -189,7 +192,7 @@ a configured shared mailbox's address; search tools also accept `all`).
 - **Never deletes email.** Clippy never calls delete and never empties Deleted
   Items. It never moves your mail. The one exception is its own outdated, unedited AI
   drafts (see above), which go to Deleted Items and can be dragged back.
-- **Attachments' content is never indexed.** Only file names are stored.
+- **Attachments' content is never indexed or stored.** Only file names are stored. For AI drafts the text of attachments and synced shared files is read in memory, sent to Claude for that one draft, and never written anywhere (Outlook attachments pass through the private folder `%LOCALAPPDATA%\ClippysRevenge\ai-files\` and are deleted at once).
 - **Download links need two secrets.** `GET /files/<link token>` needs your
   bearer token and the single-use link token. The copy sits in a folder only your
   user can read (`%LOCALAPPDATA%\ClippysRevenge\links\`) and is deleted after the

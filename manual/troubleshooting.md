@@ -203,6 +203,28 @@ in Settings, AI drafts, or Claude gave no note for that email. A draft you remov
 line from (or changed in any way) counts as edited, so Clippy leaves it alone and never
 replaces or moves it. That is intended. See [The reason line](ai-drafts.md#the-reason-line).
 
+### The draft ignored my attachment, or has a yellow `Couldn't read …` note
+
+- Check that **Read attachments and synced shared files for drafts** is ticked in
+  Settings, AI drafts. If it is off, only file names are sent.
+- Read the note. It names the reason: `not synced to this PC` (the link doesn't match a
+  file in a library or folder your OneDrive syncs: sync it or add a shortcut),
+  `Clippy only opens shared files from people in your organization`, `password-protected`,
+  `larger than 25 MB`, `no text in it, maybe a scan`, `Clippy can't read .<ext> files`,
+  `the file seems damaged`, `it took too long` and `too much attachment text for one
+  draft`. See [Why couldn't Clippy read my shared file?](faq.md#why-couldnt-clippy-read-my-shared-file).
+- Images, and links that aren't OneDrive or SharePoint links, are skipped with no note.
+- Outlook must be running: with Outlook closed, files that need Outlook are skipped.
+- The Activity suffix `(attachments: 3 read, 1 not read)` shows how many files were used.
+  It has counts only. The log never names a file.
+- `%LOCALAPPDATA%\ClippysRevenge\ai-files\` should be empty. If a file stays there, Clippy
+  deletes it at the next start.
+
+### The tray shows `tokens unknown` or no `Today:` line
+
+The line appears only after you gave AI drafts consent. `tokens unknown` means Claude
+reported no token numbers for today's calls. See [Token tally](ai-drafts.md#token-tally).
+
 ### The writing style isn't there yet
 
 Clippy builds your writing-style skill from your sent mail, and waits until your **Sent

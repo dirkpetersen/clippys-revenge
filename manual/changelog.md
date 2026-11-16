@@ -50,6 +50,41 @@ The full list of releases, with downloads, is on
   **Start each draft with a highlighted note on why it was drafted**. See
   [The reason line](ai-drafts.md#the-reason-line).
 
+- **Attachments and shared files in AI drafts.** Drafts now use what attachments say.
+  Clippy reads the text of PDF, Word, Excel, PowerPoint, text, HTML and `.eml` files
+  (and attached emails) of the email and its thread, and of OneDrive and SharePoint
+  files linked in them that are already synced to your PC, and sends it to Claude for
+  that one draft. Limits: 25 MB and 20,000 characters per file, 20 files and 40,000
+  characters per draft, 10 seconds per file and 20 seconds per draft. Images, scans and
+  old formats (`.doc`, `.xls`, `.ppt`, `.rtf`, `.zip`) aren't read. Files Clippy
+  couldn't read get a yellow `Clippy: Couldn't read …` note at the top of the draft
+  (at most 5). New setting **Read attachments and synced shared files for drafts**, on
+  by default. If you consented earlier, Clippy tells you once; new consents name it.
+  **This sends new data to Claude**: see [Attachments and shared
+  files](ai-drafts.md#attachments-and-shared-files) and
+  [Security](security.md#attachment-text-and-shared-files).
+- **Shared files: synced only.** Clippy opens only links to OneDrive and SharePoint
+  (`*.sharepoint.com`, `onedrive.live.com`, `d.docs.live.net`, `1drv.ms`), only
+  from you or your own organization, and only when the file is already synced to this
+  PC. It makes no network request (no Graph, no sign-in). An online-only file is
+  downloaded by your own OneDrive client. Other links are never touched.
+- **Nothing stored.** The text is never written to the index, settings, logs or
+  Activity. Outlook attachments pass through the private folder
+  `%LOCALAPPDATA%\ClippysRevenge\ai-files\` and are deleted at once and at start-up.
+- **Token tally.** A greyed line `Today: 18 AI calls, ~210k tokens (in 190k / out
+  20k)` at the top of the tray's **AI drafts** menu and in the Activity window. See
+  [Token tally](ai-drafts.md#token-tally).
+- **Activity.** `Draft` events get `(attachments: 3 read, 1 not read)` when files were
+  considered.
+- **Don't draft for this sender.** Two new tray items under **AI drafts** add the
+  selected email's sender, or the sender's domain, to **Never draft for**. Undo it in
+  Settings. See [Don't draft for this sender](ai-drafts.md#dont-draft-for-this-sender).
+- **Drafts and Deleted Items in other languages.** Clippy now recognizes these folders
+  by their role, so they are skipped for related mail and earlier attachments in a
+  non-English Outlook. A folder indexed before v0.1.1 under its translated name keeps
+  its old entries until you add it again or rebuild the index. See
+  [Drafts and Deleted Items in other languages](ai-drafts.md#drafts-and-deleted-items-in-other-languages).
+
 ## v0.1.0
 
 2026-11-15
