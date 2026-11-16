@@ -325,6 +325,9 @@ pass neither, the error lists the attachments (for example `1 "report.pdf", 2
 "image001.png" (inline)`) so Claude can choose. If you pass both, they must agree.
 Inline attachments can be fetched by name or position. The returned `filename` is
 the attachment's original name; the saved file may be called `name (2).ext`.
+An attached email that has no file name is listed as `<subject>.msg` (or
+`(no name).msg`). Names recorded in the index by older versions, without the `.msg`,
+still match in `get_attachment`, `save_attachments` and `attachment_link`.
 
 ### save_attachments
 

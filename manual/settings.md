@@ -118,4 +118,5 @@ while Clippy is not running.
 
 `AiDrafting.EditsNoticeShown` is internal: it records that the one-time
 [notice about learning from edits](ai-drafts.md#notice-for-existing-users) was shown.
-Leave it alone.
+Leave it alone. `RelatedMailNoticeShown` and `AttachmentsNoticeShown` do the same for the
+related-mail and attachment notices.
