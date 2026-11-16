@@ -137,8 +137,8 @@ src/ClippysRevenge.Core/        net10.0: no Windows, no COM, testable on Linux/W
     MailTable.cs            DASL date filters, Table columns/rows, tie-safe paging, Outlook dates
     MailFolders.cs          indexed-folder paths (Inbox/Sent Items canonical), ResolvedFolder
     MailItemRead.cs         inline rule, SMTP choice, To/CC format, GetItem chain, ItemNotFoundException
-    SyncModels.cs           IMailSource (the COM side of sync), plans, results, FolderPaths (incl. IsUnderInbox, §23.2),
-                            SyncLabels
+    SyncModels.cs           IMailSource (the COM side of sync), plans, results, SentGroupResult (M16.11),
+                            FolderPaths (incl. IsUnderInbox, §23.2), SyncLabels, SyncPlanner (incl. ProcessingOrder, §10)
     SyncEngine.cs           one sync cycle for one mailbox (§10)
     SyncService.cs          background indexing loop (BackgroundService), all mailboxes
     AttachmentSelection.cs  get_attachment / save_attachments selection rules
@@ -1404,7 +1404,35 @@ connection; the library pools them.
   Do nothing while paused or while Outlook is unavailable (except the
   RetentionMonths check below, which needs no COM). Run the cycle
   below for the own mailbox, then for each enabled shared mailbox.
-- Cycle, for each indexed folder of the mailbox:
+- **Folder order: Sent Items first (M16.11, user request 2026-11-15).**
+  Within each mailbox (own and shared alike) the folders are processed in
+  this order, a stable sort of the configured list
+  (`SyncPlanner.ProcessingOrder`): `Sent Items` itself, then its configured
+  subfolders (`Sent Items\…`), then `Inbox`, then every other folder
+  (including `Inbox\…` subfolders) in the configured order. Each folder
+  still runs steps 1–5 completely before the next one starts, so on the
+  first run the whole Sent Items backfill (newest first, as below) finishes
+  before the Inbox backfill begins, and the writing-style skill (§19.6)
+  can be built from a complete Sent Items while the Inbox is still being
+  indexed. The order is the same in every cycle; the incremental passes
+  themselves are unchanged. `MailboxSyncResult.Folders` and the `Sync`
+  event (`Inbox +12, Sent +3 (1.8 s)`) keep the **configured** order, so
+  their text doesn't change. Mailboxes keep their order (own first), so
+  a shared mailbox's Sent Items comes after the own mailbox's last folder.
+- **Sent Items ready (M16.11).** In each mailbox cycle that reaches the
+  folder loop, `SyncEngine` reports the *Sent group* (every folder under
+  `Sent Items`, `FolderPaths.IsUnderSentItems`) once, right after its last
+  folder (or, with no Sent group, before the first folder): *complete*
+  when every Sent-group folder is missing in Outlook or has
+  `backfill_complete`, *finished now* when it is complete and at least one
+  Sent-group folder started this cycle with an incomplete backfill.
+  `SyncService` keeps `OwnSentBackfillComplete` (own mailbox only, in
+  memory, `false` at start-up and after a Rebuild of the own mailbox, then
+  the last reported *complete*) and raises
+  `event Action? OwnSentBackfillCompleted` when the own mailbox reports
+  *finished now*. Handlers are isolated like `CycleCompleted`. The app
+  wakes the drafting worker on it (§19.6, §19.7).
+- Cycle, for each indexed folder of the mailbox (in the order above):
   1. `cutoff = now - RetentionMonths` (that mailbox's value).
   2. **First run of a folder:** set `modified_watermark = now` and
      `oldest_synced = now` **before** the backfill starts, so anything that
@@ -3579,6 +3607,22 @@ Details (M11.6, M11.7):
 - "No skill" means neither the user file nor the app copy exists. The 7
   days count from `generatedUtc` (a Regenerate restarts them). The
   "20 newer eligible" check runs at most hourly.
+- **Sent Items first (M16.11).** Because the corpus comes from the index,
+  an automatic run waits until the own mailbox's Sent Items are indexed:
+  `RunIfDueAsync` returns `NotDue` (no event, no log, no retry timer
+  touched) while `SyncService.OwnSentBackfillComplete` is false. So the
+  15-minute drafting tick during a long first backfill can no longer build
+  the skill from a half-indexed Sent Items (or record "only 0 sent
+  emails" and wait 24 h). Sync indexes Sent Items before the Inbox
+  (§10), and when the own Sent Items backfill finishes, `SyncService`
+  raises `OwnSentBackfillCompleted`, which wakes the drafting worker: its
+  next pass runs `BeforePassAsync` and so the first automatic generation,
+  without waiting for the Inbox and the shared mailboxes. All the usual
+  conditions still apply (the worker's gates, `Enabled`,
+  `AutoRegenerateStyle`, consent, the edit check). It can't run twice:
+  once the skill exists the later passes find it (`NotDue` for 7 days),
+  a too-small or failed run sets the 24 h retry, and the run gate makes a
+  concurrent call return `Busy`. Regenerate isn't affected by this wait.
 - After a failed or too-small automatic run, the next automatic attempt
   is 24 h later (in memory; Regenerate isn't affected).
 - "Once per edit" means once per distinct user-file hash per process.
@@ -3658,7 +3702,8 @@ skill (§18, open question 7).
 ### 19.7 Drafting pipeline (`DraftRules`, `DraftPrompt`, `DraftWorker`; Core)
 
 **Worker.** `DraftWorker` is a `BackgroundService` with one pass at a time
-(concurrency 1). A pass starts on `SyncService.CycleCompleted`, when
+(concurrency 1). A pass starts on `SyncService.CycleCompleted`, on
+`SyncService.OwnSentBackfillCompleted` (M16.11, §10, §19.6), when
 `Enabled` turns on, on **Draft a reply to the selected email**, and every
 15 minutes (so backoff and the next day's limit resume). Settings changes
 wake it too (`NotifySettingsChanged()`, called through
