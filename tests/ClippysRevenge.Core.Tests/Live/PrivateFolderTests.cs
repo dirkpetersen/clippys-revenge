@@ -33,7 +33,7 @@ public sealed class PrivateFolderTests : IDisposable
 
     private static SecurityIdentifier Me => WindowsIdentity.GetCurrent().User!;
 
-    private static void AssertOnlyMe(FileSystemSecurity acl, bool directory)
+    internal static void AssertOnlyMe(FileSystemSecurity acl, bool directory)
     {
         var rules = acl.GetAccessRules(true, true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().ToList();
         Assert.NotEmpty(rules);
@@ -52,7 +52,7 @@ public sealed class PrivateFolderTests : IDisposable
         if (directory) Assert.Equal(InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, inheritance);
     }
 
-    private static void AssertUserOnly(string folder) =>
+    internal static void AssertUserOnly(string folder) =>
         AssertOnlyMe(new DirectoryInfo(folder).GetAccessControl(AccessControlSections.Access), directory: true);
 
     private static void MakeJunction(string link, string target)
