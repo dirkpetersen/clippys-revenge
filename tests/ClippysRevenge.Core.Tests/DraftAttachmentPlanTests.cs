@@ -165,7 +165,7 @@ public class DraftAttachmentPlanTests
             AttFx.A(1, "a.zip"), AttFx.A(2, "noext"), AttFx.A(3, "x.png"), AttFx.A(4, "Fwd.msg"),
         ]));
         Assert.Equal("Clippy can't read .zip files", p[0].SkipReason);
-        Assert.Equal(AttachmentReasons.UnknownKind, p[1].SkipReason);
+        Assert.Null(p[1].SkipReason);   // no extension: the COM read knows the real type (older embedded-item rows)
         Assert.Equal(AttachmentReasons.Image, p[2].SkipReason);
         Assert.Null(p[3].SkipReason);
         Assert.All(p, i => Assert.Equal(AttachmentKind.File, i.Kind));
@@ -209,6 +209,66 @@ public class DraftAttachmentPlanTests
         var link = external.Single(i => i.Name == "b.docx");
         Assert.Equal(AttachmentReasons.FromOutside, link.SkipReason);
         Assert.Null(link.Mapped);
+    }
+
+    [Theory]
+    [InlineData("me@gmail.com", true)]
+    [InlineData("ME@gmail.com", true)]
+    [InlineData("bob@gmail.com", false)]
+    [InlineData("bob@outlook.com", false)]
+    public void Freemail_domain_is_not_the_organization(string sender, bool expected) =>
+        Assert.Equal(expected, DraftAttachmentPlan.MayOpenShared(sender, new AiIdentity("Me", "me@gmail.com"), ""));
+
+    [Theory]
+    [InlineData("me@outlook.com", "x@outlook.com")]
+    [InlineData("me@hotmail.com", "x@hotmail.com")]
+    [InlineData("me@live.com", "x@live.com")]
+    [InlineData("me@msn.com", "x@msn.com")]
+    [InlineData("me@googlemail.com", "x@googlemail.com")]
+    [InlineData("me@yahoo.com", "x@yahoo.com")]
+    [InlineData("me@icloud.com", "x@icloud.com")]
+    [InlineData("me@me.com", "x@me.com")]
+    [InlineData("me@aol.com", "x@aol.com")]
+    [InlineData("me@proton.me", "x@proton.me")]
+    [InlineData("me@protonmail.com", "x@protonmail.com")]
+    [InlineData("me@gmx.net", "x@gmx.net")]
+    [InlineData("me@web.de", "x@web.de")]
+    public void Freemail_list_only_allows_own_address(string own, string other)
+    {
+        var id = new AiIdentity("Me", own);
+        Assert.True(DraftAttachmentPlan.MayOpenShared(own, id, ""));
+        Assert.False(DraftAttachmentPlan.MayOpenShared(other, id, ""));
+    }
+
+    [Fact]
+    public void Freemail_user_with_shared_mailbox_still_matches_the_mailbox() =>
+        Assert.True(DraftAttachmentPlan.MayOpenShared("team@gmail.com", new AiIdentity("Me", "me@gmail.com"), "team@gmail.com"));
+
+    [Fact]
+    public void Link_in_quoted_history_of_the_users_sent_row_is_not_the_users()
+    {
+        var quoted = "Thanks, will look.\n\n-----Original Message-----\nFrom: eve@other.org\n" + AttFx.Share + "a.docx";
+        var r = AttFx.Req(thread: [AttFx.Th("S1", 10, email: "me@contoso.com", body: quoted)]);
+        Assert.Empty(Plan(r, AttFx.Root));
+    }
+
+    [Fact]
+    public void Link_only_in_the_forwarded_part_of_a_colleagues_mail_gives_no_item()
+    {
+        var fwd = "FYI\n\n-----Original Message-----\nFrom: eve@other.org\n" + AttFx.Share + "a.docx";
+        Assert.Empty(Plan(AttFx.Req(body: fwd, senderEmail: "bob@contoso.com"), AttFx.Root));
+        Assert.Empty(Plan(AttFx.Req(thread: [AttFx.Th("T1", 10, email: "bob@contoso.com", body: fwd)]), AttFx.Root));
+    }
+
+    [Fact]
+    public void Link_in_the_users_own_new_text_still_counts()
+    {
+        var body = "See " + AttFx.Share + "a.docx\n\n-----Original Message-----\nFrom: eve@other.org\nold";
+        var anchor = Assert.Single(Plan(AttFx.Req(body: body), AttFx.Root));
+        Assert.Equal("a.docx", anchor.Name);
+        var thread = Assert.Single(Plan(AttFx.Req(thread: [AttFx.Th("S1", 10, body: body)]), AttFx.Root));
+        Assert.Equal("a.docx", thread.Name);
+        Assert.Null(thread.SkipReason);
     }
 
     [Fact]

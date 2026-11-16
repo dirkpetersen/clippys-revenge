@@ -254,7 +254,8 @@ public sealed class DraftAttachments
                     {
                         var bytes = f.Bytes;
                         finals.Add(FromOutcome(p, name, AttachmentKind.File,
-                            await RunAsync(token => Outcome.From(_extract(att.FileName, bytes, token)), ct)));
+                            await RunAsync(token => Outcome.From(_extract(att.FileName, bytes, token)), ct,
+                                AttachmentText.FormatOf(att.FileName) == AttachmentFormat.Pdf)));
                     }
                     break;
 
@@ -357,11 +358,20 @@ public sealed class DraftAttachments
                 default:
                     return Outcome.Skip(AttachmentReasons.NotSynced);
             }
-        }, ct);
+        }, ct, AttachmentText.FormatOf(local.Path) == AttachmentFormat.Pdf);
 
-    /// <summary>SPEC 26.5 per-file limit: runs the work on the thread pool and gives up after PerFileTimeout.</summary>
-    private async Task<Outcome> RunAsync(Func<CancellationToken, Outcome> work, CancellationToken ct)
+    // PDF extraction can't be cancelled and has no decompression cap, so at most one timed-out (abandoned) PDF
+    // extraction may still run in the process; while it runs, further PDFs are skipped as "took too long".
+    private static int _abandonedPdf;
+
+    /// <summary>True while an abandoned PDF extraction is still running (test seam).</summary>
+    internal static bool PdfAbandoned => Volatile.Read(ref _abandonedPdf) != 0;
+
+    /// <summary>SPEC 26.5 per-file limit: runs the work on the thread pool and gives up after PerFileTimeout.
+    /// <paramref name="pdf"/>: the work is a PDF extraction (one abandoned run at a time, process-wide).</summary>
+    private async Task<Outcome> RunAsync(Func<CancellationToken, Outcome> work, CancellationToken ct, bool pdf = false)
     {
+        if (pdf && PdfAbandoned) return Outcome.Skip(AttachmentReasons.TookTooLong);
         var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var task = Task.Run(() => work(cts.Token), CancellationToken.None);
         try
@@ -390,9 +400,11 @@ public sealed class DraftAttachments
             else
             {
                 cts.Cancel();
+                var holdsPdf = pdf && Interlocked.CompareExchange(ref _abandonedPdf, 1, 0) == 0;
                 _ = task.ContinueWith(t =>
                 {
                     _ = t.Exception;
+                    if (holdsPdf) Volatile.Write(ref _abandonedPdf, 0);
                     cts.Dispose();
                 }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
             }

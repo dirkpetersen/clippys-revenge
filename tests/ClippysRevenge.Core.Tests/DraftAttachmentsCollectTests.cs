@@ -145,6 +145,54 @@ public class DraftAttachmentsCollectTests : IDisposable
     }
 
     [Fact]
+    public async Task One_abandoned_pdf_extraction_at_a_time()
+    {
+        _src.Returns("A", 1, Bytes("x")).Returns("A", 2, Bytes("y"));
+        using var release = new ManualResetEventSlim();
+        using var started = new ManualResetEventSlim();
+        var pdfCalls = 0;
+        var col = Make(extract: (n, b, t) =>
+        {
+            if (!n.EndsWith(".pdf", StringComparison.Ordinal)) return Read("fine");
+            Interlocked.Increment(ref pdfCalls);
+            started.Set();
+            release.Wait();                      // ignores the token, like a stuck PDF parser
+            return Read("late");
+        });
+
+        try
+        {
+            var task = col.CollectAsync(AttFx.Req(anchor: [AttFx.A(1, "stuck.pdf")]), CancellationToken.None);
+            Assert.True(await Task.Run(() => started.Wait(5000), TestContext.Current.CancellationToken));
+            for (var i = 0; i < 100 && !task.IsCompleted; i++)
+            {
+                _clock.Advance(TimeSpan.FromSeconds(1));
+                await Task.Delay(30, TestContext.Current.CancellationToken);
+            }
+            var first = await task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            Assert.Equal(AttachmentReasons.TookTooLong, first.Items[0].Reason);
+            Assert.True(DraftAttachments.PdfAbandoned);
+
+            // A second PDF is skipped without being extracted; other formats still work.
+            var second = await Make(extract: (n, b, t) =>
+            {
+                Interlocked.Increment(ref pdfCalls);
+                return Read("fine");
+            }).CollectAsync(AttFx.Req(anchor: [AttFx.A(1, "next.pdf"), AttFx.A(2, "ok.txt")]), CancellationToken.None);
+            Assert.Equal(AttachmentReasons.TookTooLong, second.Items.Single(i => i.Name == "next.pdf").Reason);
+            Assert.Equal(ExtractStatus.Read, second.Items.Single(i => i.Name == "ok.txt").Status);
+            Assert.Equal(2, Volatile.Read(ref pdfCalls));          // the stuck one plus ok.txt, not next.pdf
+        }
+        finally
+        {
+            release.Set();
+            for (var i = 0; i < 200 && DraftAttachments.PdfAbandoned; i++)
+                await Task.Delay(25, TestContext.Current.CancellationToken);
+        }
+        Assert.False(DraftAttachments.PdfAbandoned);
+    }
+
+    [Fact]
     public async Task Gone_earlier_email_is_read_once_and_noted_for_tier_2_only()
     {
         _src.Gone("T1");

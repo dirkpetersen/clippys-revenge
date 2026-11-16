@@ -37,7 +37,9 @@ public static class DraftAttachmentPlan
                 candidates.Add(new PlannedAttachment(TierOf(name), origin, entryId, senderName, senderEmail, time,
                     shared, a, null, null, null));
             }
-            foreach (var link in OneDriveLinks.Find(body))
+            // Links only from the message's own text: a link in quoted history belongs to an earlier sender.
+            var own = anchor ? ownText : MailText.OwnText(body ?? "", request.SignatureText);
+            foreach (var link in OneDriveLinks.Find(own))
             {
                 candidates.Add(new PlannedAttachment(TierOf(link.Name), origin, entryId, senderName, senderEmail, time,
                     shared, null, link, null, null));
@@ -110,7 +112,9 @@ public static class DraftAttachmentPlan
             case AttachmentFormat.Unsupported:
             case AttachmentFormat.UnsupportedNoted:
                 var ext = AttachmentText.Extension(name);
-                if (ext != "msg") return p with { SkipReason = AttachmentReasons.CantRead(ext) };
+                // No extension: older index rows hold an embedded item's bare display name; the COM read
+                // knows the real type, so let it through. Other unreadable extensions are skipped here.
+                if (ext != "msg" && ext.Length > 0) return p with { SkipReason = AttachmentReasons.CantRead(ext) };
                 break;
         }
         return p;
@@ -132,7 +136,24 @@ public static class DraftAttachmentPlan
         var ownDomain = DomainOf(own);
         var d = DomainOf(sender);
         if (ownDomain is null || d is null) return false;
+        // A consumer mail domain is not "your organization": only the user's own address counts there.
+        if (IsConsumerDomain(ownDomain)) return false;
         return d == ownDomain || d.EndsWith("." + ownDomain, StringComparison.Ordinal);
+    }
+
+    /// <summary>Well-known consumer mail domains (SPEC 26.3): never treated as the user's organization.</summary>
+    public static readonly IReadOnlyList<string> ConsumerMailDomains =
+    [
+        "outlook.com", "hotmail.com", "live.com", "msn.com", "gmail.com", "googlemail.com", "yahoo.com",
+        "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com", "web.de",
+    ];
+
+    private static bool IsConsumerDomain(string domain)
+    {
+        foreach (var c in ConsumerMailDomains)
+            if (domain == c || domain.EndsWith("." + c, StringComparison.Ordinal)) return true;
+        // gmx.com, gmx.net, gmx.de, ...
+        return domain.StartsWith("gmx.", StringComparison.Ordinal);
     }
 
     private static string? DomainOf(string? address)
