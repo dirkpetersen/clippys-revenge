@@ -156,4 +156,35 @@ public class SettingsEditorAiTests
         e.Rebase(live);
         Assert.Equal(AiDraftingSettings.DefaultDailyCap, e.Draft.AiDrafting.DailyCap);
     }
-}
+
+    [Fact]
+    public void Rebase_adopts_a_tray_added_exclude_sender()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        live.AiDrafting.ExcludeSenders.Add("ann@contoso.example");
+        e.Rebase(live);
+        Assert.Equal(["ann@contoso.example"], e.Draft.AiDrafting.ExcludeSenders);
+        Assert.False(e.Changes(live).Any);
+    }
+
+    [Fact]
+    public void Rebase_keeps_the_windows_exclude_list_when_edited()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        e.Draft.AiDrafting.ExcludeSenders = ["bob@x.example"];
+        live.AiDrafting.ExcludeSenders.Add("ann@contoso.example");
+        e.Rebase(live);
+        Assert.Equal(["bob@x.example"], e.Draft.AiDrafting.ExcludeSenders);
+    }
+
+    [Fact]
+    public void Rebase_leaves_exclude_list_when_tray_did_not_change_it()
+    {
+        var live = Live();
+        live.AiDrafting.ExcludeSenders.Add("old@x.example");
+        var e = new SettingsEditor(live);
+        e.Rebase(live);
+        Assert.Equal(["old@x.example"], e.Draft.AiDrafting.ExcludeSenders);
+    }}

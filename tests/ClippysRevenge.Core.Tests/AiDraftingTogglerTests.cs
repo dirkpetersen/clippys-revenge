@@ -142,4 +142,55 @@ public sealed class AiDraftingTogglerTests : IDisposable
         Assert.Throws<ArgumentNullException>(() => new AiDraftingToggler(_settings, null!, () => { }));
         Assert.Throws<ArgumentNullException>(() => new AiDraftingToggler(_settings, _ => { }, null!));
     }
-}
+
+    [Fact]
+    public void EditAi_false_saves_nothing()
+    {
+        Assert.Null(_t.EditAi(_ => false));
+        Assert.Empty(_saves);
+        Assert.Equal(0, _changed);
+    }
+
+    [Fact]
+    public void EditAi_adds_valid_entry()
+    {
+        var errors = _t.EditAi(ai => { ai.ExcludeSenders.Add("ann@contoso.example"); return true; });
+        Assert.NotNull(errors);
+        Assert.Empty(errors);
+        Assert.Equal(["ann@contoso.example"], Assert.Single(_saves).AiDrafting.ExcludeSenders);
+        Assert.Equal(["ann@contoso.example"], _settings.AiDrafting.ExcludeSenders);
+        Assert.Equal(1, _changed);
+    }
+
+    [Fact]
+    public void EditAi_invalid_clone_returns_errors_and_saves_nothing()
+    {
+        var before = _settings.AiDrafting.DailyCap;
+        var errors = _t.EditAi(ai => { ai.DailyCap = 0; return true; });
+        Assert.NotNull(errors);
+        Assert.Contains(errors, e => e.Field == "AiDrafting.DailyCap");
+        Assert.Empty(_saves);
+        Assert.Equal(before, _settings.AiDrafting.DailyCap);
+        Assert.Equal(0, _changed);
+    }
+
+    [Fact]
+    public void EditAi_save_failure_propagates_and_live_is_unchanged()
+    {
+        _saveThrows = new IOException("disk full");
+        Assert.Throws<IOException>(() => _t.EditAi(ai => { ai.ExcludeSenders.Add("a@b.example"); return true; }));
+        Assert.Empty(_settings.AiDrafting.ExcludeSenders);
+        Assert.Equal(0, _changed);
+    }
+
+    [Fact]
+    public void EditAi_leaves_consent_and_enabled_alone()
+    {
+        _settings.AiDrafting.RecordConsent(Now.AddDays(-1));
+        _t.EditAi(ai => { ai.ExcludeSenders.Add("a@b.example"); return true; });
+        Assert.Equal(Now.AddDays(-1), _settings.AiDrafting.ConsentedAtUtc);
+        Assert.False(_settings.AiDrafting.Enabled);
+    }
+
+    [Fact]
+    public void EditAi_null_edit() => Assert.Throws<ArgumentNullException>(() => _t.EditAi(null!));}

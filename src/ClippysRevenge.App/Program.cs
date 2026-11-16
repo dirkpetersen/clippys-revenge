@@ -254,10 +254,12 @@ internal static class Program
             : new AiStatusChecker(draftModel, () => { cliModel?.InvalidateStatus(); apiModel?.InvalidateModelCache(); }, s => drafts?.ReportStatus(s),
                 loggerFactory.CreateLogger<AiStatusChecker>());
         var draftsForTray = drafts;   // non-null local for the lambda (nullable flow)
-        AiTrayServices? aiTray = draftsForTray is null || aiMailbox is null || aiChecker is null ? null
+        AiTrayServices? aiTray = draftsForTray is null || aiMailbox is null || aiChecker is null || indexes is null ? null
             : new AiTrayServices(draftsForTray.DraftSelectedAsync, aiMailbox.ShowDraftsAsync, aiToggler, aiChecker,
                 draftsForTray.PlanRescan, draftsForTray.RescanAsync, draftsForTray.CancelRescan,
-                () => draftsForTray.CurrentRescan);
+                () => draftsForTray.CurrentRescan,
+                new DontDraftService(aiMailbox, indexes, aiToggler, () => settings.AiDrafting, hub,
+                    loggerFactory.CreateLogger<DontDraftService>()));
         var aiMailboxForUi = aiMailbox;
         var indexesForUi = indexes;
         var aiSettings = new AiSettingsServices(aiToggler, () => store.LoadApiKey() is { } k && SettingsStore.IsValidApiKeyFormat(k),
