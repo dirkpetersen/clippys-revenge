@@ -56,9 +56,13 @@ public abstract record AiAttachmentRead          // closed hierarchy (private ct
 /// it to 200). Text is "" unless Status is Read or Truncated. Reason is one AttachmentReasons text, set only
 /// when Skipped. SenderName/SenderEmail/MessageTime describe the message that carries it (M19.5 uses them only
 /// for Origin Thread).</summary>
+/// <param name="EntryId">EntryID of the message that carries the item (PlannedAttachment.EntryId).</param>
+/// <param name="FileName">The index file name of the attachment (PlannedAttachment.Attachment.FileName); null for
+/// links found in a body. Used only for the " (link)" suffix (SPEC 26.6).</param>
 public sealed record PromptAttachment(string Name, AttachmentOrigin Origin, AttachmentKind Kind,
     ExtractStatus Status, string Text, string? Reason, int Tier,
-    string? SenderName, string? SenderEmail, DateTimeOffset MessageTime);
+    string? SenderName, string? SenderEmail, DateTimeOffset MessageTime,
+    string? EntryId = null, string? FileName = null);
 
 /// <summary>The SPEC 26.7 table rows. Texts are M19.5 (AttachmentNoteTexts).</summary>
 public enum AttachmentNoteKind
@@ -420,7 +424,7 @@ public sealed class DraftAttachments
                 }
             }
             items.Add(new PromptAttachment(f.Name, f.Plan.Origin, f.Kind, status, text, reason, f.Plan.Tier,
-                f.Plan.SenderName, f.Plan.SenderEmail, f.Plan.MessageTime));
+                f.Plan.SenderName, f.Plan.SenderEmail, f.Plan.MessageTime, f.Plan.EntryId, f.Plan.Attachment?.FileName));
         }
 
         var notes = items.Select(NoteFor).Where(n => n is not null).Select(n => n!).ToList();
