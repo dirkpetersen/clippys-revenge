@@ -137,7 +137,7 @@ public sealed partial class DraftWorker
             }
             return DraftPassEnd.DailyLimit;
         }
-        if (_retryAt is { } retry && retry > now) return DraftPassEnd.Backoff;
+        if (!p.Rescan && _retryAt is { } retry && retry > now) return DraftPassEnd.Backoff;
 
         // 5. Model call.
         var thread = DraftRevisit.PromptThread(s.Index.Thread(topic, upTo, DraftRevisit.ThreadFetch, targetId), id);
@@ -150,12 +150,20 @@ public sealed partial class DraftWorker
             DraftModel.RevisitSchema, ai.Model, ai.Effort, TimeSpan.FromSeconds(ai.TimeoutSeconds),
             DraftModel.DraftMaxOutputTokens);
 
-        p.Scope ??= _s.Hub.Begin(ActivityState.Drafting, ActivityHub.DraftingLabel);
-        p.Total++;
-        _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
-        var result = await _s.Model.RunAsync(request, ct).ConfigureAwait(false);
-        p.Done++;
-        _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
+        var callCt = p.CallToken ?? ct;
+        if (callCt.IsCancellationRequested) return DraftPassEnd.Cancelled;
+        if (!p.Rescan)
+        {
+            p.Scope ??= _s.Hub.Begin(ActivityState.Drafting, ActivityHub.DraftingLabel);
+            p.Total++;
+            _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
+        }
+        var result = await _s.Model.RunAsync(request, callCt).ConfigureAwait(false);
+        if (!p.Rescan)
+        {
+            p.Done++;
+            _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
+        }
 
         now = _time.GetUtcNow();
         RevisitReply? reply = null;
@@ -179,7 +187,7 @@ public sealed partial class DraftWorker
                 EnterHold();
                 return DraftPassEnd.NotSignedIn;
 
-            case ModelResult.Failed { Kind: ModelFailure.Cancelled } when ct.IsCancellationRequested:
+            case ModelResult.Failed { Kind: ModelFailure.Cancelled } when callCt.IsCancellationRequested:
                 return DraftPassEnd.Cancelled;
 
             case ModelResult.Failed f:
@@ -197,7 +205,7 @@ public sealed partial class DraftWorker
         if (failure is { } kind) return CallFailed(p, s, t, upTo, kind, now);
 
         // 6. Result.
-        _consecutiveFailures = 0;
+        CallSucceeded(p);
         if (reply!.Action != RevisitAction.Keep && reply.Confidence < ai.MinConfidence)
         {
             s.Index.AddRevisit(id, now, AiRevisitOutcome.LowConfidence, 1);
@@ -228,10 +236,16 @@ public sealed partial class DraftWorker
 
     /// <summary>A failed model call: a failed row, an attempt (the trigger is given up after the third), the
     /// shared backoff and the Ai event. Ends the pass like a drafting failure.</summary>
-    private DraftPassEnd CallFailed(PassState p, RevisitScope s, AiDraftThread t, DateTimeOffset upTo, ModelFailure kind,
+    private DraftPassEnd? CallFailed(PassState p, RevisitScope s, AiDraftThread t, DateTimeOffset upTo, ModelFailure kind,
         DateTimeOffset now)
     {
         NoteFailedAttempt(p, s, t, upTo, now);
+        p.FailedCallsInRow++;
+        if (p.Rescan)
+        {
+            RevisitOutcome("failed");
+            return null;
+        }
         _consecutiveFailures++;
         var minutes = FailureBackoffMinutes[Math.Min(_consecutiveFailures - 1, FailureBackoffMinutes.Count - 1)];
         _retryAt = now + TimeSpan.FromMinutes(minutes);

@@ -152,6 +152,30 @@ public sealed partial class EmailIndex
             .ToList();
     }
 
+    public const int MaxRescanRows = 500;
+
+    /// <summary>Inbox rows (folder = 'Inbox' COLLATE NOCASE, not subfolders) with event_time &gt;= since, whatever their
+    /// ai_decisions row. Oldest first (event_time ASC, id ASC), at most max (SPEC 23.8).</summary>
+    /// <exception cref="ArgumentOutOfRangeException">max &lt; 1 or &gt; <see cref="MaxRescanRows"/>.</exception>
+    public IReadOnlyList<DraftCandidate> InboxSince(DateTimeOffset since, int max)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(max, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(max, MaxRescanRows);
+        const string sql = """
+            SELECT e.entry_id AS EntryId, e.store_id AS StoreId, e.internet_message_id AS InternetMessageId,
+                   e.conversation_topic AS ConversationTopic, e.event_time AS EventTime, e.subject AS Subject,
+                   e.sender_name AS SenderName, e.sender_email AS SenderEmail, e.to_addrs AS ToAddrs, e.cc_addrs AS CcAddrs
+            FROM emails e
+            WHERE e.folder = 'Inbox' COLLATE NOCASE AND e.event_time >= @since
+            ORDER BY e.event_time ASC, e.id ASC LIMIT @max
+            """;
+        using var conn = OpenConnection();
+        return conn.Query<CandidateRow>(sql, new { since = since.ToUnixTimeSeconds(), max })
+            .Select(r => new DraftCandidate(r.EntryId, r.StoreId, r.InternetMessageId, r.ConversationTopic,
+                DateTimeOffset.FromUnixTimeSeconds(r.EventTime), r.Subject, r.SenderName, r.SenderEmail, r.ToAddrs, r.CcAddrs))
+            .ToList();
+    }
+
     /// <exception cref="ArgumentException">sourceEntryId null or empty.</exception>
     public AiDecision? GetDecision(string sourceEntryId)
     {
