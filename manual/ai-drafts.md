@@ -728,8 +728,9 @@ For the email being answered, and for the earlier messages of its thread:
   newest 50 messages of the thread in your mailbox's index, at or before the email.
 - **Attached emails** (an Outlook message attached to another message). Their subject,
   sender, date, attachment names and body (at most 20,000 characters) are read. Their
-  own attachments are not.
-- **Shared files.** Links in the email text to OneDrive or SharePoint, and Outlook
+  own attachments are not. An attached email without a file name is named
+  `<subject>.msg`.
+- **Shared files.** Links in the text each person wrote to OneDrive or SharePoint, and Outlook
   "cloud attachments" (the share links Outlook adds when you attach a OneDrive file).
   At most 10 links per message. See [Shared files](#shared-files-onedrive-and-sharepoint).
 - Skipped without reading: **images** (`png`, `jpg` and so on, only the name is
@@ -814,10 +815,16 @@ Clippy opens a shared file only when **all** of these are true:
   `Doc.aspx?sourcedoc=…` links, and every `onedrive.live.com` and `1drv.ms` link can't
   be matched to a local file, so they end up in the same state.
 - **It comes from you or your own organization.** A link or cloud attachment is opened
-  only when the email that holds it was sent by you, or by an address in your own email
-  domain or one of its subdomains. A stranger could otherwise send a link to a file in
-  *your* OneDrive and get its content into a draft addressed back to them. Normal
-  attachments are always read, whoever sent them.
+  only when the email that holds it was sent by you, by the shared mailbox's own address,
+  or by an address in your own email domain or one of its subdomains. If your own address
+  is at a free or consumer mail provider such as outlook.com, hotmail.com, gmail.com,
+  yahoo.com, icloud.com or GMX, the domain is not "your organization": only links you
+  sent yourself (or the shared mailbox's own address) are read. A stranger could
+  otherwise send a link to a file in *your* OneDrive and get its content into a draft
+  addressed back to them. Normal attachments are always read, whoever sent them.
+- **Only the text each person wrote.** Links are taken from the part each sender
+  wrote themselves. Links in quoted replies (including lines starting with `>`), in
+  forwarded mail or in signatures are ignored, because they belong to someone else.
 
 **Files On-Demand.** If your OneDrive keeps the file "online only", opening it makes
 **your own OneDrive client** download it, with its own sign-in. Clippy itself makes no
@@ -848,7 +855,7 @@ email's own files and for earlier files that the email mentions by name (tiers 1
 | `Clippy: Couldn't read <name> (no text in it, maybe a scan).` | A PDF with no text |
 | `Clippy: Couldn't read <name> (Clippy can't read .<ext> files).` | One of the [formats it can't read](#formats), such as `.doc`, `.xls`, `.rtf` or `.zip` |
 | `Clippy: Couldn't read <name> (the file seems damaged).` | A corrupt file, a file whose content doesn't match its type, or a read that failed |
-| `Clippy: Couldn't read <name> (it took too long).` | A time limit was hit |
+| `Clippy: Couldn't read <name> (it took too long).` | A time limit was hit. While one PDF that took too long is still being processed, other PDFs are skipped with this note too |
 | `Clippy: Couldn't read <name> (too much attachment text for one draft).` | The file had no share of the 40,000 characters or was over the 20 files |
 | `Clippy: Read only the start of <name> (it's long).` | The file was cut by the page, row, slide or character limits, or by the draft total |
 
@@ -1092,7 +1099,7 @@ email**, a [rescan](#rescan-emails-from-the-last-24-hours) or a replacement in t
 [outdated-draft check](#outdated-drafts)), it keeps a copy of the draft's text in its
 own local index:
 
-- Only **the reply text Claude wrote**. The yellow [reason line](#the-reason-line), the
+- Only **the reply text Claude wrote, after Clippy added the meeting times** (the text is taken at the end, just before the draft is saved). The yellow [reason line](#the-reason-line), the
   yellow [notes](#the-yellow-notes) and your signature are left out.
 - Addresses, links and phone numbers are replaced by `<email>`, `<link>` and `<phone>`,
   and the text is cut to **1,500 characters**.

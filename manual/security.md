@@ -278,8 +278,12 @@ What Clippy does and doesn't do when it reads files for a draft
   are checked like all [file access](#file-access), so a shortcut or junction can't
   lead out of the synced folder.
 - **Only from your organization.** Links and cloud attachments are opened only when the
-  email was sent by you or by an address in your own domain (or a subdomain of it), so a
-  stranger can't make Clippy put a file from your OneDrive into a draft for them.
+  email was sent by you, by the shared mailbox's own address, or by an address in your own
+  domain (or a subdomain of it), so a stranger can't make Clippy put a file from your
+  OneDrive into a draft for them. A free or consumer mail provider (such as outlook.com,
+  hotmail.com, gmail.com, yahoo.com, icloud.com or GMX) is not an organization: with such
+  an address only links you sent yourself count. Links are read only from the text each
+  person wrote, never from quoted replies or forwarded mail.
 - **Prompt injection.** The model is told that file text is data, never instructions, and
   it still has no tools. The worst a malicious file can do is produce a bad draft.
 - **Off switch.** Untick **Read attachments and synced shared files for drafts** and

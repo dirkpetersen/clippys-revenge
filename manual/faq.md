@@ -175,12 +175,17 @@ this PC).` The reasons:
 - **Not from your organization.** The note says `Clippy only opens shared files from
   people in your organization`. Clippy opens a shared link only when the email came from
   you or from your own email domain (or a subdomain), so that outsiders can't make it
-  put a file from your OneDrive into a draft. Attached files are read whoever sent them.
+  put a file from your OneDrive into a draft. If your own address is at a free or
+  consumer mail provider such as outlook.com, hotmail.com, gmail.com, yahoo.com,
+  icloud.com or GMX, only links you sent yourself (or the shared mailbox's own address)
+  are read. Links are taken only from the text each person wrote: links in quoted
+  replies or forwarded mail are ignored. Attached files are read whoever sent them.
 - **Not a OneDrive or SharePoint link.** Dropbox, Google Drive and other links are never
   opened. There is no note for these.
 - **The file is too slow.** An online-only file is downloaded by OneDrive when Clippy opens
   it. If that takes longer than 10 seconds (or the draft's 20 seconds), the note says
-  `it took too long`.
+  `it took too long`. While one PDF that took too long is still being processed,
+  other PDFs are skipped with the same note until it finishes.
 - **The file itself.** `password-protected`, `larger than 25 MB`, `no text in it, maybe a
   scan` (Clippy has no OCR), `the file seems damaged`, or `Clippy can't read .<ext>
   files` for formats such as `.doc`, `.xls`, `.rtf` and `.zip`.
