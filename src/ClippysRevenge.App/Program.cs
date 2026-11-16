@@ -122,6 +122,13 @@ internal static class Program
             Logger = loggerFactory.CreateLogger<AttachmentLinks>(),
         });
         attachmentLinks.CleanUpAtStart();   // before the host starts: no link exists yet, so nothing valid is deleted
+        var aiFiles = new AiFiles(new AiFilesOptions
+        {
+            Folder = AiFilePaths.Default(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)).Folder,
+            EnsurePrivateFolder = PrivateFolder.Ensure,
+            Logger = loggerFactory.CreateLogger<AiFiles>(),
+        });
+        aiFiles.CleanUpAtStart();   // SPEC 26.9: no AI read exists yet
         var worker = new OutlookWorker(hub, loggerFactory.CreateLogger("OutlookWorker"));
         worker.Start();
         foreach (var w in loaded.Warnings)
@@ -222,12 +229,17 @@ internal static class Program
             factsStarter = new FactsTemplateStarter(factsFile, () => settings.AiDrafting,
                 async ct => (await aiMailboxRef.GetIdentityAsync(WorkPriority.Background, ct).ConfigureAwait(false))?.DisplayName,
                 loggerFactory.CreateLogger<FactsTemplateStarter>());
+            var attachmentSource = new OutlookAttachmentSource(worker, mail, stores, aiFiles,
+                new OneDriveRegistry(loggerFactory.CreateLogger<OneDriveRegistry>()));
+            var draftAttachments = new DraftAttachments(attachmentSource, TimeProvider.System,
+                loggerFactory.CreateLogger<DraftAttachments>());
             drafts = new DraftWorker(new DraftWorkerServices(() => settings, indexes, aiMailbox, replyWriter, draftModel,
                 styleGuide,
                 () => signatures.Default(SignatureKind.Reply), hub, balloons,
                 () => worker.State == OutlookConnectionState.Available, () => syncRef.IsPaused, TimeZoneInfo.Local,
                 Logger: loggerFactory.CreateLogger<DraftWorker>(), FreeBusy: freeBusy, Facts: facts,
-                MarkNoticeShown: new AiDraftingToggler(settings, store.Save, static () => { }).MarkNoticeShown));
+                MarkNoticeShown: new AiDraftingToggler(settings, store.Save, static () => { }).MarkNoticeShown,
+                Attachments: draftAttachments));
             var draftsRef = drafts;
             sync.CycleCompleted += _ => draftsRef.Wake();
             sync.OwnSentBackfillCompleted += () => draftsRef.Wake();

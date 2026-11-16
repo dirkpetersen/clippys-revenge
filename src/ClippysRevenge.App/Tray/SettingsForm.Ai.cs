@@ -43,6 +43,7 @@ internal sealed partial class SettingsForm
     private readonly CheckBox _aiRevise = new() { Text = AiTabTexts.ReviseDraftsText };
     private readonly CheckBox _aiRelated = new() { Text = AiTabTexts.RelatedMailText };
     private readonly CheckBox _aiReason = new() { Text = AiTabTexts.ReasonLineText };
+    private readonly CheckBox _aiAttachments = new() { Text = AiTabTexts.ReadAttachmentsText };
     private readonly Label _aiFactsStatus = new() { AutoEllipsis = true };
     private readonly TextBox _aiExclude = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
     private readonly TextBox _aiInclude = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
@@ -111,31 +112,32 @@ internal sealed partial class SettingsForm
         Put(p, _aiReason, 8, 454, 620, 24);
         Put(p, _aiFactsStatus, 8, 484, 620, 20);
 
-        Put(p, _aiMeeting, 8, 514, 370, 24);
-        Lbl(p, AiTabTexts.MeetingCountLabel, 384, 518, 150);
-        Put(p, _aiMeetingCount, 540, 514, 60, 24);
+        Put(p, _aiAttachments, 8, 514, 620, 24);
+        Put(p, _aiMeeting, 8, 544, 370, 24);
+        Lbl(p, AiTabTexts.MeetingCountLabel, 384, 548, 150);
+        Put(p, _aiMeetingCount, 540, 544, 60, 24);
 
-        Lbl(p, "Never draft for", 8, 550, 200);
-        Lbl(p, "Only draft for", 330, 550, 200);
-        Put(p, _aiExclude, 8, 576, 310, 80);
-        Put(p, _aiInclude, 330, 576, 300, 80);
-        var listHint = Lbl(p, AiTabTexts.ListHint, 8, 658, 400);
+        Lbl(p, "Never draft for", 8, 580, 200);
+        Lbl(p, "Only draft for", 330, 580, 200);
+        Put(p, _aiExclude, 8, 606, 310, 80);
+        Put(p, _aiInclude, 330, 606, 300, 80);
+        var listHint = Lbl(p, AiTabTexts.ListHint, 8, 688, 400);
         listHint.ForeColor = SystemColors.GrayText;
 
-        Lbl(p, "Mailboxes", 8, 686, 120);
-        Put(p, _aiOwnBox, 8, 712, 300, 22);
-        Put(p, _aiMailboxes, 8, 738, 622, 70);
+        Lbl(p, "Mailboxes", 8, 716, 120);
+        Put(p, _aiOwnBox, 8, 742, 300, 22);
+        Put(p, _aiMailboxes, 8, 768, 622, 70);
 
-        Lbl(p, "Writing style", 8, 816, 100);
-        Put(p, _aiStyleStatus, 110, 820, 520, 20);
-        Put(p, _aiWeekly, 8, 844, 200, 24);
-        Put(p, _aiView, 8, 874, 70, 26);
-        Put(p, _aiRegen, 84, 874, 110, 26);
-        Put(p, _aiOpen, 200, 874, 120, 26);
-        Put(p, _aiStyleNote, 8, 906, 620, 34);
+        Lbl(p, "Writing style", 8, 846, 100);
+        Put(p, _aiStyleStatus, 110, 850, 520, 20);
+        Put(p, _aiWeekly, 8, 874, 200, 24);
+        Put(p, _aiView, 8, 904, 70, 26);
+        Put(p, _aiRegen, 84, 904, 110, 26);
+        Put(p, _aiOpen, 200, 904, 120, 26);
+        Put(p, _aiStyleNote, 8, 936, 620, 34);
 
-        Put(p, _aiToday, 8, 948, 620, 20);
-        Put(p, _aiManual, 8, 972, 620, 20);
+        Put(p, _aiToday, 8, 978, 620, 20);
+        Put(p, _aiManual, 8, 1002, 620, 20);
         _tabs.TabPages.Add(p);
 
         foreach (var e in AiDraftingSettings.Efforts) _aiEffort.Items.Add(e);
@@ -194,6 +196,7 @@ internal sealed partial class SettingsForm
         _aiRevise.CheckedChanged += (_, _) => { if (!_binding) AiDraft.ReviseDrafts = _aiRevise.Checked; };
         _aiRelated.CheckedChanged += (_, _) => { if (!_binding) AiDraft.RelatedMail = _aiRelated.Checked; };
         _aiReason.CheckedChanged += (_, _) => { if (!_binding) AiDraft.ReasonLine = _aiReason.Checked; };
+        _aiAttachments.CheckedChanged += (_, _) => { if (!_binding) AiDraft.ReadAttachments = _aiAttachments.Checked; };
         _aiWeekly.CheckedChanged += (_, _) => { if (!_binding) AiDraft.AutoRegenerateStyle = _aiWeekly.Checked; };
         _aiExclude.TextChanged += (_, _) => { if (!_binding) AiDraft.ExcludeSenders = AiSettingsLines.Parse(_aiExclude.Text); };
         _aiInclude.TextChanged += (_, _) => { if (!_binding) AiDraft.IncludeOnlySenders = AiSettingsLines.Parse(_aiInclude.Text); };
@@ -272,6 +275,7 @@ internal sealed partial class SettingsForm
             _aiRevise.Checked = d.ReviseDrafts;
             _aiRelated.Checked = d.RelatedMail;
             _aiReason.Checked = d.ReasonLine;
+            _aiAttachments.Checked = d.ReadAttachments;
             _aiMeeting.Checked = d.MeetingTimes;
             _aiMeetingCount.Enabled = d.MeetingTimes;
             _aiMeetingCount.Text = d.MeetingTimeOptions.ToString(CultureInfo.InvariantCulture);
