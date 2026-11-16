@@ -16,7 +16,7 @@ internal sealed record FilterSql(string From, string Where, DynamicParameters Pa
 /// <summary>SQLite + FTS5 index for one mailbox (SPEC §9).</summary>
 public sealed partial class EmailIndex
 {
-    public const int SchemaVersion = 3;
+    public const int SchemaVersion = 4;
     public const string ThreadMetaCompleteKey = "thread_meta_complete";
     public static readonly TimeSpan DecisionRetention = TimeSpan.FromDays(30);
     public const int MaxDecisionAttempts = 3;
@@ -130,8 +130,23 @@ public sealed partial class EmailIndex
     private static void Step3(SqliteConnection conn, SqliteTransaction tx) =>
         conn.Execute(Step3Ddl, transaction: tx);
 
+    // Clippy's own model calls: counts only, never text (SPEC 9.1, 19.13).
+    private const string Step4Ddl = """
+        CREATE TABLE IF NOT EXISTS ai_calls (
+          id INTEGER PRIMARY KEY,
+          at INTEGER NOT NULL,
+          kind TEXT NOT NULL,
+          backend TEXT NOT NULL,
+          outcome TEXT NOT NULL,
+          input INTEGER, output INTEGER, cache_read INTEGER, cache_creation INTEGER);
+        CREATE INDEX IF NOT EXISTS ix_ai_calls_at ON ai_calls(at);
+        """;
+
+    private static void Step4(SqliteConnection conn, SqliteTransaction tx) =>
+        conn.Execute(Step4Ddl, transaction: tx);
+
     // Step n upgrades n-1 -> n.
-    private static readonly Action<SqliteConnection, SqliteTransaction>[] Migrations = [Step1, Step2, Step3];
+    private static readonly Action<SqliteConnection, SqliteTransaction>[] Migrations = [Step1, Step2, Step3, Step4];
 
     private const string UpsertSql = """
         INSERT INTO emails (entry_id, store_id, internet_message_id, folder, subject, sender_name, sender_email,
@@ -434,6 +449,8 @@ public sealed partial class EmailIndex
             conn.Execute("DELETE FROM ai_drafts WHERE updated < @t",
                 new { t = (DateTimeOffset.UtcNow - DecisionRetention).ToUnixTimeSeconds() }, tx);
             conn.Execute("DELETE FROM ai_revisits WHERE decided < @t",
+                new { t = (DateTimeOffset.UtcNow - DecisionRetention).ToUnixTimeSeconds() }, tx);
+            conn.Execute("DELETE FROM ai_calls WHERE at < @t",
                 new { t = (DateTimeOffset.UtcNow - DecisionRetention).ToUnixTimeSeconds() }, tx);
             tx.Commit();
         }

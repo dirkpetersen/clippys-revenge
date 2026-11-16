@@ -47,7 +47,8 @@ internal sealed class FakeDraftModel : IDraftModel
     }
 
     public static ModelResult Ok(string json) =>
-        new ModelResult.Ok(JsonDocument.Parse(json).RootElement.Clone(), TimeSpan.FromSeconds(1), 10, 5);
+        new ModelResult.Ok(JsonDocument.Parse(json).RootElement.Clone(), TimeSpan.FromSeconds(1), 10, 5,
+            new TokenUsage(10, 5, null, null));
 
     public static ModelResult OkReply(double confidence, bool replyAll = false, bool needsReply = true,
         string body = "<p>Hi [[date]]</p><script>x</script>")

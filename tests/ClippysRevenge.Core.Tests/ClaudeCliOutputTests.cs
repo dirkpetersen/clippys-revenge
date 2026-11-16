@@ -31,6 +31,75 @@ public class ClaudeCliOutputTests
         Assert.Equal("<p>Hi</p>", r.Output.GetProperty("body_html").GetString());
     }
 
+    private static string WithUsage(string usageJson) =>
+        "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"usage\":" + usageJson + ",\"structured_output\":{\"a\":1}}";
+
+    [Fact]
+    public void Usage_AllFourFields()
+    {
+        var r = Assert.IsType<ModelResult.Ok>(P(0, WithUsage(
+            """{"input_tokens":120,"output_tokens":45,"cache_read_input_tokens":3000,"cache_creation_input_tokens":200}""")));
+        Assert.Equal(new TokenUsage(120, 45, 3000, 200), r.Usage);
+        Assert.Equal(120, r.InputTokens);
+    }
+
+    [Fact]
+    public void Usage_InputOutputOnly()
+    {
+        var r = Assert.IsType<ModelResult.Ok>(P(0, Good));
+        Assert.Equal(new TokenUsage(120, 45, null, null), r.Usage);
+    }
+
+    [Fact]
+    public void Usage_NoUsageObject_IsNull()
+    {
+        var r = Assert.IsType<ModelResult.Ok>(P(0, """{"type":"result","subtype":"success","structured_output":{"a":1}}"""));
+        Assert.Null(r.Usage);
+    }
+
+    [Fact]
+    public void Usage_InvalidFields_AreNull()
+    {
+        var r = Assert.IsType<ModelResult.Ok>(P(0, WithUsage(
+            """{"input_tokens":-1,"output_tokens":"45","cache_read_input_tokens":1.5,"cache_creation_input_tokens":null}""")));
+        Assert.Equal(new TokenUsage(null, null, null, null), r.Usage);
+        Assert.False(r.Usage!.Known);
+    }
+
+    [Fact]
+    public void Usage_HugeInput_KeepsLongButNotInt()
+    {
+        var r = Assert.IsType<ModelResult.Ok>(P(0, WithUsage("""{"input_tokens":3000000000,"output_tokens":5}""")));
+        Assert.Equal(3_000_000_000L, r.Usage!.Input);
+        Assert.Null(r.InputTokens);
+    }
+
+    [Fact]
+    public void Usage_OnErrorEnvelope_StructuredRetries()
+    {
+        var r = Assert.IsType<ModelResult.Failed>(P(1,
+            """{"type":"result","subtype":"error_max_structured_output_retries","is_error":true,"usage":{"input_tokens":7,"output_tokens":8}}"""));
+        Assert.Equal(ModelFailure.NoStructuredOutput, r.Kind);
+        Assert.Equal(new TokenUsage(7, 8, null, null), r.Usage);
+    }
+
+    [Fact]
+    public void Usage_OnProcessExit()
+    {
+        var r = Assert.IsType<ModelResult.Failed>(P(1, Err("boom", ",\"usage\":{\"input_tokens\":7,\"output_tokens\":8}")));
+        Assert.Equal(ModelFailure.ProcessExit, r.Kind);
+        Assert.Equal(1, r.Code);
+        Assert.Equal(new TokenUsage(7, 8, null, null), r.Usage);
+    }
+
+    [Fact]
+    public void Usage_NotJson_IsNull()
+    {
+        var r = Assert.IsType<ModelResult.Failed>(P(0, "plain text"));
+        Assert.Equal(ModelFailure.BadOutput, r.Kind);
+        Assert.Null(r.Usage);
+    }
+
     [Fact]
     public void Ok_NoUsage_NullTokens()
     {
@@ -124,7 +193,7 @@ public class ClaudeCliOutputTests
         Assert.Equal(new ModelResult.Failed(ModelFailure.ProcessExit, 1), P(1, "", "error: unknown option '--safe-mode'"));
         Assert.Equal(new ModelResult.Failed(ModelFailure.BadOutput, null), P(0, "hello"));
         Assert.Equal(new ModelResult.Failed(ModelFailure.ProcessExit, 0), P(0, Err("boom")));
-        Assert.Equal(new ModelResult.Failed(ModelFailure.ProcessExit, 3), P(3, Good));
+        Assert.Equal(new ModelResult.Failed(ModelFailure.ProcessExit, 3, new TokenUsage(120, 45, null, null)), P(3, Good));
         Assert.Equal(new ModelResult.Failed(ModelFailure.ProcessExit, 1), P(1, "", "took 4290ms"));
     }
 

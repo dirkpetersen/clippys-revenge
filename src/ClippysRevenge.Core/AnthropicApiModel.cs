@@ -299,21 +299,26 @@ public sealed class AnthropicApiModel : IDraftModel, IDisposable
                 inTok = outTok = null;
             }
 
-            if (stop == "refusal") return (Bad(ModelFailure.NoStructuredOutput), 200);
-            if (stop == "max_tokens") return (Bad(ModelFailure.BadOutput), 200);
+            var usage = new TokenUsage(
+                UsageCount(() => msg.Usage.InputTokens), UsageCount(() => msg.Usage.OutputTokens),
+                UsageCount(() => msg.Usage.CacheReadInputTokens), UsageCount(() => msg.Usage.CacheCreationInputTokens));
+
+            if (stop == "refusal") return (new ModelResult.Failed(ModelFailure.NoStructuredOutput, null, usage), 200);
+            if (stop == "max_tokens") return (new ModelResult.Failed(ModelFailure.BadOutput, null, usage), 200);
 
             JsonElement output;
             try
             {
                 using var doc = JsonDocument.Parse(text.ToString().Trim());
-                if (doc.RootElement.ValueKind != JsonValueKind.Object) return (Bad(ModelFailure.NoStructuredOutput), 200);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                    return (new ModelResult.Failed(ModelFailure.NoStructuredOutput, null, usage), 200);
                 output = doc.RootElement.Clone();
             }
             catch (JsonException)
             {
-                return (Bad(ModelFailure.NoStructuredOutput), 200);
+                return (new ModelResult.Failed(ModelFailure.NoStructuredOutput, null, usage), 200);
             }
-            return (new ModelResult.Ok(output, duration, inTok, outTok), 200);
+            return (new ModelResult.Ok(output, duration, inTok, outTok, usage), 200);
         }
         catch (AnthropicApiException e)
         {
@@ -338,6 +343,12 @@ public sealed class AnthropicApiModel : IDraftModel, IDisposable
             // AnthropicIOException, HttpRequestException and anything else. Never read the message.
             return (Bad(ModelFailure.Http), null);
         }
+    }
+
+    private static long? UsageCount(Func<long?> read)
+    {
+        try { return read() is >= 0 and var v ? v : null; }
+        catch (Exception) { return null; }
     }
 
     private static int? Tok(long v) => v is >= 0 and <= int.MaxValue ? (int)v : null;

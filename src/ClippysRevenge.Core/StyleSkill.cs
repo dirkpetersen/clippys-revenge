@@ -285,7 +285,7 @@ Rules:
     {
         ArgumentNullException.ThrowIfNull(settings);
         return new ModelRequest(System, User(corpus, now, zone), DraftModel.StyleSchema, settings.Model, settings.Effort,
-            DraftModel.StyleTimeout, DraftModel.StyleMaxOutputTokens);
+            DraftModel.StyleTimeout, DraftModel.StyleMaxOutputTokens, ModelCallKind.Style);
     }
 }
 

@@ -149,6 +149,7 @@ internal static class Program
         OutlookReplyDraftWriter? replyWriter = null;
         DraftWorker? drafts = null;
         IDraftModel? draftModel = null;
+        AiUsage? aiUsage = null;
         OutlookAiMailbox? aiMailbox = null;
         AnthropicApiModel? apiModel = null;
         ClaudeCliModel? cliModel = null;
@@ -186,7 +187,12 @@ internal static class Program
                 logger: loggerFactory.CreateLogger<ClaudeCliModel>());
             apiModel = new AnthropicApiModel(() => settings.AiDrafting, store.LoadApiKey,
                 logger: loggerFactory.CreateLogger<AnthropicApiModel>());
-            draftModel = new DraftModelSwitch(() => settings.AiDrafting, cliModel, apiModel);
+            var usageIndexes = indexes;
+            aiUsage = new AiUsage(() => usageIndexes.For(MailboxIndexes.OwnMailbox), TimeZoneInfo.Local,
+                logger: loggerFactory.CreateLogger<AiUsage>());
+            aiUsage.Load();   // once, before the worker and the style skill exist (SPEC 19.13)
+            draftModel = new UsageRecordingModel(new DraftModelSwitch(() => settings.AiDrafting, cliModel, apiModel),
+                () => settings.AiDrafting, aiUsage, loggerFactory.CreateLogger<UsageRecordingModel>());
             aiMailbox = new OutlookAiMailbox(worker, mail, stores, loggerFactory.CreateLogger<OutlookAiMailbox>());
             var syncRef = sync;
             var indexesRef = indexes;
@@ -221,6 +227,7 @@ internal static class Program
                 drafts = null;
                 aiMailbox = null;
                 draftModel = null;
+                aiUsage = null;
                 styleSkill = null;
                 factsStarter = null;
             }
@@ -350,7 +357,8 @@ internal static class Program
             DraftInvites: new DraftInviteTrayServices(draftInvites,
                 new OutlookDraftInviteWindow(worker, loggerFactory.CreateLogger<OutlookDraftInviteWindow>()),
                 () => worker.State, TimeZoneInfo.Local),
-            Attention: attention));
+            Attention: attention,
+            AiUsageLine: () => AiUsageTexts.Line(settings.AiDrafting, aiUsage)));
         trayRef = tray;
 
         // Auto-update service (SPEC 20). Started after the server start was attempted, see AfterStartAsync.

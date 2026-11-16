@@ -511,6 +511,7 @@ public static class ClaudeCliOutput
             string? subtype = null, result = null;
             var errors = new List<string>();
             int? apiStatus = null, inTok = null, outTok = null;
+            TokenUsage? usage = null;
             JsonElement structured = default;
 
             if (!notJson)
@@ -531,6 +532,8 @@ public static class ClaudeCliOutput
                         && it.TryGetInt32(out var i)) inTok = i;
                     if (us.TryGetProperty("output_tokens", out var ot) && ot.ValueKind == JsonValueKind.Number
                         && ot.TryGetInt32(out var o)) outTok = o;
+                    usage = new TokenUsage(Count(us, "input_tokens"), Count(us, "output_tokens"),
+                        Count(us, "cache_read_input_tokens"), Count(us, "cache_creation_input_tokens"));
                 }
             }
 
@@ -540,10 +543,10 @@ public static class ClaudeCliOutput
             if (!isErr)
             {
                 if (structured.ValueKind == JsonValueKind.Object)
-                    return new ModelResult.Ok(structured.Clone(), duration, inTok, outTok);
+                    return new ModelResult.Ok(structured.Clone(), duration, inTok, outTok, usage);
                 if (result is not null && TryParseObject(StripFence(result.Trim()), out var fromResult))
-                    return new ModelResult.Ok(fromResult, duration, inTok, outTok);
-                return new ModelResult.Failed(ModelFailure.NoStructuredOutput, null);
+                    return new ModelResult.Ok(fromResult, duration, inTok, outTok, usage);
+                return new ModelResult.Failed(ModelFailure.NoStructuredOutput, null, usage);
             }
 
             var parts = new List<string>();
@@ -559,15 +562,19 @@ public static class ClaudeCliOutput
             if (IsMatch(RateLimitRx, text)) return new ModelResult.RateLimited(RetryAt(text, now, localZone));
             if (IsMatch(AuthRx, text)) return new ModelResult.NotSignedIn();
             if (subtype == "error_max_structured_output_retries")
-                return new ModelResult.Failed(ModelFailure.NoStructuredOutput, null);
+                return new ModelResult.Failed(ModelFailure.NoStructuredOutput, null, usage);
             if (notJson && exitCode == 0) return new ModelResult.Failed(ModelFailure.BadOutput, null);
-            return new ModelResult.Failed(ModelFailure.ProcessExit, exitCode);
+            return new ModelResult.Failed(ModelFailure.ProcessExit, exitCode, usage);
         }
         finally
         {
             owner?.Dispose();
         }
     }
+
+    private static long? Count(JsonElement usage, string name) =>
+        usage.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number
+        && v.TryGetInt64(out var n) && n >= 0 ? n : null;
 
     private static bool IsMatch(Regex rx, string text)
     {
