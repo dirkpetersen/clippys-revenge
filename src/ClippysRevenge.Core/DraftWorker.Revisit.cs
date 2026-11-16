@@ -145,7 +145,8 @@ public sealed partial class DraftWorker
             detail.Subject, NonInlineNames(detail.Attachments), detail.Body);
         var input = PromptInput(s.Settings, s.Key, email, thread);
         var request = new ModelRequest(
-            DraftPrompt.RevisitSystemPrompt(s.Identity.DisplayName, s.UserSmtp, _s.Style.ReadForPrompt(), ai.MeetingTimes),
+            DraftPrompt.RevisitSystemPrompt(s.Identity.DisplayName, s.UserSmtp, _s.Style.ReadForPrompt(), ai.MeetingTimes,
+                _s.Facts?.ReadForPrompt() ?? ""),
             DraftPrompt.RevisitUserPrompt(new RevisitPromptInput(input, info!.PlainBody, t.Draft.Created)),
             DraftModel.RevisitSchema, ai.Model, ai.Effort, TimeSpan.FromSeconds(ai.TimeoutSeconds),
             DraftModel.DraftMaxOutputTokens);

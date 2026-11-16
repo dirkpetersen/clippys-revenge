@@ -845,4 +845,16 @@ public class DraftWorkerRevisitTests
         Assert.Equal(DraftPassEnd.Disabled, r.End);
         Assert.Empty(h.Mailbox.DraftReads);
     }
+
+[Fact]
+    public async Task Revisit_prompt_carries_the_facts()
+    {
+        using var h = Fx();
+        h.Facts.Text = "FACTS-MARKER-42 x";
+        h.Model.Enqueue(R("keep", 0.9));
+        await Pass(h);
+        var req = Assert.Single(h.Model.Requests);
+        Assert.Equal(DraftPrompt.RevisitSystemPrompt("Dirk Example", "me@example.org", "STYLE", false, "FACTS-MARKER-42 x"), req.SystemPrompt);
+        Assert.DoesNotContain(h.AllText(), t => t.Contains("FACTS-MARKER-42", StringComparison.Ordinal));
+    }
 }

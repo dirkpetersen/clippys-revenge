@@ -878,4 +878,33 @@ public class DraftWorkerTests
             await Task.Delay(10, Ct);
         }
     }
+
+private const string FactsMarker = "FACTS-MARKER-42 Zoom https://zoom.example/j/1";
+
+    [Fact]
+    public async Task Facts_block_is_in_the_automatic_prompt()
+    {
+        using var h = new DraftHarness();
+        h.Facts.Text = FactsMarker;
+        h.Seed("C1");
+        h.Model.Enqueue(OkReply(0.9));
+        await Pass(h);
+        var req = Assert.Single(h.Model.Requests);
+        Assert.Contains("<about_me>\n" + FactsMarker + "\n</about_me>", req.SystemPrompt);
+        Assert.True(req.SystemPrompt.IndexOf("<about_me>", StringComparison.Ordinal) < req.SystemPrompt.IndexOf("\n\n<writing_style>\n", StringComparison.Ordinal));
+        Assert.Equal(1, h.Facts.Reads);
+        Assert.DoesNotContain(h.AllText(), t => t.Contains("FACTS-MARKER-42", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task No_facts_means_the_unchanged_prompt()
+    {
+        using var h = new DraftHarness();
+        h.Seed("C1");
+        h.Model.Enqueue(OkReply(0.9));
+        await Pass(h);
+        var req = Assert.Single(h.Model.Requests);
+        Assert.DoesNotContain("<about_me", req.SystemPrompt);
+        Assert.Equal(DraftPrompt.SystemPrompt("Dirk Example", "me@example.org", false, "STYLE", h.Ai.MeetingTimes), req.SystemPrompt);
+    }
 }

@@ -735,7 +735,7 @@ public sealed class StyleSkillFiles
         return new StyleSkillState(hash, generatedUtc.ToUniversalTime(), sampleCount, newestSentUtc.ToUniversalTime());
     }
 
-    private static void WriteAtomic(string path, byte[] bytes)
+    internal static void WriteAtomic(string path, byte[] bytes)
     {
         var dir = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(dir);

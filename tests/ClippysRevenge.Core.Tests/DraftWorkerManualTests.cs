@@ -207,4 +207,16 @@ public class DraftWorkerManualTests
         await h.Worker.DraftSelectedAsync(Ct);
         Assert.True((await h.Worker.DraftSelectedAsync(Ct)).Drafted);
     }
+
+[Fact]
+    public async Task Facts_block_comes_after_the_manual_note()
+    {
+        using var h = Make();
+        h.Facts.Text = "FACTS-MARKER-42 x";
+        h.Model.Enqueue(OkReply(0.9));
+        await h.Worker.DraftSelectedAsync(Ct);
+        var p = Assert.Single(h.Model.Requests).SystemPrompt;
+        Assert.True(p.IndexOf("asked for a reply to this email", StringComparison.Ordinal) < p.IndexOf("<about_me>\nFACTS-MARKER-42 x\n</about_me>", StringComparison.Ordinal));
+        Assert.DoesNotContain(h.AllText(), t => t.Contains("FACTS-MARKER-42", StringComparison.Ordinal));
+    }
 }

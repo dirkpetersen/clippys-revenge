@@ -153,6 +153,7 @@ internal static class Program
         AnthropicApiModel? apiModel = null;
         ClaudeCliModel? cliModel = null;
         StyleSkill? styleSkill = null;
+        FactsTemplateStarter? factsStarter = null;
         try
         {
             EmailIndex.Logger = loggerFactory.CreateLogger<EmailIndex>();
@@ -200,11 +201,16 @@ internal static class Program
             var styleGuide = new StyleGuideSource(styleSkill,
                 ct => AiOwner.ResolveAsync(aiMailboxRef, indexesRef, WorkPriority.Background, ct),
                 hub, loggerFactory.CreateLogger<StyleGuideSource>());
+            var factsFile = new FactsFile(FactsPaths.Default(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), dataDir));
+            var facts = new FactsReporter(factsFile, hub, loggerFactory.CreateLogger<FactsReporter>());
+            factsStarter = new FactsTemplateStarter(factsFile, () => settings.AiDrafting,
+                async ct => (await aiMailboxRef.GetIdentityAsync(WorkPriority.Background, ct).ConfigureAwait(false))?.DisplayName,
+                loggerFactory.CreateLogger<FactsTemplateStarter>());
             drafts = new DraftWorker(new DraftWorkerServices(() => settings, indexes, aiMailbox, replyWriter, draftModel,
                 styleGuide,
                 () => signatures.Default(SignatureKind.Reply), hub, balloons,
                 () => worker.State == OutlookConnectionState.Available, () => syncRef.IsPaused, TimeZoneInfo.Local,
-                Logger: loggerFactory.CreateLogger<DraftWorker>(), FreeBusy: freeBusy));
+                Logger: loggerFactory.CreateLogger<DraftWorker>(), FreeBusy: freeBusy, Facts: facts));
             var draftsRef = drafts;
             sync.CycleCompleted += _ => draftsRef.Wake();
             sync.OwnSentBackfillCompleted += () => draftsRef.Wake();
@@ -216,7 +222,9 @@ internal static class Program
                 aiMailbox = null;
                 draftModel = null;
                 styleSkill = null;
+                factsStarter = null;
             }
+            factsStarter?.Kick();
             if (styleSkill is not null)
             {
                 var skillAtStart = styleSkill;
@@ -236,11 +244,12 @@ internal static class Program
                 previousState = next;
             }
             if (resumed) sync?.SyncNow();
+            if (next == OutlookConnectionState.Available) factsStarter?.Kick();
         };
 
 
         // AI drafts UI (SPEC 19.10). The key is saved and removed through the one SettingsStore above.
-        var aiToggler = new AiDraftingToggler(settings, store.Save, () => drafts?.NotifySettingsChanged());
+        var aiToggler = new AiDraftingToggler(settings, store.Save, () => { drafts?.NotifySettingsChanged(); factsStarter?.Kick(); });
         AiStatusChecker? aiChecker = draftModel is null ? null
             : new AiStatusChecker(draftModel, () => { cliModel?.InvalidateStatus(); apiModel?.InvalidateModelCache(); }, s => drafts?.ReportStatus(s),
                 loggerFactory.CreateLogger<AiStatusChecker>());
