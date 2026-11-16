@@ -23,7 +23,7 @@ Then start Claude Code and run `/mcp` to check that `clippy` is connected.
 !!! tip
     **Settings, Connection** has the same command, a **Test connection** button
     and the token. The command box hides the token until you press **Show**;
-    **Copy** always copies the full command.
+    **Copy command** always copies the full command.
 
 The command contains your token, so treat it like a password. Don't paste it into
 chats, tickets or shared notes.
@@ -34,7 +34,8 @@ The default is `8765`. You can change it in **Settings, Connection** to any numb
 from 1024 to 65535. Clippy asks before it applies the change, because Claude Code
 must then be set up again with the new command. If the new port can't be opened
 (another program uses it), the server stays on the old port, nothing is saved, and
-the Port field says so.
+the Port field says `Port <new> is in use or can't be opened. The server stays on
+port <old>.`
 
 ## The token
 
@@ -42,7 +43,7 @@ The token is a random 32-byte value in hex. It is stored encrypted for your Wind
 user and never written to `settings.json` or to the log.
 
 - **Copy auth token** in the tray menu copies it.
-- **Regenerate auth token…** in the tray menu (or **Regenerate** in Settings,
+- **Regenerate auth token…** in the tray menu (or **Regenerate…** in Settings,
   Connection) creates a new one. The old token stops working at once, so run the new
   `claude mcp add` command again. Clippy asks you to confirm first, and Cancel is
   the default. In the Settings window the new token is applied when you press OK
@@ -167,6 +168,8 @@ yet. The result is one of:
 | `✗ The server on 127.0.0.1:<port> didn't answer within 5 s.` | Wait a moment and try again. |
 | `✗ The server answered without a token (HTTP <code>). Another program may be using port <port>.` | Change the port. |
 | `✗ The server rejected the token (HTTP 401).` | Restart Clippy. If it persists, regenerate the token. |
+| `✗ The server answered HTTP <code> to initialize.` | The server has a problem, or another program holds the port. Check the [Activity](activity.md) window, then restart Clippy or change the port. |
+| `✗ The server answered, but not with an MCP initialize result.` | Another program holds the port. Change the port. |
 | `✗ Another MCP server (<name>) is answering on port <port>.` | Another program holds the port. Change the port. |
 
 ## Troubleshooting

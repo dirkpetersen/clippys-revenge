@@ -72,9 +72,11 @@ removes older mail from the index right away. This only affects Clippy's index,
 never your mailbox.
 
 **Folders.** Pick any folders in the Settings tree. Subfolders are separate
-entries, and a search for `folder="inbox"` does not include subfolders. `Inbox` and
-`Sent Items` always mean your default Inbox and Sent Items, whatever language
-Outlook uses.
+entries, and a search for `folder="inbox"` does not include subfolders. `Inbox`,
+`Sent Items`, `Drafts` and `Deleted Items` always mean that mailbox's default
+folder, whatever language Outlook uses: a German `Gesendete Elemente` is indexed and
+shown as `Sent Items`, and `Entwürfe` as `Drafts`. Other folders keep their own
+names, such as `Archive\2025` or `Inbox\Projects`.
 
 ## Keeping up to date
 
@@ -86,8 +88,10 @@ start-up.
 Once a day for each folder, a **reconcile** pass compares the index with Outlook. It
 adds missing mail, refreshes read/unread state, and removes index rows for mail
 that is gone from Outlook. Reconcile only touches the index. As a safety measure,
-it refuses to delete rows when Outlook returns nothing, when none of its ids match
-the index, or when it would drop more than half of the index and at least 20 rows.
+when it would remove 20 or more rows it removes none if Outlook listed nothing for
+the folder, if none of Outlook's ids match the index, or if those rows are more than
+half of the folder's indexed mail. Activity shows a line such as `Reconciled Inbox:
+3 removed, 1 added, 12 read-state updated`.
 
 ## Pause, sync now and rebuild
 
@@ -104,8 +108,8 @@ the index, or when it would drop more than half of the index and at least 20 row
 ## Purge and retention
 
 After each cycle, mail older than the retention cutoff is removed from the index.
-The `Purging` state shows only when there is something to remove. When many rows go
-at once, the database file is compacted. Nothing in Outlook is touched.
+The `Purging` state shows only when there is something to remove. When more than 10%
+of the rows go at once, the database file is compacted. Nothing in Outlook is touched.
 
 Clippy's own records about AI drafts (which emails it decided on, and so on) are
 kept for 30 days. They hold no mail text. See [Security](security.md#index-at-rest).
@@ -126,7 +130,7 @@ mailboxes) appear under the tray menu **Shared mailboxes**.
 - A shared mailbox that isn't mounted, or a folder that doesn't exist, is skipped
   with one error line in Activity.
 
-Tools use a shared mailbox with `mailbox="helpdesk@example.org"`, or search all
+Tools use a shared mailbox with `mailbox="<the shared mailbox's address>"`, or search all
 enabled ones with `mailbox="all"`. AI drafts for a shared mailbox are a separate
 opt-in; see [AI drafts](ai-drafts.md#shared-mailboxes).
 

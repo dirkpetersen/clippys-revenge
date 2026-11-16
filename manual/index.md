@@ -11,7 +11,7 @@ Clippy's Revenge is a Windows tray app that lets Claude Code work with your
 Outlook through COM, and keeps a local full-text index of your mail so searches
 are fast.
 
-You can ask Claude things like "find the invoice Ann sent last month", "save the
+You can ask Claude things like "find the invoice I got last month", "save the
 PDFs from that thread", "draft a reply", "who emails me the most?" or "find a time
 next week when the five of us are free".
 
@@ -31,9 +31,12 @@ next week when the five of us are free".
   messages fetched live from Outlook, and attachments saved to a folder you allow.
   Attachment contents are never indexed. See [Tools](tools.md) and
   [Indexing](indexing.md).
-- **Count and analyze.** `email_stats` counts mail by sender, domain, folder, month,
-  weekday or hour, and `query_index` runs a read-only `SELECT` over the index. They
-  return counts and names, not mail text.
+- **Attachments into WSL.** `attachment_link` gives Claude a one-time download link
+  that works once and for 10 minutes, so an attachment lands straight in the folder
+  where Claude Code works. See [`attachment_link`](tools.md#attachment_link).
+- **Count and analyze.** `email_stats` counts mail by sender, recipient, their
+  domains, folder, month, week, weekday or hour, and `query_index` runs a read-only
+  `SELECT` over the index. They return counts and names, not mail text.
 - **Write drafts.** New mail and replies are saved as drafts in Outlook, with your
   signature and attachments. Clippy never sends them.
 - **Find meeting times.** `find_free_times` ranks free slots from everyone's calendar
@@ -47,7 +50,11 @@ next week when the five of us are free".
   default model is the latest Opus. When an email asks for a meeting, the draft offers
   free times from your calendar. When a thread moves on, Clippy re-checks its own
   unedited drafts and replaces them or moves them to Deleted Items. **Rescan emails from
-  the last 24 hours** drafts replies for the last day of mail on demand. See
+  the last 24 hours** drafts replies for the last day of mail on demand. Drafts can use
+  a facts file about you, related earlier mail, the text of attachments and of
+  synced OneDrive or SharePoint files, and what Clippy learned from how you edit its
+  drafts. Each draft starts with a yellow line saying why it was written, and
+  **Don't draft for this sender** stops drafts for one sender or domain. See
   [AI drafts](ai-drafts.md).
 - **Tray, Settings and Activity.** One menu for everything, a settings window and an
   activity log of what Clippy did. See [Tray menu](tray.md), [Settings](settings.md) and

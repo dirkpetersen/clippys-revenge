@@ -129,9 +129,11 @@ Clippy verifies a new version before it installs it, and it can undo an install.
 - **The exe is missing.** If something went wrong badly enough that both exes are
   gone, run `install.ps1` again. See [Troubleshooting](troubleshooting.md#an-update-failed-or-was-rolled-back).
 
-The [Activity window](activity.md#updates) lists every update event (`update check: v... available`,
-`update v... downloaded and verified`, `updated from v... to v...`,
-`update failed: ...`), and the log has the details.
+The [Activity window](activity.md#updates) lists every update event, such as `update check: v... available`,
+`update check: up to date (v...)`, `update v... downloaded and verified`,
+`installing update v...`, `updated from v... to v...`,
+`update v... didn't start; back on v...` and `update failed: ...`. The log has
+the details.
 
 ## Releases
 
