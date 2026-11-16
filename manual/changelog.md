@@ -3,6 +3,13 @@
 The full list of releases, with downloads, is on
 [GitHub](https://github.com/dirkpetersen/clippys-revenge/releases).
 
+## v0.1.2 - 2026-11-16
+
+- Fixed: the one-time pass that fills in thread data for mail indexed by older versions
+  failed on some Outlook profiles, because Outlook refused Clippy's draft-marker column.
+  It retried on every sync and never finished. Now the marker is read as missing in that
+  case and the pass completes.
+
 ## v0.1.1 - 2026-11-16
 
 Clippy now has thirteen tools. AI drafts use much more context (facts about you, related
