@@ -226,8 +226,8 @@ internal sealed class OutlookStores
                 inboxName = inbox.Name;
                 sent = (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderSentMail);
                 sentName = sent.Name;
-                drafts = (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderDrafts);
-                draftsName = drafts.Name;
+                drafts = (Outlook.Folder?)OutlookMail.TryDrafts(store);
+                draftsName = drafts?.Name;
                 deleted = (Outlook.Folder?)OutlookMail.TryDeletedItems(store);
                 deletedName = deleted?.Name;
             }

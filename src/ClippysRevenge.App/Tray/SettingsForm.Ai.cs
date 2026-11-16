@@ -249,7 +249,7 @@ internal sealed partial class SettingsForm
 
         if (_s.Ai.Style is null)
         {
-            foreach (var c in new Control[] { _aiWeekly, _aiView, _aiRegen, _aiOpen }) c.Enabled = false;
+            foreach (var c in new Control[] { _aiWeekly, _aiLearnEdits, _aiView, _aiRegen, _aiOpen }) c.Enabled = false;
             _aiStyleNote.Text = AiTabTexts.NoIndex;
         }
         _aiToday.Visible = _s.Ai.Today is not null;

@@ -143,6 +143,19 @@ internal sealed partial class OutlookMail
         }
     }
 
+    /// <summary>The store's Drafts folder, or null when it can't be opened (e.g. a shared mailbox with permissions only on Inbox and Sent).</summary>
+    internal static Outlook.MAPIFolder? TryDrafts(Outlook.Store store)
+    {
+        try
+        {
+            return store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderDrafts);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException || (ex is COMException c && !ComErrors.IsOutlookGone(c)))
+        {
+            return null;
+        }
+    }
+
     private Outlook.MailItem? OpenDraft(Outlook.Application app, string mailbox, string draftEntryId)
     {
         var storeId = StoreIdOf(_stores, app, mailbox);

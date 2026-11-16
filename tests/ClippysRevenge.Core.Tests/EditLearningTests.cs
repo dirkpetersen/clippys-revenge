@@ -127,6 +127,25 @@ public class EditLearningTests : IDisposable
     }
 
     [Fact]
+    public async Task Two_sent_replies_to_one_email_in_one_run_make_two_pairs()
+    {
+        Draft("D1", T.AddHours(-5), "First draft text");
+        Sent("S1", T.AddHours(-4), SentBody("First sent text"));
+        Draft("D2", T.AddHours(-3), "Second draft text");
+        Sent("S2", T.AddHours(-2), SentBody("Second sent text"));
+
+        var r = await _sut.MatchAsync(Ct);
+
+        Assert.Equal(new EditMatchResult(true, 2, 0, 0), r);
+        var edits = Own.AiEdits(10);
+        Assert.Equal(2, edits.Count);
+        Assert.Equal("First draft text", edits.Single(e => e.SentEntryId == "S1").DraftText);
+        Assert.Equal("Second draft text", edits.Single(e => e.SentEntryId == "S2").DraftText);
+        Assert.Equal(AiDraftTextState.Matched, Own.GetAiDraftText("D1")!.State);
+        Assert.Equal(AiDraftTextState.Matched, Own.GetAiDraftText("D2")!.State);
+    }
+
+    [Fact]
     public async Task Rows_that_do_not_qualify_are_never_matched()
     {
         Draft("D1", T.AddHours(-2), DraftA);
