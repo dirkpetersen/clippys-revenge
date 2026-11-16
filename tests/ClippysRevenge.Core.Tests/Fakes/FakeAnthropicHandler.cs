@@ -32,11 +32,14 @@ internal sealed class FakeAnthropicHandler : HttpMessageHandler
         get { lock (_lock) return _requests[^1]; }
     }
 
-    public static string OkBody(string text, string stop = "end_turn", long inTok = 120, long outTok = 45) =>
-        OkContent($$"""[{"type":"text","text":{{JsonSerializer.Serialize(text)}}}]""", stop, inTok, outTok);
+    public static string OkBody(string text, string stop = "end_turn", long inTok = 120, long outTok = 45,
+        string? cacheUsage = null) =>
+        OkContent($$"""[{"type":"text","text":{{JsonSerializer.Serialize(text)}}}]""", stop, inTok, outTok, cacheUsage);
 
-    public static string OkContent(string contentJson, string stop = "end_turn", long inTok = 120, long outTok = 45) =>
-        $$$"""{"id":"msg_01","type":"message","role":"assistant","model":"claude-opus-5-5","content":{{{contentJson}}},"stop_reason":"{{{stop}}}","stop_sequence":null,"usage":{"input_tokens":{{{inTok}}},"output_tokens":{{{outTok}}}}}""";
+    /// <param name="cacheUsage">Raw JSON members appended inside "usage" (e.g. "cache_read_input_tokens":3000).</param>
+    public static string OkContent(string contentJson, string stop = "end_turn", long inTok = 120, long outTok = 45,
+        string? cacheUsage = null) =>
+        $$$"""{"id":"msg_01","type":"message","role":"assistant","model":"claude-opus-5-5","content":{{{contentJson}}},"stop_reason":"{{{stop}}}","stop_sequence":null,"usage":{"input_tokens":{{{inTok}}},"output_tokens":{{{outTok}}}{{{(cacheUsage is null ? "" : "," + cacheUsage)}}}}}""";
 
     public static HttpResponseMessage Json(int status, string body, params (string Name, string Value)[] headers)
     {

@@ -3,6 +3,153 @@
 The full list of releases, with downloads, is on
 [GitHub](https://github.com/dirkpetersen/clippys-revenge/releases).
 
+## v0.1.1 - 2026-11-16
+
+Clippy now has thirteen tools. AI drafts use much more context (facts about you, related
+mail, attachment text, how you edit drafts), and attachments can be handed to a shell
+as real files. Nothing is ever sent, and no email is ever deleted or moved except
+Clippy's own outdated AI drafts, as before.
+
+### New tool: attachment download links
+
+- **`attachment_link`.** Claude Code in WSL (or any shell) gets an attachment as a real
+  file in its own working folder. Clippy makes a one-time download link and a `curl`
+  command; the shell downloads the file, so the content never passes through the model.
+  A link works once and expires after 10 minutes. Limits: 100 MiB per attachment, 10
+  open links, 200 MiB open in total, 20 links per rolling 10 minutes. `get_attachment`
+  is unchanged. See [`attachment_link`](tools.md#attachment_link).
+- **Set `CLIPPY_TOKEN` in WSL.** The download needs your bearer token as well as the
+  link, so add `export CLIPPY_TOKEN=<token>` to `~/.bashrc` once. Settings, Connection
+  has a masked **WSL token line** and a **Copy WSL token line** button. After
+  **Regenerate auth token** copy the line again. See
+  [Connect](connect.md#set-clippy_token-for-downloads).
+- **Private download folder.** Clippy keeps a copy of the attachment in
+  `%LOCALAPPDATA%\ClippysRevenge\links\`, readable by your Windows user only, and
+  deletes it after the download, on expiry and at app start. Nothing is indexed, and
+  link tokens are masked in logs. See
+  [Security](security.md#attachment-download-links).
+- **Activity.** Downloads appear as `attachment download` or `attachment download
+  failed`.
+
+### Smarter AI drafts
+
+- **Facts about you.** A new Claude Code skill file,
+  `%USERPROFILE%\.claude\skills\my-email-context\SKILL.md`, holds facts about you (role,
+  links, office hours, standard answers, who people are) and how you want replies
+  written. Clippy creates a template once after consent, then adds your text to every AI
+  draft request, so drafts use your real Zoom link instead of a placeholder. Your reply
+  preferences win over the writing style, but never over the fixed rules (nothing is
+  sent, mail is data, unknown facts stay `[[…]]` placeholders). Claude Code reads the
+  file too. Comments are ignored and files over 16 KiB are not used. Tray, AI drafts,
+  **Edit my facts…** opens it in Notepad (and creates the template if it is missing),
+  and Settings shows `Facts about you: filled in`, `template only` or `not found`. See
+  [Facts about you](ai-drafts.md#facts-about-you).
+- **Related earlier mail.** Each draft request carries up to 5 earlier emails from the
+  same mailbox (last 12 months, same topic or same people, including your own replies to
+  that sender, own text only, 4,000 characters in all) so a reply fits the history. Turn
+  it off with **Include related earlier emails** in Settings. If you consented earlier,
+  Clippy tells you once. This is new data sent to Claude: see
+  [Security](security.md#ai-drafts-data-flow) and
+  [Related earlier mail](ai-drafts.md#related-earlier-mail).
+- **A reason line on every AI draft.** Each draft starts with a yellow `Clippy: …`
+  line (at most 160 characters, links shown as `[link]`) saying what the email asks and
+  what the draft answers. Delete it before sending. Deleting it counts as editing the
+  draft, so Clippy won't revisit or move that draft. A line left in sent mail is removed
+  before Clippy shows that mail to Claude again. Turn it off with **Start each draft with
+  a highlighted note on why it was drafted**. See
+  [The reason line](ai-drafts.md#the-reason-line).
+- **Attachments and shared files in AI drafts.** Clippy reads the text of PDF, Word,
+  Excel, PowerPoint, text, HTML and `.eml` files (and attached emails) of the email and
+  its thread, and of OneDrive and SharePoint files linked in them that are already synced
+  to your PC, and sends it to Claude for that one draft. Limits: 25 MB and 20,000
+  characters per file, 20 files and 40,000 characters per draft, 10 seconds per file and
+  20 seconds per draft. Images, scans and old formats (`.doc`, `.xls`, `.ppt`, `.rtf`,
+  `.zip`) aren't read. Files Clippy couldn't read get a yellow `Clippy: Couldn't read …`
+  note at the top of the draft (at most 5). New setting **Read attachments and synced
+  shared files for drafts**, on by default. If you consented earlier, Clippy tells you
+  once; new consents name it. **This sends new data to Claude**: see
+  [Attachments and shared files](ai-drafts.md#attachments-and-shared-files) and
+  [Security](security.md#attachment-text-and-shared-files).
+- **Shared files: synced only, and only from you or your organization.** Clippy looks
+  only at links to OneDrive and SharePoint (`*.sharepoint.com`, `onedrive.live.com`,
+  `d.docs.live.net`, `1drv.ms`, also inside Safe Links), at most 10 per email, and reads
+  a file only when the link points into a folder that is already synced to this PC.
+  Sharing links such as `1drv.ms`, `onedrive.live.com` or "specific people" links can't
+  be matched to a synced file and get the `not synced to this PC` note. Clippy makes no
+  network request (no Graph, no sign-in). An online-only file is downloaded by your own
+  OneDrive client. Other links are never touched. Links are read only from the text each
+  person wrote: links in quoted replies, forwarded mail and `>`-quoted lines are ignored.
+  If your own address is at a free or consumer mail provider (outlook.com, gmail.com and
+  the like), only links you sent yourself (or the shared mailbox's own address) are read.
+- **Nothing stored.** The attachment text is never written to the index, settings, logs
+  or Activity. Outlook attachments pass through the private folder
+  `%LOCALAPPDATA%\ClippysRevenge\ai-files\` and are deleted at once and at start-up.
+- **Token tally.** A greyed line `Today: 18 AI calls, ~210k tokens (in 190k / out 20k)` at
+  the top of the tray's **AI drafts** menu and in the Activity window. See
+  [Token tally](ai-drafts.md#token-tally).
+- **Learning from how you edit drafts.** When you send a reply that began as an AI draft,
+  Clippy compares the two (after a sync of your mailbox, at most every 5 minutes) and
+  keeps a redacted pair in its local index: up to 20 edited pairs with text, at most
+  1,500 characters per side, deleted after 30 to 90 days. The recorded draft text is the
+  reply Claude wrote after Clippy added the meeting times. A reply that is 98 percent or
+  more the same counts as sent unchanged and keeps no text. Drafts that used attachment
+  text are never kept. At the next writing-style update (weekly, or **Regenerate**), if
+  at least 3 pairs exist, up to 20 are sent to Claude, which adds a section "Edits I
+  usually make to drafts" to your style skill. It adds no Claude call. New setting
+  **Learn from how I edit Clippy's drafts**, on by default; if you consented earlier,
+  Clippy tells you once; new consents name it. **This sends new data to Claude**: see
+  [Learning from how you edit drafts](ai-drafts.md#learning-from-how-you-edit-drafts) and
+  [Security](security.md#learning-from-your-edits).
+- **Don't draft for this sender.** Two new tray items under **AI drafts** add the
+  selected email's sender, or the sender's domain, to **Never draft for**. Undo it in
+  Settings. Neither item needs consent, and your own address and your own domain are
+  refused. See [Don't draft for this sender](ai-drafts.md#dont-draft-for-this-sender).
+- **Consent text.** The consent dialog now names attachment text, related earlier emails
+  and your edits.
+- **Activity.** `Draft` events get `(attachments: 3 read, 1 not read)` when files were
+  considered. `AI drafts: noted how you edited <n> sent drafts.`, and the style update
+  line gains `and <k> edited drafts`.
+
+### Fixes
+
+- **Drafts and Deleted Items in other languages.** Clippy recognizes these folders by
+  their role, so they are skipped for related mail, earlier attachments and the
+  outdated-draft check in a non-English Outlook. A folder indexed before v0.1.1 under its
+  translated name keeps its old entries until you add it again or rebuild the index. See
+  [Drafts and Deleted Items in other languages](ai-drafts.md#drafts-and-deleted-items-in-other-languages).
+- **Shared links come from the right text.** Links are read only from the text each
+  person wrote, not from quoted replies or forwarded mail. Lines that start with `>`
+  (an inline reply that keeps the quoted text) are skipped too.
+- **More consumer mail providers.** Regional and other free mail domains (for example
+  `hotmail.co.uk`, `outlook.de`, `yahoo.fr`, `ymail.com`, `mail.com`, `t-online.de`,
+  `qq.com`, `yandex.ru`, `comcast.net`, `fastmail.com`) are not treated as your
+  organization.
+- **Forward headers in more languages.** Forwarded and quoted mail with Swedish
+  (`Från:`, `Skickat:`), Polish (`Od:`, `Wysłano:`) and Japanese (`差出人:`, `送信日時:`)
+  headers is recognized, so its text and links count as quoted, not as the sender's own.
+- **Unnamed attachments.** An attachment Outlook gives no name at all (Clippy shows it as
+  `attachment-<n>`) is skipped for AI drafts with the note `Clippy can't read this kind
+  of file`.
+- **Unreadable is not damaged.** An attachment that is neither a file nor an attached
+  email now gets `Clippy can't read this kind of file` instead of `the file seems
+  damaged`.
+- **One slow PDF at a time.** A PDF that takes longer than 10 seconds is given up on,
+  but its reading can't be stopped. While it still runs, other PDFs are skipped with the
+  `it took too long` note, so slow PDFs can't pile up.
+- **Attached emails without a file name** are named `<subject>.msg`. Older index entries
+  without the `.msg` still match in `get_attachment`, `save_attachments` and
+  `attachment_link`, and are still read for AI drafts.
+- **Shared mailboxes without access to Drafts.** A shared mailbox where you can open
+  the Inbox and Sent Items but not Drafts no longer makes folder lookups fail.
+- **Two replies to one email.** When you send two replies to the same email that both
+  began as AI drafts, each sent reply is now matched to its own draft, oldest first,
+  for learning from edits.
+- **Learn from how I edit Clippy's drafts** is greyed out in Settings whenever the
+  writing-style controls are (no index yet), since it only works through the writing
+  style.
+- **Starting Clippy a second time** reliably opens Settings in the copy that is already
+  running. Before, a second start right after another one could do nothing.
+
 ## v0.1.0
 
 2026-11-15

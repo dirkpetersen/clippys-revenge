@@ -36,6 +36,24 @@ re-add the server. Also check **Settings, Connection** for the port.
 
 A `401` from `curl` with no token is expected, and tells you the server is up.
 
+## Attachment download fails (`attachment_link`)
+
+| What you see | Cause and fix |
+|---|---|
+| `curl` answers `401` | `CLIPPY_TOKEN` isn't set in that shell, or it is an old token. Press **Copy WSL token line** in **Settings, Connection**, put the line in `~/.bashrc` in WSL and run `source ~/.bashrc`. The link isn't used up by a `401`. See [Set CLIPPY_TOKEN](connect.md#set-clippy_token-for-downloads) |
+| `curl` answers `404` | The link was already used, expired after 10 minutes, or Clippy restarted or changed port. Ask Claude for a new link |
+| `curl` answers `405` | Something other than `GET` was sent. Use the exact `curl` command from the tool result |
+| `curl: (7) Failed to connect` | Clippy isn't running, or WSL isn't in mirrored networking. See [Claude can't connect from WSL](#claude-cant-connect-from-wsl) |
+| `Too many open download links (10)...` | Download or wait for open links to expire (10 minutes), then ask again |
+| `The open download links already hold 200 MB...` | Same: download the open links or wait for them to expire |
+| `Too many download links in the last 10 minutes (20). Try again in <n> min.` | Wait that many minutes |
+| `The attachment is <n> MB; attachment_link handles up to 100 MB...` | Use `get_attachment` to save it on the Windows side |
+| `Clippy can't use its private download folder. Use get_attachment instead.` | `%LOCALAPPDATA%\ClippysRevenge\links\` is a junction or symlink, or its permissions can't be set. Remove the folder (when Clippy is closed) and restart Clippy |
+| Outlook errors | Same as for other attachment tools: start Outlook, close dialogs |
+
+A failed or interrupted download shows as `attachment download failed` in
+[Activity](activity.md#tool-calls). More: [`attachment_link`](tools.md#attachment_link).
+
 ## Claude can't connect from WSL
 
 - Check `%USERPROFILE%\.wslconfig` has `networkingMode=mirrored` under `[wsl2]`.
@@ -168,6 +186,65 @@ reads **Cancel rescan (d/t)** and **Draft a reply to the selected email** is gre
 If a click only shows a balloon, read it: `There are no emails from the last 24 hours
 to rescan.`, `Today's AI draft limit (<n>) is used up.` or `Claude isn't ready: …`. A
 rescan stops early for the reasons in [Activity](activity.md#rescan).
+
+### The draft has a placeholder where my Zoom link should be
+
+Check **Facts about you** in Settings, AI drafts. `not found` means the file
+`%USERPROFILE%\.claude\skills\my-email-context\SKILL.md` is missing, larger than
+16 KiB or not valid UTF-8: use **Edit my facts…** in the tray. `template only` means you
+haven't written anything outside the `<!-- … -->` comments yet. Activity shows
+`Facts about you: my-email-context SKILL.md not found or unreadable — drafts go without it.`
+when the file goes away. See [Facts about you](ai-drafts.md#facts-about-you).
+
+### There is no yellow `Clippy:` line, or a draft isn't updated any more
+
+No line: **Start each draft with a highlighted note on why it was drafted** may be off
+in Settings, AI drafts, or Claude gave no note for that email. A draft you removed the
+line from (or changed in any way) counts as edited, so Clippy leaves it alone and never
+replaces or moves it. That is intended. See [The reason line](ai-drafts.md#the-reason-line).
+
+### The draft ignored my attachment, or has a yellow `Couldn't read …` note
+
+- Check that **Read attachments and synced shared files for drafts** is ticked in
+  Settings, AI drafts. If it is off, only file names are sent.
+- Read the note. It names the reason: `not synced to this PC` (the link doesn't match a
+  file in a library or folder your OneDrive syncs: sync it or add a shortcut),
+  `Clippy only opens shared files from people in your organization`, `password-protected`,
+  `larger than 25 MB`, `no text in it, maybe a scan`, `Clippy can't read .<ext> files`,
+  `the file seems damaged`, `it took too long` and `too much attachment text for one
+  draft`. See [Why couldn't Clippy read my shared file?](faq.md#why-couldnt-clippy-read-my-shared-file).
+- Images, and links that aren't OneDrive or SharePoint links, are skipped with no note.
+- Outlook must be running: with Outlook closed, files that need Outlook are skipped.
+- The Activity suffix `(attachments: 3 read, 1 not read)` shows how many files were used.
+  It has counts only. The log never names a file.
+- `%LOCALAPPDATA%\ClippysRevenge\ai-files\` should be empty. If a file stays there, Clippy
+  deletes it at the next start.
+
+### The tray shows `tokens unknown` or no `Today:` line
+
+The line appears only after you gave AI drafts consent. `tokens unknown` means Claude
+reported no token numbers for today's calls. See [Token tally](ai-drafts.md#token-tally).
+
+### Clippy never says it noted my edits, or the style has no "Edits I usually make" section
+
+Clippy [learns from your edits](ai-drafts.md#learning-from-how-you-edit-drafts) only
+when all of this holds:
+
+- **Learn from how I edit Clippy's drafts** is on in Settings, **AI drafts**, and you
+  gave consent.
+- The draft was saved after you updated to version 0.1.1, for an email with an internet
+  message id, and did not use attachment text (those are never kept).
+- You sent it as a reply to that email, from your own mailbox, and it still carries
+  Clippy's marker. A reply you wrote from scratch, or a draft you made with a tool,
+  isn't matched.
+- Clippy has synced your Sent Items since (it checks at most every 5 minutes, after a
+  sync), and it is within 30 days.
+
+The section appears after the next writing-style update (**Regenerate**, or the weekly
+one) once **at least 3** edited drafts with text exist. Drafts you sent unchanged only
+raise the "unchanged" count, so they don't count toward the 3. If you edited your style
+skill yourself, an automatic update leaves it alone: use **Regenerate**. Clippy shows
+`AI drafts: noted how you edited <n> sent drafts.` in Activity when it finds some.
 
 ### The writing style isn't there yet
 

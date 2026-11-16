@@ -42,7 +42,8 @@ public sealed class AiDraftsUiTests : IDisposable
     [Fact]
     public void Consent_text_is_exact()
     {
-        Assert.Equal("Clippy will send new emails from your Inbox, earlier messages in the same thread, and samples of your sent mail to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.", AiConsent.Text);
+        Assert.Equal("Clippy will send new emails from your Inbox, earlier messages in the same thread, the text of their attachments and of shared files synced to this PC, up to 5 related earlier emails, and samples of your sent mail and how you edited Clippy's drafts to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.", AiConsent.Text);
+        Assert.Equal("Read attachments and synced shared files for drafts", AiTabTexts.ReadAttachmentsText);
         Assert.Equal("Turn on AI drafts?", AiConsent.Title);
         Assert.Equal("Turn on", AiConsent.TurnOnButton);
         Assert.Equal("Cancel", AiConsent.CancelButton);
@@ -74,6 +75,8 @@ public sealed class AiDraftsUiTests : IDisposable
     public void StyleResult_texts()
     {
         Assert.Equal("Writing style updated from 150 sent emails.", AiTabTexts.StyleResult(new StyleRunResult.Updated(150, TimeSpan.FromSeconds(41))));
+        Assert.Equal("Writing style updated from 150 sent emails.", AiTabTexts.StyleResult(new StyleRunResult.Updated(150, TimeSpan.FromSeconds(41), 5)));
+        Assert.Equal("Learn from how I edit Clippy's drafts", AiTabTexts.LearnFromEditsText);
         Assert.Equal("Only 7 sent emails found. Clippy needs 20.", AiTabTexts.StyleResult(new StyleRunResult.TooFewEmails(7)));
         Assert.Equal("Writing style not updated: Claude isn't signed in.", AiTabTexts.StyleResult(new StyleRunResult.Failed("Claude isn't signed in")));
         Assert.Equal(AiDraftingSettings.ConsentRequiredMessage, AiTabTexts.StyleResult(new StyleRunResult.NoConsent()));
@@ -124,7 +127,7 @@ public sealed class AiDraftsUiTests : IDisposable
     public void Menu_defaults()
     {
         var m = AiDraftsMenu.Build(Ai(), available: true, outlookUnavailable: false, busy: false);
-        Assert.Equal(new AiDraftsMenuModel(false, true, true, true, true), m);
+        Assert.Equal(new AiDraftsMenuModel(false, true, true, true, true, DontDraftEnabled: true, EditFactsEnabled: true), m);
     }
 
     [Fact]
@@ -157,7 +160,7 @@ public sealed class AiDraftsUiTests : IDisposable
     public void Menu_busy_disables_only_auto()
     {
         var m = AiDraftsMenu.Build(Ai(), true, false, busy: true);
-        Assert.Equal(new AiDraftsMenuModel(false, false, true, true, true), m);
+        Assert.Equal(new AiDraftsMenuModel(false, false, true, true, true, DontDraftEnabled: true, EditFactsEnabled: true), m);
     }
 
     [Fact]
@@ -413,4 +416,14 @@ public sealed class AiDraftsUiTests : IDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             AiOwner.ResolveAsync(new OwnerMailbox(), ix, WorkPriority.Background, cts.Token));
     }
-}
+
+    [Fact]
+    public void DontDraftEnabled_follows_draft_selected()
+    {
+        Assert.True(AiDraftsMenu.Build(Ai(), true, false, false).DontDraftEnabled);
+        Assert.True(AiDraftsMenu.Build(Ai(), true, false, busy: true).DontDraftEnabled);
+        Assert.False(AiDraftsMenu.Build(Ai(), true, false, false, new RescanProgress(1, 5)).DontDraftEnabled);
+        Assert.False(AiDraftsMenu.Build(Ai(), true, false, false, rescanStarting: true).DontDraftEnabled);
+        Assert.False(AiDraftsMenu.Build(Ai(), true, outlookUnavailable: true, busy: false).DontDraftEnabled);
+        Assert.False(AiDraftsMenu.Build(Ai(), available: false, outlookUnavailable: false, busy: false).DontDraftEnabled);
+    }}

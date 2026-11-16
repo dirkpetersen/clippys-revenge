@@ -156,4 +156,93 @@ public class SettingsEditorAiTests
         e.Rebase(live);
         Assert.Equal(AiDraftingSettings.DefaultDailyCap, e.Draft.AiDrafting.DailyCap);
     }
+
+    [Fact]
+    public void Rebase_adopts_a_tray_added_exclude_sender()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        live.AiDrafting.ExcludeSenders.Add("ann@contoso.example");
+        e.Rebase(live);
+        Assert.Equal(["ann@contoso.example"], e.Draft.AiDrafting.ExcludeSenders);
+        Assert.False(e.Changes(live).Any);
+    }
+
+    [Fact]
+    public void Rebase_keeps_the_windows_exclude_list_when_edited()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        e.Draft.AiDrafting.ExcludeSenders = ["bob@x.example"];
+        live.AiDrafting.ExcludeSenders.Add("ann@contoso.example");
+        e.Rebase(live);
+        Assert.Equal(["bob@x.example"], e.Draft.AiDrafting.ExcludeSenders);
+    }
+
+    [Fact]
+    public void Rebase_leaves_exclude_list_when_tray_did_not_change_it()
+    {
+        var live = Live();
+        live.AiDrafting.ExcludeSenders.Add("old@x.example");
+        var e = new SettingsEditor(live);
+        e.Rebase(live);
+        Assert.Equal(["old@x.example"], e.Draft.AiDrafting.ExcludeSenders);
+    }
+
+    [Fact]
+    public void Rebase_keeps_a_live_related_mail_notice_flag()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        live.AiDrafting.RelatedMailNoticeShown = true;
+        Assert.False(e.Draft.AiDrafting.RelatedMailNoticeShown);
+        e.Rebase(live);
+        Assert.True(e.Draft.AiDrafting.RelatedMailNoticeShown);
+    }
+
+    [Fact]
+    public void Rebase_keeps_a_live_attachments_notice_flag()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        live.AiDrafting.AttachmentsNoticeShown = true;
+        Assert.False(e.Draft.AiDrafting.AttachmentsNoticeShown);
+        e.Rebase(live);
+        Assert.True(e.Draft.AiDrafting.AttachmentsNoticeShown);
+    }
+
+    [Fact]
+    public void Rebase_keeps_a_live_edits_notice_flag_and_never_clears_a_draft_one()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        live.AiDrafting.EditsNoticeShown = true;
+        Assert.False(e.Draft.AiDrafting.EditsNoticeShown);
+        e.Rebase(live);
+        Assert.True(e.Draft.AiDrafting.EditsNoticeShown);
+
+        live.AiDrafting.EditsNoticeShown = false;
+        e.Rebase(live);
+        Assert.True(e.Draft.AiDrafting.EditsNoticeShown);
+    }
+
+    [Fact]
+    public void Changing_RelatedMail_is_a_change()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        Assert.False(e.Changes(live).Any);
+        e.Draft.AiDrafting.RelatedMail = false;
+        Assert.True(e.Changes(live).Any);
+    }
+
+    [Fact]
+    public void Changing_ReasonLine_is_a_change()
+    {
+        var live = Live();
+        var e = new SettingsEditor(live);
+        Assert.False(e.Changes(live).Any);
+        e.Draft.AiDrafting.ReasonLine = false;
+        Assert.True(e.Changes(live).Any);
+    }
 }

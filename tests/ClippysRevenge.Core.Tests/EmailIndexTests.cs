@@ -78,11 +78,11 @@ public class EmailIndexTests : IDisposable
     }
 
     [Fact]
-    public void Ctor_NewFile_WritesSchemaVersion3()
+    public void Ctor_NewFile_WritesSchemaVersion5()
     {
         NewIndex();
-        Assert.Equal("3", Scalar<string>("SELECT value FROM meta WHERE key='schema_version'"));
-        Assert.Equal(3, EmailIndex.SchemaVersion);
+        Assert.Equal("5", Scalar<string>("SELECT value FROM meta WHERE key='schema_version'"));
+        Assert.Equal(5, EmailIndex.SchemaVersion);
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class EmailIndexTests : IDisposable
         var ix2 = NewIndex();
         Assert.Equal(a.RowId, ix2.Get("A")!.RowId);
         Assert.Equal(b.RowId, ix2.Get("B")!.RowId);
-        Assert.Equal("3", Scalar<string>("SELECT value FROM meta WHERE key='schema_version'"));
+        Assert.Equal("5", Scalar<string>("SELECT value FROM meta WHERE key='schema_version'"));
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public class EmailIndexTests : IDisposable
         SqliteConnection.ClearAllPools();
         var ex = Assert.Throws<InvalidOperationException>(() => new EmailIndex(DbFile));
         Assert.Contains("schema version 99", ex.Message);
-        Assert.Contains("supports up to 3", ex.Message);
+        Assert.Contains("supports up to 5", ex.Message);
     }
 
     [Fact]

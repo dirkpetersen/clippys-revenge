@@ -9,6 +9,9 @@ The Activity window shows what Clippy is doing and what it did lately. Open it w
   `Paused`, `Purging old mail`, `Syncing`, `Indexing your mail`, `Waiting for Outlook` or
   `Error`. Where it has a label, it follows after a colon, for example `Indexing your
   mail: Inbox (2025-11 → now)`.
+- **The token tally**, under the state line, while you have given AI drafts consent:
+  for example `Today: 18 AI calls, ~210k tokens (in 190k / out 20k)`. See
+  [Token tally](ai-drafts.md#token-tally).
 - **A progress bar** during the first backfill, with `<done> of <total>`.
   While drafting, the state reads `Drafting replies (<done> / <total>)` instead, with no
   bar.
@@ -21,7 +24,8 @@ The Activity window shows what Clippy is doing and what it did lately. Open it w
 Durations read `7 ms`, `1.8 s` or `1 min 4 s`.
 
 Events carry tool names, counts, folder names and email subjects. They **never** show
-email bodies, search text, prompts, Claude's answers or attachment contents. Subjects
+email bodies, search text, prompts, Claude's answers, attachment contents or attachment
+file names. Subjects
 are cut at 80 characters with `…`. The list is kept in memory only: it is empty after a
 restart. The [log files](troubleshooting.md#logs) hold more technical detail, also
 without mail text.
@@ -56,7 +60,7 @@ in.
 | `Sync` | `Retention changed to 24 months: backfilling older mail` |
 | `Purge` | `Retention changed to 6 months: purged 1204 emails` |
 | `Sync` | `Reconciled Inbox: 3 removed, 2 added, 5 read-state updated` (once a day per folder, when something differed; with `, <n> unreadable` if some mail couldn't be read) |
-| `Sync` | `Reconcile Inbox: Outlook listed no items, kept 4102 indexed emails`, or `Reconcile Inbox abandoned: Outlook ids did not match the index, will retry`. Clippy refused to remove mail from its index because Outlook's answer looked wrong |
+| `Sync` | `Reconcile Inbox: Outlook listed no items, kept 4102 indexed emails`, or `Reconcile Inbox abandoned: Outlook ids did not match the index, will retry` (with `, kept <n> indexed emails` before `, will retry` when it held some back). Clippy refused to remove mail from its index because Outlook's answer looked wrong |
 | `Error` | `sync failed: <reason>` |
 | `Error` | `<mailbox> is not in Outlook; skipped`, `folder "<path>" not found; skipped` |
 | `Error` | `Outlook isn't responding: a call took longer than <n> s` |
@@ -68,6 +72,12 @@ well.
 
 `Tool` events show the tool name and how long it took, for example `search_emails` with
 `8 ms`. A call that failed reads `<tool> failed`.
+
+An [attachment download](tools.md#attachment_link) shows as its own `Tool` event:
+`attachment download` with how long the transfer took, or `attachment download
+failed` when the transfer broke off (for example the shell stopped `curl`). The
+event has no file name, email id or token. Requests that were refused (`401`, `404`,
+`405`) leave no event. Making the link is an ordinary `attachment_link` tool call.
 
 ## Drafts and invites
 
@@ -86,8 +96,8 @@ rescan items.
 
 | Kind | Text |
 |---|---|
-| `Draft` | `AI reply draft created: <subject>` |
-| `Ai` | `AI drafts: 3 drafted, 5 no reply needed, 2 skipped (41 s)`. One summary line after each pass. Parts that are 0 are left out. Possible parts, in order: `<d> drafted`, `<u> updated`, `<m> moved to Deleted Items`, `<k> kept`, `<x> no reply needed`, `<l> low confidence`, `<s> skipped`, `<f> failed` |
+| `Draft` | `AI reply draft created: <subject>`. When Clippy considered attachments or shared files for it, a suffix follows: `AI reply draft created: Re:: Budget (attachments: 3 read, 1 not read)`. "Read" counts files read in full or in part, "not read" counts files that were skipped. Only counts, never names. A replaced draft carries the same suffix before its final period. See [Attachments and shared files](ai-drafts.md#attachments-and-shared-files) |
+| `Ai` | `AI drafts: 3 drafted, 5 no reply needed, 2 skipped (41 s)`. One summary line after each pass. `<d> drafted` is always there; the other parts appear only when they are not 0, in this order: `<u> updated`, `<m> moved to Deleted Items`, `<k> kept`, `<x> no reply needed`, `<l> low confidence`, `<s> skipped`, `<f> failed` |
 | `Ai` | `AI drafts: no draft for the email received 2026-11-15 09:42: Claude's confidence 0.45 is below your minimum of 0.60. To draft it anyway, select it in Outlook and use "Draft a reply to the selected email" in the tray menu, or lower Minimum confidence in Settings → AI drafts.` Low confidence. It shows the received time, no subject or sender. The email is decided once |
 | `Ai` | `AI drafts: daily limit of 30 reached. I'll continue tomorrow.` |
 | `Ai` | `AI drafts: Claude's usage limit was reached. I'll try again at 14:05.` |
@@ -136,11 +146,47 @@ time in seconds. A rescan that ends early starts `Rescan stopped (<reason>) afte
 
 The usual `Draft` and low-confidence events appear for each email as well.
 
+### Facts about you
+
+See [Facts about you](ai-drafts.md#facts-about-you). These texts never contain the file's content or path.
+
+| Kind | Text |
+|---|---|
+| `Ai` | `Facts about you: my-email-context SKILL.md not found or unreadable — drafts go without it. Use "Edit my facts…" in the AI drafts menu.` Shown once when the file goes missing, becomes unreadable, is larger than 16 KiB or isn't valid UTF-8 |
+| `Ai` | `Facts about you: using my-email-context SKILL.md again.` The file is back (filled in or template only) |
+
+An untouched template is normal and reports nothing. Clippy checks the file each time it
+builds a draft, so these lines appear at the next draft after the change.
+
+### Related mail
+
+| Kind | Text |
+|---|---|
+| `Ai` | `AI drafts now also send up to 5 related earlier emails from your mailbox to Claude, to write better replies. You can turn this off in Settings → AI drafts.` Shown once (with a balloon), if you consented before v0.1.1 and **Include related earlier emails** is on |
+
+### Attachments and Never draft for
+
+| Kind | Text |
+|---|---|
+| `Ai` | `AI drafts now also read attachments and shared files synced to this PC, and send their text to Claude, to write better replies. You can turn this off in Settings → AI drafts.` Shown once (with a balloon), if you consented before v0.1.1 and **Read attachments and synced shared files for drafts** is on |
+| `Ai` | `AI drafts: added an entry to "Never draft for" (<n> entries).` You used [Don't draft for this sender](ai-drafts.md#dont-draft-for-this-sender). The address is not shown |
+
+### Learning from your edits
+
+See [Learning from how you edit drafts](ai-drafts.md#learning-from-how-you-edit-drafts).
+These lines hold counts only, never text, subjects or addresses.
+
+| Kind | Text |
+|---|---|
+| `Ai` | `AI drafts: noted how you edited 1 sent draft.` or `AI drafts: noted how you edited <n> sent drafts.` (for example `12`, or `1,234`). After a check of your sent mail that matched at least one sent reply to an AI draft. The number counts every draft you sent, including those sent unchanged. At most one check every 5 minutes, so several sent drafts usually appear in one line |
+| `Ai` | `AI drafts now learn from how you edit Clippy's drafts before sending. The next writing-style update sends up to 20 of your edited replies (addresses, links and phone numbers removed) to Claude. You can turn this off in Settings → AI drafts.` Shown once (with a balloon) at the first AI draft Clippy saves after the update, if you consented before v0.1.1 and **Learn from how I edit Clippy's drafts** is on |
+
 ### Writing style
 
 | Kind | Text |
 |---|---|
 | `Ai` | `writing style updated from 240 sent emails (52 s)` |
+| `Ai` | `writing style updated from 240 sent emails and 7 edited drafts (52 s)`. The edited drafts were given to Claude (at least 3, at most 20) |
 | `Ai` | `writing style not updated: only 12 sent emails (need 20)` |
 | `Ai` | `writing style not updated: you edited it. Use Regenerate in Settings to replace it.` |
 | `Ai` | `writing style not updated: <reason>`. The reason is `Claude's usage limit was reached`, `Claude isn't signed in`, `a Claude call failed (<kind>)`, `Claude's answer wasn't usable`, `couldn't save the skill file`, `couldn't read the index` or `couldn't prepare your sent emails` |

@@ -130,11 +130,25 @@ internal sealed partial class OutlookMail
         }
     }
 
-    private static Outlook.MAPIFolder? TryDeletedItems(Outlook.Store store)
+    /// <summary>The store's Deleted Items folder, or null. Also used read-only to canonicalize the localized name (SPEC 9); the only place olFolderDeletedItems is named besides the draft-invite cleanup.</summary>
+    internal static Outlook.MAPIFolder? TryDeletedItems(Outlook.Store store)
     {
         try
         {
             return store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderDeletedItems);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException || (ex is COMException c && !ComErrors.IsOutlookGone(c)))
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The store's Drafts folder, or null when it can't be opened (e.g. a shared mailbox with permissions only on Inbox and Sent).</summary>
+    internal static Outlook.MAPIFolder? TryDrafts(Outlook.Store store)
+    {
+        try
+        {
+            return store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderDrafts);
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException || (ex is COMException c && !ComErrors.IsOutlookGone(c)))
         {

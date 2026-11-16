@@ -115,6 +115,20 @@ internal static class Program
         }
 
         var hub = new ActivityHub();
+        var attachmentLinks = new AttachmentLinks(new AttachmentLinksOptions
+        {
+            Folder = LinkPaths.Default(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)).Folder,
+            EnsurePrivateFolder = PrivateFolder.Ensure,
+            Logger = loggerFactory.CreateLogger<AttachmentLinks>(),
+        });
+        attachmentLinks.CleanUpAtStart();   // before the host starts: no link exists yet, so nothing valid is deleted
+        var aiFiles = new AiFiles(new AiFilesOptions
+        {
+            Folder = AiFilePaths.Default(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)).Folder,
+            EnsurePrivateFolder = PrivateFolder.Ensure,
+            Logger = loggerFactory.CreateLogger<AiFiles>(),
+        });
+        aiFiles.CleanUpAtStart();   // SPEC 26.9: no AI read exists yet
         var worker = new OutlookWorker(hub, loggerFactory.CreateLogger("OutlookWorker"));
         worker.Start();
         foreach (var w in loaded.Warnings)
@@ -149,10 +163,13 @@ internal static class Program
         OutlookReplyDraftWriter? replyWriter = null;
         DraftWorker? drafts = null;
         IDraftModel? draftModel = null;
+        AiUsage? aiUsage = null;
         OutlookAiMailbox? aiMailbox = null;
         AnthropicApiModel? apiModel = null;
         ClaudeCliModel? cliModel = null;
         StyleSkill? styleSkill = null;
+        FactsTemplateStarter? factsStarter = null;
+        FactsEditor? factsEditor = null;
         try
         {
             EmailIndex.Logger = loggerFactory.CreateLogger<EmailIndex>();
@@ -185,7 +202,12 @@ internal static class Program
                 logger: loggerFactory.CreateLogger<ClaudeCliModel>());
             apiModel = new AnthropicApiModel(() => settings.AiDrafting, store.LoadApiKey,
                 logger: loggerFactory.CreateLogger<AnthropicApiModel>());
-            draftModel = new DraftModelSwitch(() => settings.AiDrafting, cliModel, apiModel);
+            var usageIndexes = indexes;
+            aiUsage = new AiUsage(() => usageIndexes.For(MailboxIndexes.OwnMailbox), TimeZoneInfo.Local,
+                logger: loggerFactory.CreateLogger<AiUsage>());
+            aiUsage.Load();   // once, before the worker and the style skill exist (SPEC 19.13)
+            draftModel = new UsageRecordingModel(new DraftModelSwitch(() => settings.AiDrafting, cliModel, apiModel),
+                () => settings.AiDrafting, aiUsage, loggerFactory.CreateLogger<UsageRecordingModel>());
             aiMailbox = new OutlookAiMailbox(worker, mail, stores, loggerFactory.CreateLogger<OutlookAiMailbox>());
             var syncRef = sync;
             var indexesRef = indexes;
@@ -200,14 +222,31 @@ internal static class Program
             var styleGuide = new StyleGuideSource(styleSkill,
                 ct => AiOwner.ResolveAsync(aiMailboxRef, indexesRef, WorkPriority.Background, ct),
                 hub, loggerFactory.CreateLogger<StyleGuideSource>());
+            var factsFile = new FactsFile(FactsPaths.Default(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), dataDir));
+            factsEditor = new FactsEditor(factsFile,
+                ct => OwnerNameAsync(aiMailboxRef, ct));
+            var facts = new FactsReporter(factsFile, hub, loggerFactory.CreateLogger<FactsReporter>());
+            factsStarter = new FactsTemplateStarter(factsFile, () => settings.AiDrafting,
+                async ct => (await aiMailboxRef.GetIdentityAsync(WorkPriority.Background, ct).ConfigureAwait(false))?.DisplayName,
+                loggerFactory.CreateLogger<FactsTemplateStarter>());
+            var attachmentSource = new OutlookAttachmentSource(worker, mail, stores, aiFiles,
+                new OneDriveRegistry(loggerFactory.CreateLogger<OneDriveRegistry>()));
+            var draftAttachments = new DraftAttachments(attachmentSource, TimeProvider.System,
+                loggerFactory.CreateLogger<DraftAttachments>());
             drafts = new DraftWorker(new DraftWorkerServices(() => settings, indexes, aiMailbox, replyWriter, draftModel,
                 styleGuide,
                 () => signatures.Default(SignatureKind.Reply), hub, balloons,
                 () => worker.State == OutlookConnectionState.Available, () => syncRef.IsPaused, TimeZoneInfo.Local,
-                Logger: loggerFactory.CreateLogger<DraftWorker>(), FreeBusy: freeBusy));
+                Logger: loggerFactory.CreateLogger<DraftWorker>(), FreeBusy: freeBusy, Facts: facts,
+                MarkNoticeShown: new AiDraftingToggler(settings, store.Save, static () => { }).MarkNoticeShown,
+                Attachments: draftAttachments));
             var draftsRef = drafts;
             sync.CycleCompleted += _ => draftsRef.Wake();
             sync.OwnSentBackfillCompleted += () => draftsRef.Wake();
+            var edits = new EditLearning(indexesRef, () => settings.AiDrafting,
+                () => StyleCorpus.SignatureTexts(kind => signatures.Default(kind)), hub,
+                logger: loggerFactory.CreateLogger<EditLearning>());
+            sync.CycleCompleted += cycle => edits.OnSyncCycleCompleted(cycle);
             }
             catch (Exception ex)
             {
@@ -215,8 +254,12 @@ internal static class Program
                 drafts = null;
                 aiMailbox = null;
                 draftModel = null;
+                aiUsage = null;
                 styleSkill = null;
+                factsStarter = null;
+                factsEditor = null;
             }
+            factsStarter?.Kick();
             if (styleSkill is not null)
             {
                 var skillAtStart = styleSkill;
@@ -236,19 +279,24 @@ internal static class Program
                 previousState = next;
             }
             if (resumed) sync?.SyncNow();
+            if (next == OutlookConnectionState.Available) factsStarter?.Kick();
         };
 
 
         // AI drafts UI (SPEC 19.10). The key is saved and removed through the one SettingsStore above.
-        var aiToggler = new AiDraftingToggler(settings, store.Save, () => drafts?.NotifySettingsChanged());
+        var aiToggler = new AiDraftingToggler(settings, store.Save, () => { drafts?.NotifySettingsChanged(); factsStarter?.Kick(); });
         AiStatusChecker? aiChecker = draftModel is null ? null
             : new AiStatusChecker(draftModel, () => { cliModel?.InvalidateStatus(); apiModel?.InvalidateModelCache(); }, s => drafts?.ReportStatus(s),
                 loggerFactory.CreateLogger<AiStatusChecker>());
+        var factsEditorForUi = factsEditor;
         var draftsForTray = drafts;   // non-null local for the lambda (nullable flow)
-        AiTrayServices? aiTray = draftsForTray is null || aiMailbox is null || aiChecker is null ? null
+        AiTrayServices? aiTray = draftsForTray is null || aiMailbox is null || aiChecker is null || indexes is null ? null
             : new AiTrayServices(draftsForTray.DraftSelectedAsync, aiMailbox.ShowDraftsAsync, aiToggler, aiChecker,
                 draftsForTray.PlanRescan, draftsForTray.RescanAsync, draftsForTray.CancelRescan,
-                () => draftsForTray.CurrentRescan);
+                () => draftsForTray.CurrentRescan,
+                new DontDraftService(aiMailbox, indexes, aiToggler, () => settings.AiDrafting, hub,
+                    loggerFactory.CreateLogger<DontDraftService>()),
+                factsEditorForUi);
         var aiMailboxForUi = aiMailbox;
         var indexesForUi = indexes;
         var aiSettings = new AiSettingsServices(aiToggler, () => store.LoadApiKey() is { } k && SettingsStore.IsValidApiKeyFormat(k),
@@ -256,7 +304,8 @@ internal static class Program
             TrayApp.ShellOpen, aiChecker, styleSkill,
             aiMailboxForUi is null || indexesForUi is null ? null
                 : ct => AiOwner.ResolveAsync(aiMailboxForUi, indexesForUi, WorkPriority.Interactive, ct),
-            drafts is null ? null : drafts.Today);
+            drafts is null ? null : drafts.Today,
+            factsEditorForUi);
 
         // Built before the tray: the tray's attention badge counts tracked draft invites (SPEC 22.6).
         var draftInvites = new DraftInvites(
@@ -339,7 +388,8 @@ internal static class Program
             DraftInvites: new DraftInviteTrayServices(draftInvites,
                 new OutlookDraftInviteWindow(worker, loggerFactory.CreateLogger<OutlookDraftInviteWindow>()),
                 () => worker.State, TimeZoneInfo.Local),
-            Attention: attention));
+            Attention: attention,
+            AiUsageLine: () => AiUsageTexts.Line(settings.AiDrafting, aiUsage)));
         trayRef = tray;
 
         // Auto-update service (SPEC 20). Started after the server start was attempted, see AfterStartAsync.
@@ -387,6 +437,7 @@ internal static class Program
         {
             Tokens = tokens,
             Hub = hub,
+            Links = attachmentLinks,
             ConfigureMcp = b => b.WithTools<McpTools>().WithTools<AttachmentTools>(),
             ConfigureServices = s =>
             {
@@ -404,6 +455,10 @@ internal static class Program
                     s.AddSingleton<IAttachmentSaver, OutlookAttachmentSaver>()
                         .AddSingleton(sp => new AttachmentExport(sp.GetRequiredService<IAttachmentSaver>(),
                             sp.GetRequiredService<MailboxIndexes>(), () => settings, hub));
+                    s.AddSingleton<IAttachmentLinkSaver, OutlookAttachmentLinkSaver>()
+                        .AddSingleton(sp => new Optional<AttachmentLinkTool>(new AttachmentLinkTool(attachmentLinks,
+                            sp.GetRequiredService<IAttachmentLinkSaver>(), () => hostRef?.Port ?? settings.Port,
+                            TimeZoneInfo.Local, loggerFactory.CreateLogger<AttachmentLinkTool>())));
                     // Index-backed tools take Optional<T> so they stay listed (and explain the problem) when the index failed to open.
                     s.AddSingleton(new Optional<MailboxIndexes>(indexes))
                         .AddSingleton(new Optional<OutlookMail>(mail))
@@ -415,13 +470,14 @@ internal static class Program
                     s.AddSingleton(new Optional<MailboxIndexes>(null))
                         .AddSingleton(new Optional<OutlookMail>(null))
                         .AddSingleton(new Optional<ReplyDraftTool>(null))
-                        .AddSingleton(new Optional<AttachmentExport>(null));
+                        .AddSingleton(new Optional<AttachmentExport>(null))
+                        .AddSingleton(new Optional<AttachmentLinkTool>(null));
                 }
             },
             ConfigureLogging = b => b.AddDebug().AddProvider(fileLog),
         });
         hostRef = host;
-        applier = new SettingsApplier(new SettingsApplyTargets(settings, store, tokens, p => host.RestartAsync(p), () => host.Port,
+        applier = new SettingsApplier(new SettingsApplyTargets(settings, store, tokens, p => RestartHostAsync(host, attachmentLinks, p), () => host.Port,
             e => StartupRegistration.Apply(e), indexes,
             sync is null ? null : sync.NotifySettingsChanged, sync is null ? null : sync.SyncNow,
             drafts is null ? null : drafts.NotifySettingsChanged), logger);
@@ -446,6 +502,7 @@ internal static class Program
         var pendingHandover = Volatile.Read(ref handover);
         // Then the MCP host, before anything else: the new version needs its port, and no new requests are wanted.
         var hostStopped = WaitBounded(() => host.DisposeAsync().AsTask(), HostStopWait, logger, "MCP host");
+        attachmentLinks.Dispose();   // stops the sweep timer and deletes every open link's file (SPEC 24.3)
         WaitBounded(async () =>
         {
             if (drafts is not null)
@@ -483,6 +540,10 @@ internal static class Program
 
     /// <summary>Process entry point only: blocks the STA main thread before the message loop starts or after it ended.
     /// Task.Run avoids the WinForms SynchronizationContext.</summary>
+    /// <summary>The own mailbox owner's display name for "Edit my facts…", or null when Outlook doesn't answer within 5 s.</summary>
+    private static async Task<string?> OwnerNameAsync(OutlookAiMailbox mailbox, CancellationToken ct) =>
+        (await mailbox.GetIdentityAsync(WorkPriority.Interactive, ct).WaitAsync(TimeSpan.FromSeconds(5), ct).ConfigureAwait(false))?.DisplayName;
+
     private static T RunBlocking<T>(Func<Task<T>> work) => Task.Run(work).GetAwaiter().GetResult();
 
     private static readonly TimeSpan HostStopWait = TimeSpan.FromSeconds(10);
@@ -570,6 +631,18 @@ internal static class Program
             }
             _ = updates.StartAsync(CancellationToken.None);
         }, null);
+    }
+
+    private static async Task<bool> RestartHostAsync(McpHttpHost host, AttachmentLinks links, int port)
+    {
+        try
+        {
+            return await host.RestartAsync(port).ConfigureAwait(false);
+        }
+        finally
+        {
+            links.Clear();   // SPEC 24.3: the URLs name the old port
+        }
     }
 
     private static async Task<bool> StartHostAsync(McpHttpHost host, int port, ILogger logger, TimeSpan bindRetryFor)

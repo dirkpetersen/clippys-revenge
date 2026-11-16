@@ -14,7 +14,8 @@ internal sealed record AiSettingsServices(
     AiStatusChecker? Checker = null,      // null when the index failed to open
     StyleSkill? Style = null,
     Func<CancellationToken, Task<Recipient?>>? Owner = null,
-    Func<AiDraftsToday>? Today = null);
+    Func<AiDraftsToday>? Today = null,
+    FactsEditor? Facts = null);          // the facts status line (SPEC 25.2); null hides it
 
 /// <summary>The AI drafts tab (SPEC 19.10). Edits the staged draft; consent and API key changes apply at once.</summary>
 internal sealed partial class SettingsForm
@@ -40,12 +41,17 @@ internal sealed partial class SettingsForm
     private readonly TextBox _aiMeetingCount = new();
     private readonly CheckBox _aiDirect = new() { Text = "Only when I'm in To or CC" };
     private readonly CheckBox _aiRevise = new() { Text = AiTabTexts.ReviseDraftsText };
+    private readonly CheckBox _aiRelated = new() { Text = AiTabTexts.RelatedMailText };
+    private readonly CheckBox _aiReason = new() { Text = AiTabTexts.ReasonLineText };
+    private readonly CheckBox _aiAttachments = new() { Text = AiTabTexts.ReadAttachmentsText };
+    private readonly Label _aiFactsStatus = new() { AutoEllipsis = true };
     private readonly TextBox _aiExclude = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
     private readonly TextBox _aiInclude = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true };
     private readonly CheckBox _aiOwnBox = new() { Text = SettingsEditor.OwnMailboxLabel, Enabled = false };
     private readonly CheckedListBox _aiMailboxes = new() { CheckOnClick = true };
     private readonly Label _aiStyleStatus = new() { AutoEllipsis = true };
     private readonly CheckBox _aiWeekly = new() { Text = "Update weekly" };
+    private readonly CheckBox _aiLearnEdits = new() { Text = AiTabTexts.LearnFromEditsText };
     private readonly Button _aiView = new() { Text = "View" };
     private readonly Button _aiRegen = new() { Text = "Regenerate…" };
     private readonly Button _aiOpen = new() { Text = "Open in editor" };
@@ -103,31 +109,37 @@ internal sealed partial class SettingsForm
 
         Put(p, _aiRevise, 8, 394, 620, 24);
 
-        Put(p, _aiMeeting, 8, 424, 370, 24);
-        Lbl(p, AiTabTexts.MeetingCountLabel, 384, 428, 150);
-        Put(p, _aiMeetingCount, 540, 424, 60, 24);
+        Put(p, _aiRelated, 8, 424, 620, 24);
+        Put(p, _aiReason, 8, 454, 620, 24);
+        Put(p, _aiFactsStatus, 8, 484, 620, 20);
 
-        Lbl(p, "Never draft for", 8, 460, 200);
-        Lbl(p, "Only draft for", 330, 460, 200);
-        Put(p, _aiExclude, 8, 486, 310, 80);
-        Put(p, _aiInclude, 330, 486, 300, 80);
-        var listHint = Lbl(p, AiTabTexts.ListHint, 8, 568, 400);
+        Put(p, _aiAttachments, 8, 514, 620, 24);
+        Put(p, _aiMeeting, 8, 544, 370, 24);
+        Lbl(p, AiTabTexts.MeetingCountLabel, 384, 548, 150);
+        Put(p, _aiMeetingCount, 540, 544, 60, 24);
+
+        Lbl(p, "Never draft for", 8, 580, 200);
+        Lbl(p, "Only draft for", 330, 580, 200);
+        Put(p, _aiExclude, 8, 606, 310, 80);
+        Put(p, _aiInclude, 330, 606, 300, 80);
+        var listHint = Lbl(p, AiTabTexts.ListHint, 8, 688, 400);
         listHint.ForeColor = SystemColors.GrayText;
 
-        Lbl(p, "Mailboxes", 8, 596, 120);
-        Put(p, _aiOwnBox, 8, 622, 300, 22);
-        Put(p, _aiMailboxes, 8, 648, 622, 70);
+        Lbl(p, "Mailboxes", 8, 716, 120);
+        Put(p, _aiOwnBox, 8, 742, 300, 22);
+        Put(p, _aiMailboxes, 8, 768, 622, 70);
 
-        Lbl(p, "Writing style", 8, 726, 100);
-        Put(p, _aiStyleStatus, 110, 730, 520, 20);
-        Put(p, _aiWeekly, 8, 754, 200, 24);
-        Put(p, _aiView, 8, 784, 70, 26);
-        Put(p, _aiRegen, 84, 784, 110, 26);
-        Put(p, _aiOpen, 200, 784, 120, 26);
-        Put(p, _aiStyleNote, 8, 816, 620, 34);
+        Lbl(p, "Writing style", 8, 846, 100);
+        Put(p, _aiStyleStatus, 110, 850, 520, 20);
+        Put(p, _aiWeekly, 8, 874, 200, 24);
+        Put(p, _aiLearnEdits, 214, 874, 416, 24);
+        Put(p, _aiView, 8, 904, 70, 26);
+        Put(p, _aiRegen, 84, 904, 110, 26);
+        Put(p, _aiOpen, 200, 904, 120, 26);
+        Put(p, _aiStyleNote, 8, 936, 620, 34);
 
-        Put(p, _aiToday, 8, 858, 620, 20);
-        Put(p, _aiManual, 8, 882, 620, 20);
+        Put(p, _aiToday, 8, 978, 620, 20);
+        Put(p, _aiManual, 8, 1002, 620, 20);
         _tabs.TabPages.Add(p);
 
         foreach (var e in AiDraftingSettings.Efforts) _aiEffort.Items.Add(e);
@@ -184,7 +196,11 @@ internal sealed partial class SettingsForm
         };
         _aiDirect.CheckedChanged += (_, _) => { if (!_binding) AiDraft.RequireDirectRecipient = _aiDirect.Checked; };
         _aiRevise.CheckedChanged += (_, _) => { if (!_binding) AiDraft.ReviseDrafts = _aiRevise.Checked; };
+        _aiRelated.CheckedChanged += (_, _) => { if (!_binding) AiDraft.RelatedMail = _aiRelated.Checked; };
+        _aiReason.CheckedChanged += (_, _) => { if (!_binding) AiDraft.ReasonLine = _aiReason.Checked; };
+        _aiAttachments.CheckedChanged += (_, _) => { if (!_binding) AiDraft.ReadAttachments = _aiAttachments.Checked; };
         _aiWeekly.CheckedChanged += (_, _) => { if (!_binding) AiDraft.AutoRegenerateStyle = _aiWeekly.Checked; };
+        _aiLearnEdits.CheckedChanged += (_, _) => { if (!_binding) AiDraft.LearnFromEdits = _aiLearnEdits.Checked; };
         _aiExclude.TextChanged += (_, _) => { if (!_binding) AiDraft.ExcludeSenders = AiSettingsLines.Parse(_aiExclude.Text); };
         _aiInclude.TextChanged += (_, _) => { if (!_binding) AiDraft.IncludeOnlySenders = AiSettingsLines.Parse(_aiInclude.Text); };
         foreach (var t in new[] { _aiModel, _aiCliPath, _aiCap, _aiMinConf, _aiMaxAge, _aiMeetingCount, _aiExclude, _aiInclude })
@@ -233,10 +249,11 @@ internal sealed partial class SettingsForm
 
         if (_s.Ai.Style is null)
         {
-            foreach (var c in new Control[] { _aiWeekly, _aiView, _aiRegen, _aiOpen }) c.Enabled = false;
+            foreach (var c in new Control[] { _aiWeekly, _aiLearnEdits, _aiView, _aiRegen, _aiOpen }) c.Enabled = false;
             _aiStyleNote.Text = AiTabTexts.NoIndex;
         }
         _aiToday.Visible = _s.Ai.Today is not null;
+        _aiFactsStatus.Visible = _s.Ai.Facts is not null;
     }
 
     /// <summary>Called from BindAll (under the form's binding guard): shows the draft in the tab.</summary>
@@ -259,10 +276,14 @@ internal sealed partial class SettingsForm
             _aiMaxAge.Text = d.MaxAgeDays.ToString(CultureInfo.InvariantCulture);
             _aiDirect.Checked = d.RequireDirectRecipient;
             _aiRevise.Checked = d.ReviseDrafts;
+            _aiRelated.Checked = d.RelatedMail;
+            _aiReason.Checked = d.ReasonLine;
+            _aiAttachments.Checked = d.ReadAttachments;
             _aiMeeting.Checked = d.MeetingTimes;
             _aiMeetingCount.Enabled = d.MeetingTimes;
             _aiMeetingCount.Text = d.MeetingTimeOptions.ToString(CultureInfo.InvariantCulture);
             _aiWeekly.Checked = d.AutoRegenerateStyle;
+            _aiLearnEdits.Checked = d.LearnFromEdits;
             _aiExclude.Text = AiSettingsLines.Join(d.ExcludeSenders);
             _aiInclude.Text = AiSettingsLines.Join(d.IncludeOnlySenders);
             _aiOwnBox.Checked = d.Enabled;
@@ -305,6 +326,7 @@ internal sealed partial class SettingsForm
     {
         FillAiMailboxes();
         RefreshStyleStatus();
+        RefreshFactsStatus();
         RefreshAiToday();
         if (_aiChecked) return;
         _aiChecked = true;
@@ -475,6 +497,21 @@ internal sealed partial class SettingsForm
         catch (Exception)
         {
             if (!IsDisposed) _aiStyleStatus.Text = "";
+        }
+    }
+
+    private async void RefreshFactsStatus()
+    {
+        var facts = _s.Ai.Facts;
+        if (facts is null) return;
+        try
+        {
+            var text = await Task.Run(facts.StatusText);
+            if (!IsDisposed) _aiFactsStatus.Text = text;
+        }
+        catch (Exception)
+        {
+            if (!IsDisposed) _aiFactsStatus.Text = "";
         }
     }
 

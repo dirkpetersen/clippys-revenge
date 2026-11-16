@@ -9,10 +9,13 @@ namespace ClippysRevenge.Core;
 public static class AiConsent
 {
     public const string Title = "Turn on AI drafts?";
-    public const string Text = "Clippy will send new emails from your Inbox, earlier messages in the same thread, and samples of your sent mail to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.";
+    public const string Text = "Clippy will send new emails from your Inbox, earlier messages in the same thread, the text of their attachments and of shared files synced to this PC, up to 5 related earlier emails, and samples of your sent mail and how you edited Clippy's drafts to Claude (Anthropic) to write reply drafts in your style. Drafts are only saved, never sent. With Claude Code, this uses your Claude plan's usage. Shared mailboxes are included only if you turn them on one by one.";
     public const string TurnOnButton = "Turn on";
     public const string CancelButton = "Cancel";
 }
+
+/// <summary>One-time AI-drafts notices (SPEC 25.3; M19/M20 add members).</summary>
+public enum AiNotice { RelatedMail, Attachments, Edits }
 
 public static class AiMenuTexts
 {
@@ -21,6 +24,9 @@ public static class AiMenuTexts
     public const string DraftSelected = "Draft a reply to the selected email";
     public const string ShowDrafts = "Show Drafts in Outlook";
     public const string Settings = "AI drafts settings…";
+    public const string DontDraftSender = "Don't draft for this sender";
+    public const string DontDraftDomain = "Don't draft for this sender's domain…";
+    public const string EditFacts = "Edit my facts…";
 
     public static string ToggleFailed(string reason) => "Couldn't change AI drafts: " + reason;
 }
@@ -29,7 +35,9 @@ public sealed record AiDraftsMenuModel(bool AutoChecked, bool AutoEnabled, bool 
     bool ShowDraftsVisible, bool ShowDraftsEnabled,
     string RescanText = RescanTexts.MenuItem,   // "Rescan emails from the last 24 hours…" or "Cancel rescan (d/t)"
     bool RescanEnabled = true,
-    bool RescanCancels = false);                // true: a click calls CancelRescan
+    bool RescanCancels = false,                 // true: a click calls CancelRescan
+    bool DontDraftEnabled = false,              // the two "Don't draft for" items (SPEC 27.7)
+    bool EditFactsEnabled = false);             // "Edit my facts…" (SPEC 25.2): needs the AI services only
 
 /// <summary>SPEC 23.8: what the tray shows before and after a rescan. Pure.</summary>
 public static class RescanFlow
@@ -78,7 +86,9 @@ public static class AiDraftsMenu
             ShowDraftsEnabled: available,
             RescanText: running ? RescanTexts.CancelItem(rescan!.Done, rescan.Total) : RescanTexts.MenuItem,
             RescanEnabled: running || (available && !outlookUnavailable && !starting),
-            RescanCancels: running);
+            RescanCancels: running,
+            DontDraftEnabled: available && !outlookUnavailable && !running && !starting,
+            EditFactsEnabled: available);
     }
 }
 
@@ -147,6 +157,10 @@ public static class AiTabTexts
     public const string TabTitle = "AI drafts";
     public const string EnableText = "Draft replies to new email automatically";
     public const string ReviseDraftsText = "Update or remove my AI drafts when a thread moves on";
+    public const string RelatedMailText = "Include related earlier emails";
+    public const string ReadAttachmentsText = "Read attachments and synced shared files for drafts";
+    public const string LearnFromEditsText = "Learn from how I edit Clippy's drafts";
+    public const string ReasonLineText = "Start each draft with a highlighted note on why it was drafted";
     public const string MeetingTimesText = "Offer meeting times when an email asks for a meeting";
     public const string MeetingCountLabel = "Number of times to offer";
     public const string UseLabel = "Use:";
@@ -358,10 +372,41 @@ public sealed class AiDraftingToggler
         {
             if (ai.HasConsent) return false;
             ai.RecordConsent(_time.GetUtcNow());
+            ai.RelatedMailNoticeShown = true;   // the consent text already names related mail
+            ai.AttachmentsNoticeShown = true;   // and attachments
+            ai.EditsNoticeShown = true;         // and how you edited drafts
             return true;
         });
         if (did) _changed();
         return _settings.AiDrafting.ConsentedAtUtc!.Value;
+    }
+
+    /// <summary>Sets the notice's *NoticeShown flag through Mutate (clone, save, swap under Settings.Gate). No-op (no save)
+    /// when already set. Never calls changed() (no worker wake-up).</summary>
+    /// <exception cref="ArgumentOutOfRangeException">notice isn't a defined AiNotice.</exception>
+    /// <exception cref="IOException">The save failed. Live is unchanged.</exception>
+    /// <exception cref="UnauthorizedAccessException">Same.</exception>
+    public void MarkNoticeShown(AiNotice notice)
+    {
+        if (!Enum.IsDefined(notice)) throw new ArgumentOutOfRangeException(nameof(notice));
+        Mutate(ai =>
+        {
+            switch (notice)
+            {
+                case AiNotice.Attachments:
+                    if (ai.AttachmentsNoticeShown) return false;
+                    ai.AttachmentsNoticeShown = true;
+                    return true;
+                case AiNotice.Edits:
+                    if (ai.EditsNoticeShown) return false;
+                    ai.EditsNoticeShown = true;
+                    return true;
+                default:
+                    if (ai.RelatedMailNoticeShown) return false;
+                    ai.RelatedMailNoticeShown = true;
+                    return true;
+            }
+        });
     }
 
     /// <summary>SetEnabled on a clone, then save, then swap. No-op (no save, no changed()) when live.Enabled already equals enabled.</summary>
@@ -379,13 +424,38 @@ public sealed class AiDraftingToggler
         if (did) _changed();
     }
 
-    private bool Mutate(Func<AiDraftingSettings, bool> edit)
+    /// <summary>The normal settings path for a tray edit of AiDrafting (SPEC 27.7). Under Settings.Gate: clone live,
+    /// run edit on the clone's AiDrafting. edit false: nothing saved, returns null. Else clone.Validate(): errors,
+    /// nothing saved, returns them. Else save(clone), live.AiDrafting = clone.AiDrafting, release the gate, changed(),
+    /// returns an empty list.</summary>
+    /// <exception cref="ArgumentNullException">edit is null.</exception>
+    /// <exception cref="IOException">The save failed. Live is unchanged.</exception>
+    /// <exception cref="UnauthorizedAccessException">Same.</exception>
+    public IReadOnlyList<SettingsError>? EditAi(Func<AiDraftingSettings, bool> edit)
+    {
+        ArgumentNullException.ThrowIfNull(edit);
+        IReadOnlyList<SettingsError>? errors = null;
+        var did = Mutate(ai => edit(ai), next =>
+        {
+            var e = next.Validate();
+            if (e.Count == 0) return true;
+            errors = e;
+            return false;
+        });
+        if (errors is not null) return errors;
+        if (!did) return null;
+        _changed();
+        return [];
+    }
+
+    private bool Mutate(Func<AiDraftingSettings, bool> edit, Func<Settings, bool>? accept = null)
     {
         _settings.Gate.Wait();
         try
         {
             var next = _settings.Clone();
             if (!edit(next.AiDrafting)) return false;
+            if (accept is not null && !accept(next)) return false;
             _save(next);
             _settings.AiDrafting = next.AiDrafting;
             return true;

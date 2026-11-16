@@ -76,4 +76,47 @@ public sealed class LiveClaudeTests(LiveOutlook fx)
         var outTok = ok.OutputTokens?.ToString(CultureInfo.InvariantCulture) ?? "?";
         fx.Result("claude-call", $"ok in {AiHtmlChecks.Seconds(ok.Duration)} s, tokens {inTok}/{outTok}, model {model}");
     }
+
+    [Fact(Timeout = 180_000)]
+    public async Task Cli_call_reports_usage_and_writes_an_ai_calls_row()
+    {
+        var model = LiveClaude.RequireEnabled();
+        var ct = TestContext.Current.CancellationToken;
+        var settings = LiveClaude.Settings(model, DateTimeOffset.UtcNow);
+        var cli = LiveClaude.CreateModel(() => settings, WorkDir());
+        await LiveClaude.RequireReadyAsync(cli, ct);
+
+        using var indexes = new MailboxIndexes(Path.Combine(fx.TempRoot, "usage-index"), []);
+        var usage = new AiUsage(() => indexes.For(""), TimeZoneInfo.Local);
+        usage.Load();
+        var rec = new UsageRecordingModel(cli, () => settings, usage);
+        var start = DateTimeOffset.UtcNow;
+
+        var request = new ModelRequest(
+            "You are a connectivity test. Answer only with JSON that matches the schema, with ok set to true.",
+            "ping", LiveClaude.OkSchema, model, LiveClaude.Effort, TimeSpan.FromSeconds(120), 256, ModelCallKind.Style);
+        var result = await rec.RunAsync(request, ct);
+
+        if (result is ModelResult.RateLimited) Assert.Skip(LiveClaude.UsageLimit);
+        if (result is ModelResult.NotSignedIn) Assert.Skip(LiveClaude.NotReady(ClaudeCliStatusTexts.NotSignedIn));
+        if (result is ModelResult.Failed f)
+            Assert.Fail($"The Claude call failed ({f.Kind}, code {f.Code?.ToString(CultureInfo.InvariantCulture) ?? "none"}).");
+        if (result is not ModelResult.Ok ok)
+        {
+            Assert.Fail("The Claude call returned an unexpected result.");
+            return;
+        }
+
+        Assert.True(ok.Usage is { Input: > 0, Output: > 0 }, "The CLI envelope has no numeric usage.input_tokens/output_tokens.");
+        var t = indexes.For("").AiUsageSince(start);
+        Assert.True(t.Calls == 1 && t.UnknownCalls == 0 && t.Input == ok.Usage!.Input && t.Output == ok.Usage.Output
+            && t.CacheRead == (ok.Usage.CacheRead ?? 0) && t.CacheCreation == (ok.Usage.CacheCreation ?? 0),
+            "No ai_calls row matches the call.");
+        Assert.True(usage.Today().Calls == 1, "The usage tally of today did not count exactly the call.");
+
+        static string N(long? v) => v?.ToString(CultureInfo.InvariantCulture) ?? "absent";
+        fx.Result("claude-usage",
+            $"input {N(ok.Usage.Input)}, output {N(ok.Usage.Output)}, cache_read {N(ok.Usage.CacheRead)}, "
+            + $"cache_creation {N(ok.Usage.CacheCreation)}, ai_calls row ok");
+    }
 }

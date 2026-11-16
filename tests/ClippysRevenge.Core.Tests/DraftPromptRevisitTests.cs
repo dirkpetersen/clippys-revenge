@@ -149,4 +149,14 @@ public class DraftPromptRevisitTests
         Assert.Throws<ArgumentNullException>(() =>
             DraftPrompt.RevisitUserPrompt(Input() with { Prompt = Prompt() with { Thread = null! } }));
     }
+
+[Fact]
+    public void Revisit_facts_block_and_default()
+    {
+        var plain = DraftPrompt.RevisitSystemPrompt("Ann", "a@x.org", "S", false);
+        Assert.Equal(plain, DraftPrompt.RevisitSystemPrompt("Ann", "a@x.org", "S", false, ""));
+        var s = DraftPrompt.RevisitSystemPrompt("Ann", "a@x.org", "S", false, "Zoom: x");
+        Assert.EndsWith("\n\n" + DraftPrompt.FactsIntro.Replace("{name}", "Ann")
+            + "\n\n<about_me>\nZoom: x\n</about_me>\n\n<writing_style>\nS\n</writing_style>", s);
+    }
 }

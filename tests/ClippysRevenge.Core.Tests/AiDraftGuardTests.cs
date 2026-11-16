@@ -77,4 +77,14 @@ public class AiDraftGuardTests
             g.MoveObsoleteAiDraftAsync("", "D1", FP, WorkPriority.Background, CancellationToken.None));
         Assert.Equal(2, g.Moves.Count);
     }
+
+    [Fact]
+    public void Deleting_the_reason_line_changes_the_fingerprint_and_so_the_draft_counts_as_edited()
+    {
+        string Fp(string html) => DraftFingerprint.Compute(new("Re:: Ski", "Ann <ann@x.org>", null, null, html, null, 1, null, 0, null));
+        var withLine = Fp("<html><body>" + DraftReasonLine.Html("Ann asked") + "<p>Hi</p></body></html>");
+        var without = Fp("<html><body><p>Hi</p></body></html>");
+        Assert.Equal(ObsoleteDraftStatus.Changed, AiDraftGuard.Evaluate(Base with { Fingerprint = without }, withLine));
+        Assert.Equal(ObsoleteDraftStatus.Movable, AiDraftGuard.Evaluate(Base with { Fingerprint = withLine }, withLine));
+    }
 }

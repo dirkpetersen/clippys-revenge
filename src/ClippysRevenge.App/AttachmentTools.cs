@@ -5,7 +5,7 @@ using ModelContextProtocol.Server;
 namespace ClippysRevenge.App;
 
 [McpServerToolType]
-internal sealed class AttachmentTools(Optional<AttachmentExport> exports)
+internal sealed class AttachmentTools(Optional<AttachmentExport> exports, Optional<AttachmentLinkTool> links)
 {
     [McpServerTool(Name = "get_attachment")]
     [Description("Saves one attachment of an email to disk and returns its path. Use the id from search_emails. Pass filename or position when the email has more than one attachment. save_dir defaults to the user's attachment folder; relative paths go under it; it must be inside an allowed folder.")]
@@ -59,4 +59,13 @@ internal sealed class AttachmentTools(Optional<AttachmentExport> exports)
                 Offset = offset,
             },
         }, cancellationToken);
+
+    [McpServerTool(Name = "attachment_link", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description(LinkTexts.ToolDescription)]
+    public Task<AttachmentLinkResult> AttachmentLink(
+        [Description("The id of an email, as returned by search_emails.")] string id,
+        [Description("File name of the attachment (case-insensitive, whole name).")] string? filename = null,
+        [Description("1-based position of the attachment in the email's attachments list.")] int? position = null,
+        CancellationToken cancellationToken = default) =>
+        links.Required().CreateAsync(id, filename, position, cancellationToken);
 }

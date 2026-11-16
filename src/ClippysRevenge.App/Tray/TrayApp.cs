@@ -14,7 +14,9 @@ internal sealed record AiTrayServices(
     Func<RescanPlan> PlanRescan,                                     // drafts.PlanRescan
     Func<CancellationToken, Task<RescanResult>> Rescan,              // drafts.RescanAsync
     Action CancelRescan,                                             // drafts.CancelRescan
-    Func<RescanProgress?> CurrentRescan);                            // () => drafts.CurrentRescan
+    Func<RescanProgress?> CurrentRescan,                             // () => drafts.CurrentRescan
+    DontDraftService? DontDraft = null,
+    FactsEditor? Facts = null);          // "Edit my facts…" (SPEC 25.2)
 
 internal sealed record DraftInviteTrayServices(
     DraftInvites Invites,
@@ -43,7 +45,7 @@ internal sealed record TrayServices(
     AiTrayServices? Ai = null,
     Func<AboutForm>? CreateAboutForm = null,
     DraftInviteTrayServices? DraftInvites = null,
-    AttentionCount? Attention = null);
+    AttentionCount? Attention = null, Func<string?>? AiUsageLine = null);
 
 /// <summary>Tray icon and menu (SPEC 6.1, 6.2). All UI objects are touched on the UI thread only.</summary>
 internal sealed partial class TrayApp : ApplicationContext
@@ -252,7 +254,7 @@ internal sealed partial class TrayApp : ApplicationContext
             open.Activate();
             return;
         }
-        _activity = new ActivityForm(_s.Hub);
+        _activity = new ActivityForm(_s.Hub, _s.AiUsageLine);
         _activity.FormClosed += (_, _) =>
         {
             _activity?.Dispose();
@@ -452,6 +454,7 @@ internal sealed partial class TrayApp : ApplicationContext
 
     private void BuildAiMenu()
     {
+        BuildUsageItem();
         _aiAuto.Click += (_, _) => ToggleAi();
         _aiDraftSelected.Click += (_, _) => DraftSelected();
         _aiShowDrafts.Click += (_, _) => ShowDraftsInOutlook();
@@ -460,10 +463,13 @@ internal sealed partial class TrayApp : ApplicationContext
         _ai.DropDownOpening += (_, _) => ApplyAiMenu();
         _aiRescan.Click += (_, _) => RescanClicked();
         _ai.DropDownItems.AddRange([_aiAuto, _aiDraftSelected, _aiRescan, _aiShowDrafts, new ToolStripSeparator(), _aiSettings]);
+        BuildDontDraftItems();
+        BuildEditFactsItem();
     }
 
     private void ApplyAiMenu()
     {
+        ApplyUsageItem();
         var ai = _s.Ai;
         var m = AiDraftsMenu.Build(_s.GetSettings().AiDrafting, ai is not null, _s.IsOutlookUnavailable(),
             Volatile.Read(ref _aiBusy) == 1, ai?.CurrentRescan(), Volatile.Read(ref _rescanPhase) == 1);
@@ -474,6 +480,8 @@ internal sealed partial class TrayApp : ApplicationContext
         _aiDraftSelected.Enabled = m.DraftSelectedEnabled;
         _aiShowDrafts.Visible = m.ShowDraftsVisible;
         _aiShowDrafts.Enabled = m.ShowDraftsEnabled;
+        ApplyDontDraftItems(m);
+        ApplyEditFactsItem(m);
     }
 
     /// <summary>Draft replies automatically: consent first, then a backend check, then Enabled (SPEC 19.10).</summary>

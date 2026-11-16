@@ -64,7 +64,7 @@ public sealed class SecretFailTools
     public string Fail() => throw new McpException("SQL error: no such column: zebra7731. query_index reads the views mail, mail_fts and mail_attachments (see the tool description).");
 }
 
-public class McpHttpHostTests
+public partial class McpHttpHostTests
 {
     [Fact]
     public async Task MissingOptionalService_OtherToolsStayCallable_AndIndexToolsExplain()
@@ -112,7 +112,8 @@ public class McpHttpHostTests
         public TestTools Tools { get; } = new();
         public McpHttpHost Host { get; }
 
-        public Fixture(Action<IMcpServerBuilder>? mcp = null, Action<IServiceCollection>? services = null)
+        public Fixture(Action<IMcpServerBuilder>? mcp = null, Action<IServiceCollection>? services = null,
+            AttachmentLinks? links = null, Action<ILoggingBuilder>? logging = null)
         {
             Host = new McpHttpHost(new McpHostOptions
             {
@@ -120,6 +121,8 @@ public class McpHttpHostTests
                 Hub = Hub,
                 ConfigureMcp = mcp ?? (b => b.WithTools(Tools)),
                 ConfigureServices = services,
+                Links = links,
+                ConfigureLogging = logging,
             });
         }
 
@@ -132,9 +135,10 @@ public class McpHttpHostTests
         }
     }
 
-    private static async Task<Fixture> Started(Action<IMcpServerBuilder>? mcp = null, Action<IServiceCollection>? services = null)
+    private static async Task<Fixture> Started(Action<IMcpServerBuilder>? mcp = null, Action<IServiceCollection>? services = null,
+        AttachmentLinks? links = null, Action<ILoggingBuilder>? logging = null)
     {
-        var f = new Fixture(mcp, services);
+        var f = new Fixture(mcp, services, links, logging);
         Assert.True(await f.Host.StartAsync(0));
         return f;
     }

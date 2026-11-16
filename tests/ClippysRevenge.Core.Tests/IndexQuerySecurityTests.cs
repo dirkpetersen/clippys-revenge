@@ -74,7 +74,7 @@ public class IndexQuerySecurityTests : IndexQueryFixture
         prefix = prefix[..^1];   // drop the final "."
         foreach (var sql in new[] { "SELECT * FROM sqlite_master", "SELECT * FROM sqlite_schema", "SELECT * FROM sqlite_temp_master" })
             Assert.StartsWith(prefix, Fail(sql).Message);
-        foreach (var t in new[] { "meta", "sync_state", "ai_decisions", "ai_drafts", "ai_revisits" })
+        foreach (var t in new[] { "meta", "sync_state", "ai_decisions", "ai_drafts", "ai_revisits", "ai_calls", "ai_draft_texts", "ai_edits" })
             Assert.Equal(Denied("table " + t), Fail("SELECT * FROM " + t).Message);
         foreach (var c in new[] { "entry_id", "store_id", "internet_message_id", "in_reply_to", "clippy_marker" })
             Assert.Equal(Denied("column emails." + c), Fail($"SELECT {c} FROM emails").Message);
@@ -196,7 +196,7 @@ public class IndexQuerySecurityTests : IndexQueryFixture
         Assert.Equal(before, Fingerprint(path));
         Assert.Equal(counts, new[] { "emails", "attachments", "meta", "ai_decisions" }.Select(t => Count(path, t)).ToArray());
         var fresh = new EmailIndex(path);
-        Assert.Equal("3", fresh.GetMeta("schema_version"));
+        Assert.Equal("5", fresh.GetMeta("schema_version"));
         using var c = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
         c.Open();
         using var cmd = c.CreateCommand();

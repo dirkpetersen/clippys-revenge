@@ -10,6 +10,30 @@ public class AttachmentSelectionTests
     private static readonly IReadOnlyList<AttachmentInfo> L =
         [A(1, "report.pdf"), A(2, "image001.png", true), A(3, "Report.PDF"), A(4, "data.xlsx")];
 
+    [Fact]
+    public void Old_extensionless_embedded_name_matches_the_msg_name()
+    {
+        var live = new[] { A(1, "Budget.msg"), A(2, "other.pdf") };
+        var wanted = A(1, "Budget");
+        Assert.Equal(1, AttachmentSelection.MatchLive(live, wanted)!.Position);
+        Assert.Equal(1, AttachmentSelection.MatchLive([A(3, "budget.MSG")], wanted)!.Position - 2);   // name path
+        Assert.Equal(1, AttachmentSelection.SelectOne(live, "budget", null).Position);
+        Assert.Equal(1, AttachmentSelection.SelectOne(live, "Budget", 1).Position);
+        // A name that already ends in .msg only matches itself.
+        Assert.Null(AttachmentSelection.MatchLive([A(1, "Budget.msg.msg")], A(1, "Budget.msg")));
+        Assert.Null(AttachmentSelection.MatchLive([A(1, "Other.msg")], wanted));
+    }
+
+    [Fact]
+    public void Msg_alias_keeps_the_ambiguity_rules()
+    {
+        var live = new[] { A(1, "Budget.msg"), A(2, "Budget.msg") };
+        Assert.Null(AttachmentSelection.MatchLive(live, A(5, "Budget")));
+        Assert.Equal(2, AttachmentSelection.MatchLive(live, A(2, "Budget"))!.Position);
+        var ex = Assert.Throws<McpException>(() => AttachmentSelection.SelectOne(live, "Budget", null));
+        Assert.Contains("Pass position", ex.Message);
+    }
+
     private static int[] Pos(IReadOnlyList<AttachmentInfo> l) => l.Select(a => a.Position).ToArray();
 
     [Fact]

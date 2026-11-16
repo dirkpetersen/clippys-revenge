@@ -51,6 +51,9 @@
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookFreeBusySource.cs"    Link="AppLinked\OutlookFreeBusySource.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\SignatureRegistry.cs"        Link="AppLinked\SignatureRegistry.cs" />
     <Compile Include="..\..\src\ClippysRevenge.App\OutlookAiMailbox.cs"         Link="AppLinked\OutlookAiMailbox.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\PrivateFolder.cs"             Link="AppLinked\PrivateFolder.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OneDriveRegistry.cs"          Link="AppLinked\OneDriveRegistry.cs" />
+    <Compile Include="..\..\src\ClippysRevenge.App\OutlookAttachmentSource.cs"   Link="AppLinked\OutlookAttachmentSource.cs" />
   </ItemGroup>
 
   <!-- Keep the existing tests free of the WinForms global usings (Timer etc. would become ambiguous). -->

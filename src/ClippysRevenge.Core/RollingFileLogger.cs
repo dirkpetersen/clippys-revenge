@@ -35,6 +35,9 @@ public static partial class LogRedactor
     [GeneratedRegex(@"sk-ant-[A-Za-z0-9_-]+")]
     private static partial Regex AnthropicKeyRegex();
 
+    [GeneratedRegex(@"(?i)/files/[A-Za-z0-9_-]{20,}")]
+    private static partial Regex FilesLinkRegex();
+
     public static string Redact(string text, IEnumerable<string?> secrets)
     {
         foreach (var s in secrets)
@@ -45,7 +48,8 @@ public static partial class LogRedactor
             }
         }
         text = AnthropicKeyRegex().Replace(text, Mask);
-        return BearerRegex().Replace(text, "Bearer " + Mask);
+        text = BearerRegex().Replace(text, "Bearer " + Mask);
+        return FilesLinkRegex().Replace(text, "/files/" + Mask);
     }
 }
 

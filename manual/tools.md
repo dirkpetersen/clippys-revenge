@@ -1,6 +1,6 @@
 # Tools reference
 
-Clippy's Revenge gives Claude Code twelve tools. You normally don't call them
+Clippy's Revenge gives Claude Code thirteen tools. You normally don't call them
 yourself: you ask Claude in plain language and it picks the right tool. This page
 lists every tool and its parameters, which is useful when you want to know what
 Claude can and can't do.
@@ -11,6 +11,7 @@ Claude can and can't do.
 | [`get_message`](#get_message) | Read one email in full |
 | [`get_attachment`](#get_attachment) | Save one attachment to disk |
 | [`save_attachments`](#save_attachments) | Save attachments of all emails matching a search |
+| [`attachment_link`](#attachment_link) | Make a one-time download link for one attachment, for WSL or another shell |
 | [`create_draft`](#create_draft) | Save a new email draft |
 | [`reply_draft`](#reply_draft) | Save a reply draft |
 | [`list_events`](#list_events) | List calendar events |
@@ -34,7 +35,9 @@ There is no `send_meeting_invite` tool. Older versions had one; it was replaced 
 - **Read-only tools.** `search_emails`, `get_message`, `index_status`,
   `email_stats`, `query_index`, `list_events` and `find_free_times` change nothing.
   `get_attachment` and `save_attachments` write files to disk, only inside the
-  [allowed folders](security.md#file-access). `create_draft`, `reply_draft` and
+  [allowed folders](security.md#file-access). `attachment_link` also creates a file,
+  but only a short-lived private copy for a [download link](#attachment_link).
+  `create_draft`, `reply_draft` and
   `create_meeting_draft` create items in Outlook.
 - **Which tools need Outlook running.** `search_emails`, `email_stats`,
   `query_index` and `index_status` use the local index and work while Outlook is
@@ -50,9 +53,14 @@ There is no `send_meeting_invite` tool. Older versions had one; it was replaced 
   `save_attachments`) also accept `all`. Tools that take an `id` find the mailbox
   from the id.
 - **Dates**: ISO date (`2026-03-01`) or date-time (`2026-03-01T14:30`), in local
-  time. A space may replace the `T`, and a date-time ending in `Z` or `+hh:mm` is
-  honored. A date-only end date includes the whole day.
-- **Recipients**: `"Last, First <you@example.org>; other@example.org"`. Separate
+  time. A space may replace the `T`, seconds are optional, and a date-time ending
+  in `Z`, `+hh:mm` or `-hh:mm` is honored. A date-only end date includes the whole
+  day.
+- **Numbers out of range**: `limit`, `offset`, `top`, `max_rows`, `days_ahead` and
+  `max_suggestions` are moved into their range without an error. `days`
+  (`list_events`), `duration_minutes`, `earliest_hour` and `latest_hour` give an
+  error instead.
+- **Recipients**: `"Last, First <address>; other-address"`. Separate
   people with `;`, never `,`, because names are often written "Last, First".
 - **File paths**: every path must be inside an allowed folder. See
   [file access](security.md#file-access). Relative paths resolve under the
@@ -73,11 +81,11 @@ indexed; use [`index_status`](#index_status) to check coverage.
 |---|---|---|
 | `query` | string | Free text over subject, body, sender, recipients and attachment file names. Words are ANDed. Use `OR` between words for alternatives, `"quotes"` for a phrase, and a trailing `*` for a prefix. |
 | `sender` | string | Substring of the sender's name or email address |
-| `recipient` | string | Substring of To or CC. Also accepts a list like `Ann <ann@example.org>; bob@example.org`, which matches mail involving any of them |
+| `recipient` | string | Substring of To or CC. Also accepts a list like `Name <address>; other-address`, which matches mail involving any of them |
 | `subject` | string | Substring of the subject |
 | `date_from` | string | Earliest date, inclusive |
 | `date_to` | string | Latest date, inclusive |
-| `folder` | string | `inbox`, `sent`, or another indexed folder path such as `Inbox\Projects` (not case-sensitive). Subfolders are not included. Empty means all folders |
+| `folder` | string | `inbox`, `sent` (or `sent items`), or another indexed folder path such as `Inbox\Projects` (not case-sensitive, `/` works as well as `\`). Subfolders are not included. Empty means all folders |
 | `has_attachment` | bool | true: only mail with real (non-inline) attachments; false: only mail without |
 | `attachment_name` | string | Substring of any attachment file name (inline images included) |
 | `attachment_ext` | string | Exact attachment extension, with or without the dot (`pdf` or `.pdf`) |
@@ -88,11 +96,14 @@ indexed; use [`index_status`](#index_status) to check coverage.
 
 The text filters (`sender`, `recipient`, `subject`, `attachment_name`) ignore
 upper and lower case. A blank text filter means no filter. A `recipient` that
-contains `;` or `<` is read as a list of people.
+contains `;` or `<` is read as a list of people (up to 50 of them are used).
+Outlook's default folders keep their English names in the index (`Inbox`,
+`Sent Items`, `Drafts`, `Deleted Items`), also when Outlook shows them in another
+language.
 
 Each result has `id`, `mailbox`, `folder`, `date` (local time), `from`,
-`sender_email`, `to`, `subject`, `has_attachments`, `attachments[]` (position,
-name, size, inline flag) and `snippet`. With `query`, the snippet shows the matching
+`sender_email`, `to`, `subject`, `has_attachments`, `attachments[]` (`position`,
+`filename`, `size`, `inline`) and `snippet`. With `query`, the snippet shows the matching
 words between `**`; otherwise it is the start of the body. Pass a result's `id` to
 `get_message` to read the body.
 
@@ -100,9 +111,9 @@ Errors: a date that can't be read gives `date_from "<text>" is not a valid date.
 an ISO date like 2026-03-01 or a date-time like 2026-03-01T14:30 (local time).`
 
 ??? example "Example request"
-    "Find unread mail from Ann with a PDF attached since 1 March."
+    "Find unread mail from accounting with a PDF attached since 1 March."
 
-    Claude calls `search_emails` with `sender="Ann"`, `unread=true`,
+    Claude calls `search_emails` with `sender="accounting"`, `unread=true`,
     `attachment_ext="pdf"`, `date_from="2026-03-01"`.
 
 ### get_message
@@ -134,8 +145,10 @@ search found nothing, or to check indexing progress.
 |---|---|---|
 | `mailbox` | string | Optional shared mailbox address. Empty means all configured mailboxes |
 
-The result has `state` (what Clippy is doing, such as `Idle` or `Backfilling`),
-`progress` (text such as `indexing Inbox 1,240 / 8,000 (2025-11 → now)`),
+The result has `state` (what Clippy is doing: `Idle`, `Serving`, `Drafting`,
+`Paused`, `Purging`, `Syncing`, `Backfilling`, `OutlookUnavailable` or `Error`),
+`progress` (text such as `Inbox (2025-11 → now) 1240/8000`, or null when there is
+nothing to report),
 `outlook_running` (true, false, or null before the first attempt) and `mailboxes[]`.
 Each mailbox has `mailbox`, `total_emails`, `folders` (count per folder),
 `oldest`, `newest`, `db_size_bytes`, `last_sync` and `backfill_complete`.
@@ -174,8 +187,9 @@ There is no `limit` or `offset`.
 | `weekday` | `Mon` to `Sun` |
 | `hour` | `00` to `23` |
 
-`month`, `week`, `weekday` and `hour` use your Windows time zone. `(unknown)` means
-an email had no address. Any other `group_by` value returns an error that lists the
+`month`, `week`, `weekday` and `hour` use your Windows time zone. `(unknown)` is
+the group for senders with no valid address. Recipients with no valid address are
+skipped, so `recipient` and `recipient_domain` have no `(unknown)` group. Any other `group_by` value returns an error that lists the
 valid ones.
 
 The result is `group_by`, `mailbox`, `total` (matching emails, not recipient
@@ -224,24 +238,26 @@ simpler. It works while Outlook is busy or closed, and only synced mail is index
 
 For full-text search, filter with `WHERE mail_fts MATCH '...'` (FTS5 syntax: words
 are ANDed, `OR`, `NOT`, `"a phrase"`, `prefix*`, `column:word`) and sort with
-`ORDER BY rank`. `snippet(mail_fts, n, ...)` and `highlight(mail_fts, n, ...)` take
-a column number: 0 subject, 1 body, 2 sender name, 3 sender email, 4 To, 5 CC, 6
-attachment names.
+`ORDER BY rank` (best first). `snippet(mail_fts, n, ...)` and
+`highlight(mail_fts, n, ...)` take a column number: 0 subject, 1 body, 2 sender
+name, 3 sender email, 4 To, 5 CC, 6 attachment names. `bm25(mail_fts)` also works.
 
 **Limits**
 
 - One statement only. `PRAGMA`, `ATTACH`, every write and every other table are
   refused, with an error that names what was not allowed.
-- 10 seconds in total, at most 1000 rows (`max_rows`), at most 100 columns, and
-  long text cells are cut at 2,000 characters. On a large mailbox add a `LIMIT` and
-  a date or folder filter.
+- 10 seconds in total, at most 1000 rows (`max_rows`), at most 100 columns, long
+  text cells cut at 2,000 characters, and about 1,000,000 characters of results in
+  total. The SQL itself may be at most 20,000 characters. On a large mailbox add a
+  `LIMIT` and a date or folder filter.
 - With `mailbox="all"` each mailbox is queried separately and the rows are joined
   with a leading `mailbox` column. Counts and other aggregates are therefore
   **per mailbox**; use `email_stats` for counts merged across mailboxes.
 
 The result has `columns`, `rows` (numbers stay numbers, empty values are `null`),
-`row_count`, `truncated`, `truncated_cells` and `elapsed_ms`. When it stops early
-it also gives `truncated_reason`: `max_rows` or `size`.
+`row_count`, `truncated`, `truncated_cells` (how many cells were cut) and
+`elapsed_ms`. When it stops early it also gives `truncated_reason`: `max_rows` (the
+row limit was reached) or `size` (the next row would pass the total size limit).
 
 ??? example "Example queries"
     Top senders in your Inbox in the last year:
@@ -293,6 +309,8 @@ The main `query_index` errors:
 | `?` parameters | `query_index takes no parameters; write the values into the SQL.` |
 | More than 100 columns | `query_index returns at most 100 columns.` |
 | Longer than 10 seconds | `The query ran longer than 10 seconds and was stopped. Add a date range, a folder or a LIMIT, or use email_stats for counts.` |
+| Query needs too much memory | `The query needs too much memory. Simplify it: fewer nested WITH clauses, fewer or shorter computed columns.` |
+| A value over 16 MB | `A value in the query is too large (more than 16 MB).` |
 | SQL syntax or other SQLite error | `SQL error: <SQLite's message>. query_index reads the views ...` |
 | Index not ready (not indexed yet, being rebuilt) | `The index for <mailbox> isn't available right now. Check index_status.` |
 
@@ -317,11 +335,20 @@ size.
 | `position` | int | 1-based position in the email's attachment list |
 | `save_dir` | string | Folder to save into. Empty means the attachment folder. Relative paths go under it. Must be inside an allowed folder |
 
-If the email has more than one attachment, pass `filename` or `position`. If you
-pass neither, the error lists the attachments (for example `1 "report.pdf", 2
-"image001.png" (inline)`) so Claude can choose. If you pass both, they must agree.
-Inline attachments can be fetched by name or position. The returned `filename` is
-the attachment's original name; the saved file may be called `name (2).ext`.
+If you pass neither `filename` nor `position`, Clippy takes the only attachment, or
+the only real (non-inline) one when the rest are inline images. Otherwise the error
+lists the attachments (for example `This email has 3 attachments. Pass filename or
+position to choose one: 1 "report.pdf", 2 "notes.docx", 3 "image001.png" (inline).`)
+so Claude can choose; the list shows at most 20. If you pass both, they must agree.
+If two attachments have the same name, pass `position`. Inline attachments can be
+fetched by name or position. The returned `filename` is the attachment's original
+name; the saved file may be called `name (2).ext`, and characters Windows doesn't
+allow in file names become `_`.
+
+An attached email that has no file name is listed as `<subject>.msg` (or
+`(no name).msg`); any other attachment without a name is listed as
+`attachment-<n>`. Names recorded in the index by older versions, without the
+`.msg`, still match in `get_attachment`, `save_attachments` and `attachment_link`.
 
 ### save_attachments
 
@@ -331,8 +358,11 @@ attachments are saved. Inline images are skipped unless `include_inline` is true
 Returns `saved[]`, `failed[]`, `count` (number saved) and a `note` when nothing
 matched or nothing was eligible. Each `saved` entry has `id`, `mailbox`, `position`,
 `filename`, `path` and `size`; each `failed` entry has `id`, `mailbox`, `position`,
-`filename` and `error`. One failure doesn't stop the rest. Emails are saved newest
-first.
+`filename` and `error`. One failure doesn't stop the rest, except when Outlook
+closes or stops responding: then every attachment not yet saved is listed in
+`failed` with that error. Emails are saved newest first. The `note` is `No emails
+matched the filters.` or `<n> email(s) matched, but none had attachments to save.
+Inline attachments are skipped unless include_inline is true.`
 
 | Parameter | Type | Description |
 |---|---|---|
@@ -341,6 +371,122 @@ first.
 | `include_inline` | bool | true: also save inline attachments such as embedded images (default false) |
 | `limit` | int | Maximum number of **emails**, 1 to 200 (default 50) |
 | `offset` | int | Emails to skip, for paging |
+
+### attachment_link
+
+Makes a **one-time download link** for one attachment of an email. Use it when Claude
+Code runs in WSL (or any other shell) and should get the attachment as a real file in
+its own working folder, without you copying it over from the Windows side.
+
+| Tool | Where the file goes | Result |
+|---|---|---|
+| `get_attachment` | A Windows folder inside the [allowed folders](security.md#file-access) | A Windows path (`C:\...`) |
+| `save_attachments` | One Windows folder, for many emails | A list of Windows paths |
+| `attachment_link` | The shell's **current folder**, through `curl` | A link and a `curl` command |
+
+The file's bytes never pass through Claude: the tool returns only the link, and the
+shell downloads the file. Nothing about the attachment's content is indexed or put
+into the conversation. `get_attachment` is unchanged and stays the right tool when
+you want the file on the Windows side.
+
+**Setup needed once:** the shell must have `CLIPPY_TOKEN` set, because the download
+needs your auth token as well as the link. See
+[Set CLIPPY_TOKEN in WSL](connect.md#set-clippy_token-for-downloads).
+
+| Parameter | Type | Description |
+|---|---|---|
+| `id` | string, required | The id of an email, from `search_emails` |
+| `filename` | string | File name of the attachment (whole name, case-insensitive) |
+| `position` | int | 1-based position in the email's attachment list |
+
+Choosing the attachment works exactly as in [`get_attachment`](#get_attachment): with
+more than one attachment, pass `filename` or `position`; with neither, the error lists
+the attachments so Claude can choose; with both, they must agree; inline attachments
+can be fetched by name or position. There is no `save_dir`, because the file is not
+saved to a folder you choose.
+
+Result:
+
+| Field | Meaning |
+|---|---|
+| `url` | `http://127.0.0.1:<port>/files/<link token>`. The link token is 43 characters of letters, digits, `-` and `_` |
+| `filename` | The attachment's original name |
+| `size` | Size in bytes of the copy Clippy made |
+| `expires_at` | When the link stops working: 10 minutes after it was made, in your local time with the offset, for example `2026-11-15T14:35:00+01:00` |
+| `curl` | The command to run in the shell (below) |
+| `note` | `One download only. If curl answers 401, CLIPPY_TOKEN isn't set in this shell: ask the user to copy the auth token from the Clippy tray menu and add export CLIPPY_TOKEN=<token> to ~/.bashrc.` |
+
+The `curl` command has this shape:
+
+```bash
+curl -fsS -H "Authorization: Bearer $CLIPPY_TOKEN" -o 'Q3 report.pdf' 'http://127.0.0.1:8765/files/<link token>'
+```
+
+The real token is never in the result: the shell fills in `$CLIPPY_TOKEN` itself. The
+file name in the command is made safe to put in single quotes: characters Windows
+doesn't allow in file names and every `'` become `_`, and a leading `-` or `.` is
+replaced by `_`, so the name can never be taken for an option or be a hidden file. The file is saved with that name in the folder where the command runs,
+and an existing file with the same name is overwritten by `curl`, so ask Claude to run
+it in the folder you want.
+
+How the link behaves:
+
+- **One download only.** The first successful request uses the link up. Running the
+  same command again gives `404`.
+- **Expires after 10 minutes.** After that the link is gone, even if never used.
+- **Needs both tokens.** The request must carry your bearer token (`$CLIPPY_TOKEN`)
+  and the link token. A request without the bearer token gets `401` and does **not**
+  use the link up.
+- **Made at once.** Clippy saves the attachment through Outlook when the link is
+  made, not when it is downloaded. The download then works even if Outlook closes
+  or gets busy, and Outlook problems show up as normal tool errors instead of a
+  `curl` failure.
+- **Gone after use.** Clippy deletes its private copy right after the download
+  (finished or interrupted), when the link expires, and when Clippy starts or
+  exits. Changing the port or restarting the server also drops every open link,
+  because the links name the old port. See
+  [Security](security.md#attachment-download-links).
+- The download is `GET` only (other methods get `405`) and the whole file is
+  always sent.
+
+#### attachment_link limits
+
+Expired links don't count. A link whose download is still running counts until the
+download ends.
+
+| Limit | Refusal text |
+|---|---|
+| 100 MiB per attachment | `The attachment is <n> MB; attachment_link handles up to 100 MB. Use get_attachment to save it on the Windows side.` (`<n>` is the size rounded up) |
+| At most 10 open links | `Too many open download links (10). Download them or wait until they expire (10 minutes), then try again.` |
+| At most 200 MiB of open links in total | `The open download links already hold 200 MB. Download them or wait until they expire, then try again.` |
+| At most 20 links per rolling 10 minutes | `Too many download links in the last 10 minutes (20). Try again in <n> min.` (`<n>` is whole minutes, at least 1) |
+
+Before Clippy asks Outlook for anything, it checks the number of open links, the
+open bytes (refused when they already reach 200 MiB) and the rate, in that order.
+The size limit is checked when Outlook reports the attachment's size, and again on
+the saved copy. When the copy is registered, all four are checked once more (size
+first); a link that would push the open total over 200 MiB is refused then, and
+the copy is deleted.
+
+Other errors:
+
+| Situation | What the message says |
+|---|---|
+| No `id` | `id is required. Use the id from search_emails.` |
+| Outlook isn't running, busy, or the email is gone | The same messages as in [Errors Claude may see](#errors-claude-may-see) |
+| Several attachments and none chosen, or a name that doesn't match | The attachment list, as for `get_attachment` |
+| The private folder can't be used | `Clippy can't use its private download folder. Use get_attachment instead.` |
+| The server is restarting | `Clippy's server isn't running, so it can't make a download link. Try again in a moment.` |
+
+??? example "Example request"
+    "Get the PDF attached to the email about the Q3 numbers into this folder."
+
+    Claude finds the email with `search_emails`, then calls `attachment_link` with
+    its `id` and `filename="Q3 report.pdf"`. It gets back `size: 482113`, an
+    `expires_at` ten minutes from now and the `curl` command above. In WSL, Claude
+    runs the command and `Q3 report.pdf` appears in the current folder. If you ask
+    it to run the same command again, `curl` fails with `404`, because the link
+    was single use. Ask for a new link instead.
 
 ## Drafts
 
@@ -365,15 +511,15 @@ least one), attachments. Line breaks in the subject become spaces.
 | `cc` | string | Same format as `to` |
 | `bcc` | string | Same format as `to` |
 | `html` | bool | true when `body` is HTML (default false) |
-| `attachments` | string[] | Full paths to existing files in allowed folders |
+| `attachments` | string[] | Paths to existing files in allowed folders. Relative paths resolve under the attachment folder |
 | `mailbox` | string | Empty means your own mailbox, or an enabled shared mailbox. The draft goes to that mailbox's Drafts folder and is sent on its behalf |
 
 Returns `id`, `subject`, `mailbox` (empty for your own) and `signature_added`.
 
 ??? example "Example request"
-    "Draft an email to Ann Lee <ann@example.org> asking for the Q3 numbers."
+    "Draft an email to my manager asking for the Q3 numbers."
 
-    Claude calls `create_draft` with `to="Ann Lee <ann@example.org>"`,
+    Claude calls `create_draft` with `to` set to your manager's address,
     `subject="Q3 numbers"` and a `body`. The draft appears in Drafts. You edit and
     send it yourself.
 
@@ -408,14 +554,16 @@ instances. Sorted by start, at most 500. Defaults to the next 7 days.
 | Parameter | Type | Description |
 |---|---|---|
 | `start` | string | Window start. Default: today 00:00 |
-| `end` | string | Window end. Default: `start` plus `days` |
-| `days` | int | Window length in days when `end` isn't given, 1 to 366 (default 7) |
-| `mailbox` | string | A shared mailbox's calendar. Empty means yours |
+| `end` | string | Window end. A date-only end covers that whole day. Default: `start` plus `days` |
+| `days` | int | Window length in days when `end` isn't given, 1 to 366 (default 7). Outside that range: `days must be between 1 and 366.` |
+| `mailbox` | string | An enabled shared mailbox's calendar. Empty means yours |
 
-Each event has `id`, `subject`, `start`, `end`, `all_day`, `location`,
-`organizer`, `is_recurring` and `busy_status`. The result also has the resolved
-`start` and `end` of the window, `count` and `truncated` (true when the 500 limit
-was reached).
+The result has the resolved `start` and `end` of the window, `count`, `truncated`
+(true when the 500 limit was reached) and `events[]`. Each event has `id`,
+`subject`, `start`, `end`, `all_day`, `location`, `organizer`, `is_recurring` and
+`busy_status` (`free`, `tentative`, `busy`, `out_of_office` or
+`working_elsewhere`). An `end` that isn't after `start` gives `end must be after
+start.`
 
 ### find_free_times
 
@@ -431,10 +579,14 @@ minutes, on the same day), then times next to a tentative meeting, then everythi
 else, each group in date order. `adjacent` says which: `busy`, `tentative` or `none`.
 Free/busy can't tell a meeting from other busy time, so "next to a meeting" means
 "next to busy time". Without your own calendar (`include_me=false`, or your free/busy
-can't be read), every time is `none`.
+can't be read), every time is `none`. Whether tentative time blocks a slot follows
+**Tentative counts as busy** in [Settings](settings.md#scheduling), and the zone
+label (`PT` below) follows **Time-zone label**.
 
 **Offers.** `offers` and `offer_text` hold at most `max_suggestions` options of
-exactly `duration_minutes`, in the same order, one per line:
+exactly `duration_minutes`, in the same ranking, one per line. Options are taken in
+30-minute steps from the start of each free block (plus one that ends exactly at
+its end) and never overlap each other:
 
 ```
 1. Tue 11/18  10:00–11:00 PT  (19:00–20:00 CET)
@@ -444,17 +596,18 @@ exactly `duration_minutes`, in the same order, one per line:
 With `offer_cet=true` (for someone in Europe) each line also shows the time in
 Central European time, always labelled `CET`, also in summer. Options between 08:00
 and 18:00 CET come first. If there are fewer than wanted, the rest follow in a second
-list headed `Outside European office hours:`. Each offer has `list`: `main` or
-`outside_hours`. See [Meeting times in AI drafts](ai-drafts.md#meeting-times).
+list headed `Outside European office hours:`, numbered on from the first. Each
+offer has `list`: `main` or `outside_hours`. If your PC is already on Central
+European time, there is no CET part and no second list. See [Meeting times in AI drafts](ai-drafts.md#meeting-times).
 
 | Parameter | Type | Description |
 |---|---|---|
-| `recipients` | string, required | Attendees as `Name <email>; Name <email>`. At most 50 |
+| `recipients` | string, required | Attendees as `Name <email>; Name <email>`. At most 50. May be empty when `include_me` is true |
 | `duration_minutes` | int | Minimum free block length, and the exact length of each offer, 1 to 1440 (default 60) |
 | `days_ahead` | int | Calendar days to search, counted from the day of `date_from`, 1 to 60 (default 10) |
 | `date_from` | string | Start date or date-time. Default: now |
 | `earliest_hour` | int | Working-hours start, 0 to 23. Default: from [Settings](settings.md) |
-| `latest_hour` | int | Working-hours end, 1 to 24. Default: from Settings |
+| `latest_hour` | int | Working-hours end, 1 to 24, later than `earliest_hour`. Default: from Settings |
 | `business_days_only` | bool | Skip Saturdays and Sundays. Default: from Settings |
 | `include_me` | bool | Also check the calendar owner (default true) |
 | `max_suggestions` | int | 1 to 20 (default 5). Also the most `offers` returned |
@@ -474,11 +627,11 @@ If `offer_cet` is true but the PC has no Central European time zone, the offers 
 no CET part, and a warning is written to the log once.
 
 ??? example "Example request"
-    "Find an hour for me, Ann Lee <ann@example.org> and Bo Kim <bo@example.org> next
-    week. Ann is in Berlin."
+    "Find an hour next week for me and the two people on this email. One of
+    them is in Berlin."
 
-    Claude calls `find_free_times` with `recipients="Ann Lee <ann@example.org>; Bo
-    Kim <bo@example.org>"`, `duration_minutes=60`, `date_from` set to next Monday
+    Claude calls `find_free_times` with `recipients` set to their two addresses,
+    `duration_minutes=60`, `date_from` set to next Monday
     and `offer_cet=true`, then pastes `offer_text` into the email it drafts.
 
 ### create_meeting_draft
@@ -495,9 +648,11 @@ Every recipient must resolve in Outlook, or nothing is created. In **Disabled** 
 (see [Settings, Scheduling](settings.md#scheduling)) the tool refuses with `Meeting drafts
 are disabled in Clippy's Revenge. Ask the user to enable them in the tray settings
 (Meeting invites: Draft only), then try again.` Clippy checks the arguments first, then
-`reply_to_id`, then the recipients, and only then creates and saves the meeting. Each
-call adds one line to [Activity](activity.md), such as `meeting draft saved for 2
-attendees: Thu 10/15 10:00–11:00`. The body never appears there.
+`reply_to_id`, then the recipients, and only then creates and saves the meeting.
+With `mailbox`, you need delegate or editor rights on that mailbox's calendar, or
+the tool refuses. Each call adds one line to [Activity](activity.md), such as
+`meeting draft saved for 2 attendees: Thu 10/15 10:00–11:00`, or `meeting draft not
+created: <reason>` when it fails. The body never appears there.
 
 | Parameter | Type | Description |
 |---|---|---|
@@ -507,7 +662,7 @@ attendees: Thu 10/15 10:00–11:00`. The body never appears there.
 | `end` | string, required | Local end date-time, after `start` and in the future |
 | `body` | string | Plain-text invite body |
 | `location` | string | Location, for example a room |
-| `mailbox` | string | A configured shared mailbox to save the meeting in. Empty means yours |
+| `mailbox` | string | An enabled shared mailbox to save the meeting in. Empty means yours |
 | `reply_to_id` | string | The `id` of the email that asked for the meeting (from `search_emails`). Saves a note in Drafts as a reply to it. An unknown id is an error and nothing is created |
 
 To book option N of a `find_free_times` result, or of times offered in a draft, pass
@@ -523,7 +678,7 @@ The result has:
 | Field | Meaning |
 |---|---|
 | `status` | Always `saved_as_draft` |
-| `message` | A sentence for Claude: the meeting was saved without sending, it has no link, and it is listed in the tray under Draft invites |
+| `message` | For Claude: the meeting was saved without sending, it has no Teams or Zoom link, and it is listed in the tray under Draft invites. With a note, it adds `A note was saved in Drafts as a reply to the email.` |
 | `subject`, `start`, `end` | What was saved. Times are in the same format as `find_free_times` |
 | `mailbox`, `organizer`, `recipients` | Whose calendar it is in, who organizes it and who is invited |
 | `category` | `Clippy draft invite`, or null if the category couldn't be set (the meeting is still saved) |
@@ -531,9 +686,9 @@ The result has:
 | `note_error` | Only if the note failed: the meeting is saved, but the note in Drafts couldn't be created |
 
 !!! example
-    Claude calls `create_meeting_draft` with `recipients="Ann Lee <ann@example.org>"`,
+    Claude calls `create_meeting_draft` with `recipients` set to the sender's address,
     `subject="Project sync"`, `start="2026-10-15T10:00"`, `end="2026-10-15T11:00"` and
-    `reply_to_id` set to the id of Ann's email. The meeting appears unsent in your
+    `reply_to_id` set to the id of the sender's email. The meeting appears unsent in your
     calendar, a note reply appears in Drafts, and the tray shows **Draft invites (1)**.
 
 ## Errors Claude may see
@@ -543,12 +698,14 @@ Every tool error is a plain sentence that tells Claude what to do next. Common o
 | Situation | What the message says |
 |---|---|
 | Outlook isn't running | `Outlook is not running. Ask the user to start Outlook (tray → Start Outlook) and try again.` |
-| Outlook is busy | `Outlook isn't responding. It may be busy, offline or showing a dialog box. Ask the user to check Outlook, then try again.` For a draft or meeting, it adds that Claude should check Outlook for it before retrying |
+| Outlook is busy | `Outlook isn't responding. It may be busy, offline or showing a dialog box. Ask the user to check Outlook, then try again. If this call was creating a draft or a meeting, check Outlook for it before retrying.` |
 | Index can't be opened | `The email index could not be opened; see the tray (Error state). Restart Clippy or use Rebuild index.` |
-| Unknown or disabled mailbox | `Mailbox "<input>" is not configured or not enabled.` and the list of available mailboxes, with the hint to enable it in the tray under **Shared mailboxes** |
-| `mailbox="all"` on a tool that doesn't support it | `Mailbox "all" only works with search tools. Use one mailbox: <list>.` |
+| Unknown or disabled mailbox | `Mailbox "<input>" is not configured or not enabled. Available mailboxes: <list>. To use another shared mailbox, ask the user to enable it in the Clippy tray menu under Shared mailboxes.` |
+| Mailbox enabled but not in your Outlook profile | `Mailbox "<address>" is configured but is not open in Outlook. Ask the user to add it to their Outlook profile, then try again.` |
+| `mailbox="all"` on a tool that doesn't support it | `Mailbox "all" only works with search tools. Use one mailbox: <list>.` (`create_draft` and `reply_draft` word the second sentence a little differently) |
 | Unknown email `id` | `Email "<id>" was not found in Outlook. It may have been deleted or moved to a folder that isn't indexed. Run search_emails again to get a current id.` |
-| Path outside the allowed folders | An error naming the allowed folders. See [file access](security.md#file-access) |
+| `attachment_link` refused | One of the [limit messages](#attachment_link-limits) |
+| Path outside the allowed folders | `Path '<path>' is not allowed: <reason>. Allowed folders: <list>.` See [file access](security.md#file-access) |
 | Meeting drafts turned off | See [create_meeting_draft](#create_meeting_draft) |
 
 Tool errors are not written to the log with their text, because they can quote what

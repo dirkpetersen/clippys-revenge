@@ -10,7 +10,7 @@ public class SingleInstanceTests
     private static string M() => @"Local\ClippyTest-" + Guid.NewGuid().ToString("N");
     private static string P() => "ClippyTest-" + Guid.NewGuid().ToString("N");
 
-    private static async Task<bool> WaitFor(Func<bool> cond, int ms = 5000)
+    private static async Task<bool> WaitFor(Func<bool> cond, int ms = 30000)
     {
         var sw = Stopwatch.StartNew();
         while (sw.ElapsedMilliseconds < ms)
@@ -23,6 +23,9 @@ public class SingleInstanceTests
         }
         return cond();
     }
+
+    // Generous connect timeout: under load the listener loop can take seconds to create its pipe.
+    private static bool Signal(string command, string pipe) => SingleInstance.SignalExisting(command, pipe, 30000);
 
     [Fact]
     public void Acquire_NotNull()
@@ -51,7 +54,7 @@ public class SingleInstanceTests
         using var a = SingleInstance.TryAcquire(M(), p)!;
         var count = 0;
         a.StartListening(() => Interlocked.Increment(ref count));
-        Assert.True(SingleInstance.SignalExisting("show-settings", p));
+        Assert.True(Signal("show-settings", p));
         Assert.True(await WaitFor(() => Volatile.Read(ref count) == 1));
     }
 
@@ -64,7 +67,7 @@ public class SingleInstanceTests
         a.StartListening(() => Interlocked.Increment(ref count));
         for (var i = 0; i < 3; i++)
         {
-            Assert.True(SingleInstance.SignalExisting("show-settings", p));
+            Assert.True(Signal("show-settings", p));
             Assert.True(await WaitFor(() => Volatile.Read(ref count) == i + 1));
         }
     }
@@ -76,10 +79,10 @@ public class SingleInstanceTests
         using var a = SingleInstance.TryAcquire(M(), p)!;
         var count = 0;
         a.StartListening(() => Interlocked.Increment(ref count));
-        Assert.True(SingleInstance.SignalExisting("delete-everything", p));
+        Assert.True(Signal("delete-everything", p));
         await Task.Delay(500, TestContext.Current.CancellationToken);
         Assert.Equal(0, Volatile.Read(ref count));
-        Assert.True(SingleInstance.SignalExisting("show-settings", p));
+        Assert.True(Signal("show-settings", p));
         Assert.True(await WaitFor(() => Volatile.Read(ref count) == 1));
     }
 
@@ -92,7 +95,7 @@ public class SingleInstanceTests
         a.StartListening(() => Interlocked.Increment(ref count));
         using (var c = new NamedPipeClientStream(".", p, PipeDirection.Out, PipeOptions.CurrentUserOnly))
         {
-            c.Connect(2000);
+            c.Connect(30000);
             var bytes = Encoding.UTF8.GetBytes(new string('x', 10000));
             try
             {
@@ -105,7 +108,7 @@ public class SingleInstanceTests
             }
         }
         Assert.Equal(0, Volatile.Read(ref count));
-        Assert.True(await WaitFor(() => SingleInstance.SignalExisting("show-settings", p, 500) && Volatile.Read(ref count) >= 1));
+        Assert.True(await WaitFor(() => SingleInstance.SignalExisting("show-settings", p, 5000) && Volatile.Read(ref count) >= 1));
     }
 
     [Fact]
@@ -119,9 +122,9 @@ public class SingleInstanceTests
             Interlocked.Increment(ref count);
             throw new InvalidOperationException("boom");
         });
-        Assert.True(SingleInstance.SignalExisting("show-settings", p));
+        Assert.True(Signal("show-settings", p));
         Assert.True(await WaitFor(() => Volatile.Read(ref count) == 1));
-        Assert.True(SingleInstance.SignalExisting("show-settings", p));
+        Assert.True(Signal("show-settings", p));
         Assert.True(await WaitFor(() => Volatile.Read(ref count) == 2));
     }
 

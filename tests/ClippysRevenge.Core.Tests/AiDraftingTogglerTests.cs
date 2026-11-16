@@ -142,4 +142,165 @@ public sealed class AiDraftingTogglerTests : IDisposable
         Assert.Throws<ArgumentNullException>(() => new AiDraftingToggler(_settings, null!, () => { }));
         Assert.Throws<ArgumentNullException>(() => new AiDraftingToggler(_settings, _ => { }, null!));
     }
+
+    [Fact]
+    public void EditAi_false_saves_nothing()
+    {
+        Assert.Null(_t.EditAi(_ => false));
+        Assert.Empty(_saves);
+        Assert.Equal(0, _changed);
+    }
+
+    [Fact]
+    public void EditAi_adds_valid_entry()
+    {
+        var errors = _t.EditAi(ai => { ai.ExcludeSenders.Add("ann@contoso.example"); return true; });
+        Assert.NotNull(errors);
+        Assert.Empty(errors);
+        Assert.Equal(["ann@contoso.example"], Assert.Single(_saves).AiDrafting.ExcludeSenders);
+        Assert.Equal(["ann@contoso.example"], _settings.AiDrafting.ExcludeSenders);
+        Assert.Equal(1, _changed);
+    }
+
+    [Fact]
+    public void EditAi_invalid_clone_returns_errors_and_saves_nothing()
+    {
+        var before = _settings.AiDrafting.DailyCap;
+        var errors = _t.EditAi(ai => { ai.DailyCap = 0; return true; });
+        Assert.NotNull(errors);
+        Assert.Contains(errors, e => e.Field == "AiDrafting.DailyCap");
+        Assert.Empty(_saves);
+        Assert.Equal(before, _settings.AiDrafting.DailyCap);
+        Assert.Equal(0, _changed);
+    }
+
+    [Fact]
+    public void EditAi_save_failure_propagates_and_live_is_unchanged()
+    {
+        _saveThrows = new IOException("disk full");
+        Assert.Throws<IOException>(() => _t.EditAi(ai => { ai.ExcludeSenders.Add("a@b.example"); return true; }));
+        Assert.Empty(_settings.AiDrafting.ExcludeSenders);
+        Assert.Equal(0, _changed);
+    }
+
+    [Fact]
+    public void EditAi_leaves_consent_and_enabled_alone()
+    {
+        _settings.AiDrafting.RecordConsent(Now.AddDays(-1));
+        _t.EditAi(ai => { ai.ExcludeSenders.Add("a@b.example"); return true; });
+        Assert.Equal(Now.AddDays(-1), _settings.AiDrafting.ConsentedAtUtc);
+        Assert.False(_settings.AiDrafting.Enabled);
+    }
+
+    [Fact]
+    public void EditAi_null_edit() => Assert.Throws<ArgumentNullException>(() => _t.EditAi(null!));
+
+    [Fact]
+    public void MarkNoticeShown_saves_once_and_does_not_notify()
+    {
+        _t.MarkNoticeShown(AiNotice.RelatedMail);
+        Assert.True(_settings.AiDrafting.RelatedMailNoticeShown);
+        Assert.True(Assert.Single(_saves).AiDrafting.RelatedMailNoticeShown);
+        Assert.Equal(0, _changed);
+        _t.MarkNoticeShown(AiNotice.RelatedMail);
+        Assert.Single(_saves);
+        Assert.Equal(0, _changed);
+    }
+
+    [Fact]
+    public void MarkNoticeShown_attachments_sets_only_its_own_flag_and_saves_once()
+    {
+        _t.MarkNoticeShown(AiNotice.Attachments);
+        Assert.True(_settings.AiDrafting.AttachmentsNoticeShown);
+        Assert.False(_settings.AiDrafting.RelatedMailNoticeShown);
+        Assert.True(Assert.Single(_saves).AiDrafting.AttachmentsNoticeShown);
+        _t.MarkNoticeShown(AiNotice.Attachments);
+        Assert.Single(_saves);
+        Assert.Equal(0, _changed);
+    }
+
+    [Fact]
+    public void MarkNoticeShown_edits_sets_only_its_own_flag_and_saves_once()
+    {
+        _t.MarkNoticeShown(AiNotice.Edits);
+        Assert.True(_settings.AiDrafting.EditsNoticeShown);
+        Assert.False(_settings.AiDrafting.RelatedMailNoticeShown);
+        Assert.False(_settings.AiDrafting.AttachmentsNoticeShown);
+        Assert.True(Assert.Single(_saves).AiDrafting.EditsNoticeShown);
+        _t.MarkNoticeShown(AiNotice.Edits);
+        Assert.Single(_saves);
+        Assert.Equal(0, _changed);
+    }
+
+    [Fact]
+    public void RecordConsent_marks_the_edits_notice_shown_only_on_a_fresh_consent()
+    {
+        _t.RecordConsent();
+        Assert.True(_settings.AiDrafting.EditsNoticeShown);
+        Assert.True(_settings.AiDrafting.AttachmentsNoticeShown);
+        Assert.True(_settings.AiDrafting.RelatedMailNoticeShown);
+
+        _saves.Clear();
+        _settings.AiDrafting.EditsNoticeShown = false;
+        _t.RecordConsent();
+        Assert.False(_settings.AiDrafting.EditsNoticeShown);
+        Assert.Empty(_saves);
+    }
+
+    [Fact]
+    public void MarkNoticeShown_related_mail_leaves_the_attachments_flag_alone()
+    {
+        _t.MarkNoticeShown(AiNotice.RelatedMail);
+        Assert.True(_settings.AiDrafting.RelatedMailNoticeShown);
+        Assert.False(_settings.AiDrafting.AttachmentsNoticeShown);
+    }
+
+    [Fact]
+    public void RecordConsent_marks_the_attachments_notice_shown_only_on_a_fresh_consent()
+    {
+        _t.RecordConsent();
+        Assert.True(_settings.AiDrafting.AttachmentsNoticeShown);
+        Assert.True(Assert.Single(_saves).AiDrafting.AttachmentsNoticeShown);
+    }
+
+    [Fact]
+    public void RecordConsent_with_existing_consent_leaves_the_attachments_flag_alone()
+    {
+        _settings.AiDrafting.RecordConsent(Now.AddDays(-3));
+        _t.RecordConsent();
+        Assert.False(_settings.AiDrafting.AttachmentsNoticeShown);
+        Assert.Empty(_saves);
+    }
+
+    [Fact]
+    public void MarkNoticeShown_save_failure_propagates_and_live_is_unchanged()
+    {
+        _saveThrows = new IOException("disk");
+        Assert.Throws<IOException>(() => _t.MarkNoticeShown(AiNotice.RelatedMail));
+        Assert.False(_settings.AiDrafting.RelatedMailNoticeShown);
+    }
+
+    [Fact]
+    public void MarkNoticeShown_rejects_an_undefined_notice()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => _t.MarkNoticeShown((AiNotice)99));
+        Assert.Empty(_saves);
+    }
+
+    [Fact]
+    public void RecordConsent_also_marks_the_related_mail_notice_shown()
+    {
+        _t.RecordConsent();
+        Assert.True(_settings.AiDrafting.RelatedMailNoticeShown);
+        Assert.True(Assert.Single(_saves).AiDrafting.RelatedMailNoticeShown);
+    }
+
+    [Fact]
+    public void RecordConsent_with_existing_consent_leaves_the_notice_flag_alone()
+    {
+        _settings.AiDrafting.RecordConsent(Now.AddDays(-3));
+        _t.RecordConsent();
+        Assert.False(_settings.AiDrafting.RelatedMailNoticeShown);
+        Assert.Empty(_saves);
+    }
 }

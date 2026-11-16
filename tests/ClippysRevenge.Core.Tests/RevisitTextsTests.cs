@@ -43,6 +43,20 @@ public class RevisitTextsTests
     }
 
     [Fact]
+    public void For_replace_inserts_the_suffix_after_the_subject()
+    {
+        const string suf = " (attachments: 1 read, 0 not read)";
+        Assert.Equal("AI reply draft updated (the thread moved on): S" + suf + ". The old draft is in Deleted Items.",
+            RevisitTexts.ForReplace(ObsoleteDraftStatus.Moved, "S", suf));
+        Assert.Equal("AI reply draft updated (the thread moved on): S" + suf + ". The old draft is still in Drafts because it was changed or is open.",
+            RevisitTexts.ForReplace(ObsoleteDraftStatus.Open, "S", suf));
+        Assert.Equal("AI reply draft updated (the thread moved on): S" + suf + ".", RevisitTexts.ForReplace(null, "S", suf));
+        Assert.Equal(RevisitTexts.ForReplace(ObsoleteDraftStatus.Moved, "S"), RevisitTexts.ForReplace(ObsoleteDraftStatus.Moved, "S", ""));
+        Assert.Equal(RevisitTexts.ForReplace(ObsoleteDraftStatus.Moved, "S"), RevisitTexts.ForReplace(ObsoleteDraftStatus.Moved, "S", null!));
+        Assert.Equal(RevisitTexts.ForReplace(null, "S"), RevisitTexts.ForReplace(null, "S", null!));
+    }
+
+    [Fact]
     public void Confirm_texts()
     {
         Assert.Equal("Clippy will go through 12 emails from the last 24 hours, oldest first, and draft a reply where one is needed. Each email is one Claude call: up to 12 calls, and 25 of today's 30 are left. The rescan stops at the daily limit. Outdated Clippy drafts in those threads may be replaced or moved to Deleted Items. Nothing is sent.",

@@ -13,6 +13,8 @@ internal sealed class ActivityForm : Form
 
     private readonly ActivityHub _hub;
     private readonly Label _state = new() { AutoSize = true, Margin = new Padding(0, 0, 0, 4) };
+    private readonly Label _usage = new() { AutoSize = true, Visible = false, Margin = new Padding(0, 0, 0, 4) };
+    private readonly Func<string?>? _usageLine;
     private readonly ProgressBar _bar = new() { Dock = DockStyle.Fill, Visible = false, Minimum = 0, Maximum = 100 };
     private readonly Label _barText = new() { AutoSize = true, Visible = false };
     private readonly ComboBox _kind = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
@@ -33,10 +35,11 @@ internal sealed class ActivityForm : Form
     private bool _refreshing;
     private List<ActivityRow> _rows = [];
 
-    public ActivityForm(ActivityHub hub)
+    public ActivityForm(ActivityHub hub, Func<string?>? usageLine = null)
     {
         ArgumentNullException.ThrowIfNull(hub);
         _hub = hub;
+        _usageLine = usageLine;
         Text = "Clippy — Activity";
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(820, 480);
@@ -64,8 +67,10 @@ internal sealed class ActivityForm : Form
         top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         top.Controls.Add(_state, 0, 0);
         top.SetColumnSpan(_state, 2);
-        top.Controls.Add(_bar, 0, 1);
-        top.Controls.Add(_barText, 1, 1);
+        top.Controls.Add(_usage, 0, 1);
+        top.SetColumnSpan(_usage, 2);
+        top.Controls.Add(_bar, 0, 2);
+        top.Controls.Add(_barText, 1, 2);
 
         var filters = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(10, 4, 10, 4) };
         filters.Controls.AddRange([new Label { Text = "Kind:", AutoSize = true, Margin = new Padding(0, 6, 4, 0) }, _kind,
@@ -133,6 +138,18 @@ internal sealed class ActivityForm : Form
         _refreshing = true;
         try
         {
+            string? usage = null;
+            try
+            {
+                usage = _usageLine?.Invoke();
+            }
+            catch (Exception)
+            {
+                usage = null;
+            }
+            _usage.Text = usage ?? "";
+            _usage.Visible = usage is not null;
+
             var header = ActivityView.Header(_hub.State, _hub.Progress);
             _state.Text = header.StateText;
             _bar.Visible = _barText.Visible = header.ShowProgress;

@@ -55,6 +55,8 @@ internal sealed partial class OutlookMail
             {
                 FolderRoot.Inbox => (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderInbox),
                 FolderRoot.SentItems => (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderSentMail),
+                FolderRoot.Drafts => (Outlook.Folder?)TryDrafts(store) ?? throw new MailFolderNotFoundException(key, p.Canonical),
+                FolderRoot.DeletedItems => (Outlook.Folder?)TryDeletedItems(store) ?? throw new MailFolderNotFoundException(key, p.Canonical),
                 _ => (Outlook.Folder)store.GetRootFolder(),
             };
             foreach (var segment in p.SubPath)
@@ -362,16 +364,22 @@ internal sealed partial class OutlookMail
         Outlook.Store? store = null;
         Outlook.Folder? inbox = null;
         Outlook.Folder? sent = null;
+        Outlook.Folder? drafts = null;
+        Outlook.Folder? deleted = null;
         try
         {
             parent = (Outlook.Folder)item.Parent;
             store = parent.Store;
             inbox = (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderInbox);
             sent = (Outlook.Folder)store.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderSentMail);
+            drafts = (Outlook.Folder?)TryDrafts(store);
+            deleted = (Outlook.Folder?)TryDeletedItems(store);
             var parentId = parent.EntryID;
             var path = parentId == inbox.EntryID ? MailFolderPath.Inbox
                 : parentId == sent.EntryID ? MailFolderPath.SentItems
-                : MailFolderPath.FromOutlook(parent.FolderPath, inbox.Name, sent.Name) ?? parent.Name;
+                : drafts is not null && parentId == drafts.EntryID ? MailFolderPath.Drafts
+                : deleted is not null && parentId == deleted.EntryID ? MailFolderPath.DeletedItems
+                : MailFolderPath.FromOutlook(parent.FolderPath, inbox.Name, sent.Name, drafts?.Name, deleted?.Name) ?? parent.Name;
             var parsed = MailFolderPath.Parse(path);
             var storeId = store.StoreID;
             var mailbox = "";
@@ -391,6 +399,8 @@ internal sealed partial class OutlookMail
         }
         finally
         {
+            Release(deleted);
+            Release(drafts);
             Release(sent);
             Release(inbox);
             Release(store);
@@ -666,7 +676,8 @@ internal sealed partial class OutlookMail
             var cid = pa is null ? null : ComSafe.Try(() => pa.GetProperty(PrAttachContentId) as string);
             var mime = pa is null ? null : ComSafe.Try(() => pa.GetProperty(PrAttachMimeTag) as string);
             var fileName = InlineAttachments.FileNameFor(
-                ComSafe.Try(() => a.FileName), ComSafe.Try(() => a.DisplayName), ComSafe.Try(() => a.Index));
+                ComSafe.Try(() => a.FileName), ComSafe.Try(() => a.DisplayName), ComSafe.Try(() => a.Index),
+                (int)a.Type);
             return new AttachmentFacts((int)a.Type, hidden, cid, mime, fileName);
         }
         finally

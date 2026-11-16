@@ -87,17 +87,17 @@ Both lines are greyed out and can't be clicked.
 | **Start Outlook** | Starts Outlook (`OUTLOOK.EXE`). This is the only place Clippy ever starts it. If Outlook can't be found, a balloon says so | Hidden while Outlook is running. Also hidden while Outlook is open but not responding |
 | **Sync now** | Starts a sync cycle at once | Greyed out while indexing is paused |
 | **Pause indexing** / **Resume indexing** | Pauses or resumes syncing. The pause is not remembered after a restart | |
-| **Rebuild index…** | Asks "Rebuild the email index?". It deletes the index and reads your mail from Outlook again. Buttons: **My mailbox**, **All mailboxes** (only when a shared mailbox is enabled) and **Cancel** (the default). Your mail is not touched | |
+| **Rebuild index…** | Asks "Rebuild the email index?": Clippy deletes the index and reads your mail from Outlook again, and search finds less until that is done. Buttons: **My mailbox**, **All mailboxes** (only when a shared mailbox is enabled) and **Cancel** (the default). Your mail is not touched | |
 | **Shared mailboxes** | Submenu, see below | |
 | **AI drafts** | Submenu, see below | |
 | **Draft invites (n)** | Submenu of your unsent meeting drafts, see below | Hidden when there are none |
 | **Copy "claude mcp add" command** | Puts the full setup command on the clipboard and shows the balloon `Copied — paste it in WSL` | |
-| **Copy auth token** | Copies the token. No balloon | |
-| **Regenerate auth token…** | Asks "Regenerate the auth token?" (Cancel is the default). The old token stops working at once, so Claude Code must be set up again | |
+| **Copy auth token** | Copies the token. No balloon (only `Couldn't reach the clipboard — try again.` if copying fails) | |
+| **Regenerate auth token…** | Asks "Regenerate the auth token?" (Cancel is the default). The old token stops working at once, so Claude Code must be set up again, and `CLIPPY_TOKEN` in WSL must be updated ([how](connect.md#set-clippy_token-for-downloads)) | |
 | **Activity…** | Opens the [Activity window](activity.md) | |
-| **Settings…** | Opens [Settings](settings.md) on the Connection tab. If it is already open, it comes to the front | |
+| **Settings…** | Opens [Settings](settings.md) on the Connection tab. If it is already open, it comes to the front and switches to that tab | |
 | **Open log folder** | Opens `%LOCALAPPDATA%\ClippysRevenge\logs` | |
-| **Open data folder** | Opens the data folder | |
+| **Open data folder** | Opens `%APPDATA%\ClippysRevenge`, where `settings.json` and the encrypted token are | |
 | **Start with Windows** | Check mark. Starts Clippy at logon. The same setting as in [Settings](settings.md#general) | |
 | **About Clippy's Revenge…** | Opens the About window: version, update status, **Update now** and links to the documentation and release notes. See [Updates](updates.md#the-about-window) | |
 | **Exit** | Hides the icon and quits the app | |
@@ -112,7 +112,8 @@ check mark on the ones Clippy indexes. See [shared mailboxes](indexing.md#shared
 
 - **Check** a mailbox to start indexing it (its backfill starts at once).
 - **Uncheck** a mailbox and Clippy asks `Stop indexing <name>?` with **Delete its
-  index**, **Keep index file** and **Cancel**. The mailbox is switched off either way.
+  index**, **Keep index file** (the default) and **Cancel**. The mailbox is switched off
+  either way, at once.
 - A mailbox you configured but that Outlook no longer lists shows `(not in Outlook)`.
 - While Outlook isn't running, only configured mailboxes are listed, plus a greyed-out
   line `Start Outlook to see more mailboxes`.
@@ -120,15 +121,19 @@ check mark on the ones Clippy indexes. See [shared mailboxes](indexing.md#shared
 
 ### AI drafts
 
-The submenu for [AI drafts](ai-drafts.md):
+The submenu for [AI drafts](ai-drafts.md), top to bottom:
 
 | Item | What it does | When it is unavailable |
 |---|---|---|
+| `Today: 18 AI calls, ~210k tokens (in 190k / out 20k)` | The first line, greyed out. Today's [token tally](ai-drafts.md#token-tally): Claude calls since midnight and the tokens they used. It reads `Today: no AI calls` when there were none, ends in `tokens unknown` when Claude gave no numbers, and adds `, <n> without token data` when only some calls had numbers. Refreshed each time you open the menu | Hidden until you have given AI drafts consent |
 | **Draft replies automatically** | Check mark. Turns automatic drafting on or off. The first time, Clippy shows the [consent dialog](ai-drafts.md#consent-and-what-is-sent). If Claude isn't ready (not signed in, no API key), it opens Settings on the AI drafts tab instead of switching on | Greyed out while the email index isn't available, or while a toggle is in progress |
 | **Draft a reply to the selected email** | Drafts a reply to the one email you selected in Outlook, now, even when automatic drafting is off. Asks for consent first if you haven't given it. A balloon reports the result | Greyed out while Outlook isn't running, while the index isn't available and while a rescan runs |
+| **Don't draft for this sender** | Adds the sender of the email selected in Outlook to **Never draft for** in Settings, with no dialog. Needs no consent. A balloon says `I won't draft replies to <address> any more. You can undo this in Settings → AI drafts.` Refuses your own address and an address that is already covered, and stops at 200 entries. Activity records `AI drafts: added an entry to "Never draft for" (<n> entries).` Existing drafts for that sender are left alone. **To undo,** delete the line in Settings, **AI drafts**, **Never draft for**. See [Don't draft for this sender](ai-drafts.md#dont-draft-for-this-sender) | Greyed out while Outlook isn't running, while the index isn't available and while a rescan runs |
+| **Don't draft for this sender's domain…** | The same for the sender's whole domain (and its subdomains), after asking `Never draft replies to anyone at <domain>?` (**Add** or **Cancel**, the default). Refuses your own organization's domain (and its parent or subdomains). Undo it the same way: delete the domain line in Settings | Same as above |
 | **Rescan emails from the last 24 hours…** | Goes through the last day of mail, oldest first, drafts replies where one is needed and re-checks Clippy's own drafts in those threads. Works with automatic drafting off. See below | Greyed out while Outlook isn't running, while the index isn't available and while the rescan is starting |
-| **Show Drafts in Outlook** | Opens your Drafts folder in Outlook | Hidden while Outlook isn't running |
+| **Show Drafts in Outlook** | Opens your Drafts folder in Outlook | Hidden while Outlook isn't running. Greyed out while the index isn't available |
 | **AI drafts settings…** | Opens Settings on the AI drafts tab | |
+| **Edit my facts…** | Opens your [facts file](ai-drafts.md#facts-about-you) (`%USERPROFILE%\.claude\skills\my-email-context\SKILL.md`) in Notepad. If the file is missing, Clippy creates the template first, even without AI drafts consent, because nothing is sent. If Notepad can't start, a balloon says `Couldn't open the file: <reason>` | Greyed out while the AI drafts services aren't available |
 
 **Rescan emails from the last 24 hours…** works like this:
 
@@ -168,8 +173,9 @@ Wed 10/16 14:00–14:30  Budget review
 - Only the first 15 meetings are listed. A last greyed-out line says `and <n> more`.
 - **Click a line** to open that meeting in Outlook. Add the Zoom or Teams link and send
   it there. Clippy then removes its category.
-- While Outlook isn't running, the lines are greyed out and the last line says `Start
-  Outlook to open them`.
+- A meeting Clippy can't read the details of shows `Draft invite saved <day> <date> <time>`.
+- While Outlook isn't running or not responding, the lines are greyed out. While it
+  isn't running, the last line says `Start Outlook to open them`.
 - If the meeting is gone from your calendar, a balloon says `That draft invite is no
   longer in your calendar.` If Outlook can't open it, the balloon says `It looks like
   Outlook couldn't open that draft invite. Open it from your calendar.`
@@ -184,24 +190,32 @@ in Clippy's voice and titled "Clippy's Revenge".
 | First run | `Clippy's Revenge is running — right-click to copy the Claude setup command` |
 | Outlook not running for more than 2 minutes | `It looks like Outlook isn't running. I'll wait — or right-click me and pick Start Outlook.` |
 | Outlook not responding for more than 2 minutes | `It looks like Outlook isn't responding. I'll keep trying — check Outlook for an open dialog box.` |
-| An error lasts more than 2 minutes (if **Notify on errors** is on) | `It looks like something went wrong: <reason>. Right-click me and pick Activity… for details.` |
+| An error lasts more than 2 minutes (if **Notify on errors** is on) | `It looks like something went wrong: <reason>. Right-click me and pick Activity… for details.` (without `: <reason>` when there is none) |
 | A first backfill finishes (once per mailbox) | `It looks like you're trying to find an email. I finished indexing <your mailbox or address>: <n> emails.` |
-| Automatic drafting saved replies | `It looks like you got mail. I drafted <n> reply — they're in your Drafts folder.` (`replies` for more than one). Click it to open Drafts |
+| Automatic drafting saved or updated replies | `It looks like you got mail. I drafted <n> reply — they're in your Drafts folder.` (`replies` for more than one). Click it to open Drafts |
+| Once, at the first AI draft that uses related mail, if you consented before this was added | `AI drafts now also send up to 5 related earlier emails from your mailbox to Claude, to write better replies. You can turn this off in Settings → AI drafts.` |
+| Once, at the first AI draft that reads attachments, if you consented before this was added | `AI drafts now also read attachments and shared files synced to this PC, and send their text to Claude, to write better replies. You can turn this off in Settings → AI drafts.` |
+| Once, at the first AI draft after you update to a version that learns from edits, if you consented to AI drafts earlier and **Learn from how I edit Clippy's drafts** is on | `AI drafts now learn from how you edit Clippy's drafts before sending. The next writing-style update sends up to 20 of your edited replies (addresses, links and phone numbers removed) to Claude. You can turn this off in Settings → AI drafts.` See [Notice for existing users](ai-drafts.md#notice-for-existing-users) |
 | An update is available, is downloaded, was installed or was rolled back | See [Updates](updates.md) |
 
-Balloons that report on their own are limited to **one per minute**. A balloon that hits
+Balloon texts are cut at 255 characters. Balloons that report on their own are limited
+to **one per minute**. A balloon that hits
 the limit is dropped, not queued. The 2-minute balloons fire once per episode.
 
 Balloons that answer one of your clicks are not limited:
 
 | Click | Balloon |
 |---|---|
-| Copy "claude mcp add" command | `Copied — paste it in WSL` |
+| Copy "claude mcp add" command | `Copied — paste it in WSL`, or `Couldn't reach the clipboard — try again.` |
+| Rebuild index…, when it fails | `Couldn't rebuild the index: <reason>` |
+| Checking or unchecking a shared mailbox, when it fails | `Couldn't change that mailbox: <reason>` |
 | Start Outlook, when Outlook can't be found | `It looks like I can't find Outlook on this PC. Start it from the Start menu.` |
 | Draft a reply to the selected email | `It looks like you want a reply. It's in your Drafts folder.`, or why not: `Select one email in Outlook first.`, `That email isn't in your mailbox or an enabled shared mailbox.`, `That mailbox isn't indexed yet.`, `Claude isn't ready: <status>`, `Today's AI draft limit (<cap>) is used up.`, `I couldn't draft that reply: <reason>` |
-| Rescan emails from the last 24 hours | The messages in the section above, then the summary |
+| Rescan emails from the last 24 hours | The messages in the section above, then the summary. If it can't start: `I couldn't start the rescan: <reason>` |
+| Don't draft for this sender / this sender's domain | `I won't draft replies to <address> any more. You can undo this in Settings → AI drafts.` (`…to anyone at <domain>…` for the domain). Or why not: `Select one email in Outlook first.`, `That email isn't in your mailbox or an enabled shared mailbox.`, `I couldn't find that sender's email address.`, `That's your own address.`, `That's your own organization's domain. To stop drafting for all internal mail, add it in Settings → AI drafts.`, `<address or domain> is already on "Never draft for".`, `"Never draft for" already has 200 entries. Remove some in Settings → AI drafts.`, `Clippy doesn't know your email address yet. Start Outlook, wait for the first sync, then try again.`, or `It looks like Outlook isn't running. I'll wait — or right-click me and pick Start Outlook.` |
 | Show Drafts in Outlook | `It looks like Outlook has no open window. Open Outlook and look in Drafts.` when Outlook has no window to show it in |
-| A draft invite that is gone | `That draft invite is no longer in your calendar.` |
+| A draft invite line | `That draft invite is no longer in your calendar.`, `It looks like Outlook couldn't open that draft invite. Open it from your calendar.`, or the Outlook not running / not responding text above |
+| Edit my facts…, when it fails | `Couldn't open the file: <reason>` |
 | Draft replies automatically fails to switch | `Couldn't change AI drafts: <reason>` |
 
 Event lines in the Activity window are listed on the [Activity page](activity.md).

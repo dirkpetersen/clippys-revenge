@@ -11,9 +11,11 @@ Not supported. An Exchange or Microsoft 365 mailbox is required.
 
 ## Can it send email?
 
-No. Clippy never sends anything, neither mail nor meetings. It saves drafts and
-you send them from Outlook. Meeting invites are saved unsent in your calendar too.
-See [Meeting drafts](calendar.md#meeting-drafts).
+No. Clippy never sends anything, neither mail nor meetings, with or without AI. It has
+no send function at all, and the code is checked for this on every build. It saves
+drafts and you send them from Outlook. Meeting invites are saved unsent in your
+calendar too. See [Meeting drafts](calendar.md#meeting-drafts) and
+[Security](security.md#what-it-never-does).
 
 ## Why can't Clippy send a meeting invite?
 
@@ -42,13 +44,6 @@ you can drag it back). It does this only when you haven't edited it, opened it o
 it, and the Activity window records it. Nothing is ever deleted for good. You can turn
 it off with **Update or remove my AI drafts when a thread moves on** in Settings, AI
 drafts. See [Outdated drafts](ai-drafts.md#outdated-drafts).
-
-## Does Clippy ever send an email or a meeting?
-
-No, never. Clippy has no send function at all. Mail and replies, with or without AI,
-are saved as drafts. Meetings are saved unsent in your calendar. You read them and
-press Send in Outlook yourself. The code is checked for this on every build. See
-[Security](security.md#what-it-never-does).
 
 ## What does "Rescan emails from the last 24 hours" do?
 
@@ -115,10 +110,143 @@ in Outlook and use **Draft a reply to the selected email** in the tray menu. See
 
 ## Does AI drafting send my mail to Anthropic?
 
-Yes, while it is on: the email being answered, thread excerpts, attachment names and
-your style guide go to Claude through your own Claude Code (or your API key).
-Attachment contents never do. See
-[what is sent](ai-drafts.md#consent-and-what-is-sent).
+Yes, while it is on: the email being answered, thread excerpts, up to 5 related
+earlier emails, attachment names, the extracted text of attachments and of synced shared
+files (unless you turn that off), your facts file and your style guide go to Claude
+through your own Claude Code (or your API key). Once a week, with the writing-style
+update, samples of your sent mail go too, and up to 20 pairs of an AI draft and what you
+sent after editing it (unless you turn that off). Files themselves and images never do.
+See [what is sent](ai-drafts.md#consent-and-what-is-sent).
+
+## Does Clippy learn from how I edit its drafts?
+
+Yes, since version 0.1.1, unless you turn it off. When you send a reply that began as
+an AI draft, Clippy notes what you changed. It keeps a redacted copy of the draft and of
+what you sent in its local index (at most 1,500 characters each, the newest 20 edited
+pairs, deleted after 30 to 90 days). Nothing leaves your PC then. At the next
+writing-style update (weekly, or **Regenerate**), if there are at least 3 pairs, up to 20
+are sent to Claude, which adds an "Edits I usually make to drafts" section to your style.
+Drafts that used attachment text are never kept. Untick **Learn from how I edit
+Clippy's drafts** in Settings, **AI drafts**, to stop it. See
+[Learning from how you edit drafts](ai-drafts.md#learning-from-how-you-edit-drafts).
+
+## How do I make Clippy forget how I edited its drafts?
+
+Turn off **Learn from how I edit Clippy's drafts** in Settings, **AI drafts**: nothing
+more is recorded or sent. That doesn't erase what is already stored; it ages out within 90
+days. To erase it now, use **Rebuild index…** in the tray and choose **My mailbox** or **All mailboxes**
+(it deletes the index file that holds the records). Then press **Regenerate** in Settings to write a style without
+the "Edits I usually make to drafts" section.
+
+## Why does Activity say "noted how you edited 3 sent drafts"?
+
+Clippy looked at your recently sent mail, found replies that started as its AI drafts and
+compared them with the drafts. It says how many it noted, including drafts you sent
+unchanged. See [Activity](activity.md#learning-from-your-edits).
+
+## Does Clippy read my attachments?
+
+For AI drafts, yes, since v0.1.1 and unless you turn it off. It reads the text of PDF,
+Word, Excel, PowerPoint, text, HTML and `.eml` attachments (and attached emails) of the
+email and its thread, and of OneDrive/SharePoint files linked in them that are synced to
+your PC, and sends that text to Claude for that one draft. It is never stored or
+indexed. Images are not read. See
+[Attachments and shared files](ai-drafts.md#attachments-and-shared-files), and
+[Settings](settings.md#ai-drafts) to turn it off.
+
+## Why couldn't Clippy read my shared file?
+
+When Clippy can't read a file from a link or cloud attachment, the draft starts with a
+yellow note, for example `Clippy: Couldn't read the shared file Plan.docx (not synced to
+this PC).` The reasons:
+
+- **Not synced to this PC.** Clippy never downloads from the network. It reads only the
+  copy that your OneDrive sync client already keeps on this PC. The file must be in your
+  OneDrive, a synced SharePoint or Teams library or folder, or a folder you added with
+  **Add shortcut to My files**. Sync the library (in SharePoint, **Sync**) or add the
+  shortcut, then rescan or draft the reply again. "Specific people" and other secret-token
+  sharing links, `Doc.aspx?sourcedoc=…` links, and `1drv.ms` and `onedrive.live.com`
+  links can't be matched to a local file even when it is synced.
+- **Not from your organization.** The note says `Clippy only opens shared files from
+  people in your organization`. Clippy opens a shared link only when the email came from
+  you or from your own email domain (or a subdomain), so that outsiders can't make it
+  put a file from your OneDrive into a draft. If your own address is at a free or
+  consumer mail provider such as outlook.com, hotmail.com, gmail.com, yahoo.com,
+  icloud.com or GMX, only links you sent yourself (or the shared mailbox's own address)
+  are read. Links are taken only from the text each person wrote: links in quoted
+  replies or forwarded mail are ignored. Attached files are read whoever sent them.
+- **Not a OneDrive or SharePoint link.** Dropbox, Google Drive and other links are never
+  opened. There is no note for these.
+- **The file is too slow.** An online-only file is downloaded by OneDrive when Clippy opens
+  it. If that takes longer than 10 seconds (or the draft's 20 seconds), the note says
+  `it took too long`. While one PDF that took too long is still being processed,
+  other PDFs are skipped with the same note until it finishes.
+- **The file itself.** `password-protected`, `larger than 25 MB`, `no text in it, maybe a
+  scan` (Clippy has no OCR), `the file seems damaged`, or `Clippy can't read .<ext>
+  files` for formats such as `.doc`, `.xls`, `.rtf` and `.zip`.
+- **The setting is off.** If **Read attachments and synced shared files for drafts** is
+  unticked, no files are read and there are no notes.
+
+Notes are shown only for files of the email itself and for earlier files the email
+mentions by name. More about the notes, with their exact texts, is in
+[The yellow notes](ai-drafts.md#the-yellow-notes).
+
+## Where does Clippy keep the attachment text?
+
+Nowhere. It is read into memory for one draft request and then dropped. The next draft
+in the same thread reads the file again. Outlook attachments pass through a private
+folder, `%LOCALAPPDATA%\ClippysRevenge\ai-files\`, for a moment and are deleted at once
+(and at start-up, if one was left). See [Security](security.md#attachment-text-and-shared-files).
+
+## What is the "Today: … tokens" line?
+
+A tally of today's Claude calls and the tokens they used, shown while AI drafts consent
+exists: at the top of the tray's **AI drafts** menu and in the Activity window. For
+example `Today: 18 AI calls, ~210k tokens (in 190k / out 20k)`. It counts drafts,
+re-checks, rescans and style updates, not calls that never started. Only counts are
+stored (30 days). See [Token tally](ai-drafts.md#token-tally).
+
+## How do I stop drafts for one sender?
+
+Select an email from them in Outlook and use **Don't draft for this sender** (or **…this
+sender's domain…**) in the tray's **AI drafts** menu. To undo, delete the line in
+Settings, AI drafts, **Never draft for**. See
+[Don't draft for this sender](ai-drafts.md#dont-draft-for-this-sender).
+
+## Does Clippy work in a non-English Outlook?
+
+Yes. Since v0.1.1 Clippy recognizes the Drafts and Deleted Items folders by their role,
+so they are skipped for related mail and earlier attachments whatever Outlook calls them.
+A folder indexed before v0.1.1 under its translated name keeps its old entries until you
+add the folder again or use **Rebuild index…**. See
+[Drafts and Deleted Items in other languages](ai-drafts.md#drafts-and-deleted-items-in-other-languages).
+
+To cut quoted history from mail, Clippy recognizes the reply headers Outlook writes in
+English, German, French, Spanish, Dutch, Italian, Swedish, Polish and Japanese (for
+example `From:`/`Von:`/`Från:`/`差出人:` blocks and "On … wrote:" lines). In other
+languages more of the quoted text may reach Claude as part of an email.
+
+## Can I tell the AI drafts my Zoom link or how I like to sign off?
+
+Yes. Use **Edit my facts…** in the tray, under **AI drafts**. It opens a file with
+headings for your role, links, office hours, standard answers, people and **How I want
+replies written**. Whatever you write there is used in every draft, and your reply
+preferences win over the writing style. See [Facts about you](ai-drafts.md#facts-about-you).
+
+## Does Claude see my older emails too?
+
+A few. With **Include related earlier emails** on (the default), each draft request
+carries up to 5 earlier emails from the same mailbox that match the topic or the
+sender, including your own replies to that person, so the draft fits the history. You
+can turn it off in Settings, AI drafts. See
+[Related earlier mail](ai-drafts.md#related-earlier-mail).
+
+## What is the yellow line at the top of an AI draft?
+
+The reason line: one sentence starting `Clippy:` that says why the draft was written.
+Delete it before you send. Deleting it counts as editing the draft, so Clippy won't
+replace or move that draft later. You can turn the line off in Settings, AI drafts. See
+[The reason line](ai-drafts.md#the-reason-line).
 
 ## Does Clippy sign in to Claude or read my Claude login?
 
@@ -133,7 +261,7 @@ newsletter or automatic mail, match a never-draft rule, or not need a reply. See
 
 ## Is the writing-style file safe?
 
-It is a Claude Code skill in %USERPROFILE%\.claude\skills\my-email-style, so your
+It is a Claude Code skill in `%USERPROFILE%\.claude\skills\my-email-style`, so your
 interactive Claude Code sessions can load it. Review, edit or delete it any time. See
 the [security note](ai-drafts.md#your-writing-style).
 
@@ -186,13 +314,54 @@ has an `Origin` header.
 ## Are attachments searchable?
 
 Attachment **file names** are searchable. Their contents are never indexed. To read
-an attachment, Claude saves it with [`get_attachment`](tools.md#get_attachment) and
-reads the file.
+an attachment, Claude saves it with [`get_attachment`](tools.md#get_attachment) (or,
+from WSL, fetches it with [`attachment_link`](tools.md#attachment_link)) and reads
+the file.
 
 ## Where does it save attachments?
 
 `%USERPROFILE%\Downloads\Clippy's Revenge` by default. Claude can only save to
 allowed folders, which you control in Settings, General.
+
+## Where do downloaded files go when Claude uses a download link?
+
+Into the folder where Claude Code ran the `curl` command, for example your WSL
+project folder. With [`attachment_link`](tools.md#attachment_link), Clippy makes a
+one-time link and the shell downloads the file itself. Clippy keeps a private copy
+in `%LOCALAPPDATA%\ClippysRevenge\links\` only until the download ends or 10 minutes
+pass, then deletes it. That folder is normally empty.
+
+## How do I get an attachment into WSL?
+
+Ask Claude Code to fetch it. It uses `attachment_link` and runs the `curl` command it
+gets back. You need `CLIPPY_TOKEN` set in WSL once: see
+[Set CLIPPY_TOKEN](connect.md#set-clippy_token-for-downloads).
+
+## curl says 401 when Claude downloads an attachment
+
+The shell doesn't have your token, or has an old one. Open **Settings, Connection**,
+press **Copy WSL token line** and put the line in `~/.bashrc` in WSL, then
+`source ~/.bashrc`. After **Regenerate auth token** you must do this again. A
+`401` does not use up the link, so the same command works once the token is right
+(if the 10 minutes haven't passed).
+
+## curl says 404 when Claude downloads an attachment
+
+The link is single use and lasts 10 minutes. A `404` means it was already used,
+has expired, was never made, or Clippy was restarted (which clears all links).
+Ask Claude for a new link. The link names the port it was made on, so after a port
+change old links no longer work either.
+
+## Can I download the same link twice?
+
+No. Each link works once. Ask Claude for a new one.
+
+## Why does Claude say the attachment is too big for a link?
+
+Links handle files up to 100 MB, with at most 10 open links, 200 MB open in total and
+20 links per 10 minutes. For a bigger file, Claude uses
+[`get_attachment`](tools.md#get_attachment) to save it on the Windows side. See the
+[limits](tools.md#attachment_link-limits).
 
 ## Can I use a shared mailbox?
 

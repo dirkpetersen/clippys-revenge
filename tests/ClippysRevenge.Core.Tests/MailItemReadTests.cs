@@ -101,6 +101,20 @@ public class MailItemReadTests
         Assert.Equal("attachment-4", InlineAttachments.FileNameFor("  ", null, 4));
     }
 
+    [Fact]
+    public void FileNameFor_embedded_item_without_file_name_ends_in_msg()
+    {
+        const int embedded = InlineAttachments.OlEmbeddedItem;
+        Assert.Equal("Quarterly plan.msg",
+            InlineAttachments.FileNameFor(null, " Quarterly: plan ", 1, embedded));
+        Assert.Equal("(no name).msg", InlineAttachments.FileNameFor("", "  ", 2, embedded));
+        Assert.Equal("Hello.msg", InlineAttachments.FileNameFor(null, "Hello.msg", 3, embedded));
+        Assert.Equal("inner.msg", InlineAttachments.FileNameFor("inner.msg", "Subject", 4, embedded));
+        Assert.Equal("Subject", InlineAttachments.FileNameFor(null, "Subject", 5, 1));
+        Assert.Equal("attachment-6", InlineAttachments.FileNameFor(null, null, 6, 1));
+        Assert.EndsWith(".msg", InlineAttachments.FileNameFor(null, new string('x', 300), 7, embedded));
+    }
+
     private static string? Boom() => throw new InvalidOperationException("must not be called");
 
     [Fact]

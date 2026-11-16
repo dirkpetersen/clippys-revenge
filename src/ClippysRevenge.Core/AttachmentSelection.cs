@@ -22,7 +22,7 @@ public static class AttachmentSelection
             if (atPos is null)
                 throw new McpException(
                     $"There is no attachment at position {N(p)}. This email has {N(attachments.Count)} attachment(s): {Describe(attachments)}.");
-            if (name is not null && !string.Equals(atPos.FileName, name, StringComparison.OrdinalIgnoreCase))
+            if (name is not null && !NameMatches(atPos.FileName, name))
                 throw new McpException(
                     $"The attachment at position {N(p)} is \"{atPos.FileName}\", not \"{name}\". Pass only one of filename and position, or matching values.");
             return atPos;
@@ -30,7 +30,7 @@ public static class AttachmentSelection
 
         if (name is not null)
         {
-            var matches = attachments.Where(a => string.Equals(a.FileName, name, StringComparison.OrdinalIgnoreCase))
+            var matches = attachments.Where(a => NameMatches(a.FileName, name))
                 .OrderBy(a => a.Position).ToList();
             if (matches.Count == 0)
                 throw new McpException($"This email has no attachment named \"{name}\". Its attachments: {Describe(attachments)}.");
@@ -69,11 +69,21 @@ public static class AttachmentSelection
     {
         ArgumentNullException.ThrowIfNull(live);
         ArgumentNullException.ThrowIfNull(wanted);
-        var same = live.FirstOrDefault(a => a.Position == wanted.Position
-            && string.Equals(a.FileName, wanted.FileName, StringComparison.OrdinalIgnoreCase));
+        var same = live.FirstOrDefault(a => a.Position == wanted.Position && NameMatches(a.FileName, wanted.FileName));
         if (same is not null) return same;
-        var byName = live.Where(a => string.Equals(a.FileName, wanted.FileName, StringComparison.OrdinalIgnoreCase)).ToList();
+        var byName = live.Where(a => NameMatches(a.FileName, wanted.FileName)).ToList();
         return byName.Count == 1 ? byName[0] : null;
+    }
+
+    /// <summary>Case-insensitive name equality. Also true when the live name is the wanted name plus ".msg" and the
+    /// wanted name has no ".msg": index rows written before an embedded item got its ".msg" name hold the bare name.</summary>
+    private static bool NameMatches(string live, string wanted)
+    {
+        if (string.Equals(live, wanted, StringComparison.OrdinalIgnoreCase)) return true;
+        const string Msg = ".msg";
+        return live.EndsWith(Msg, StringComparison.OrdinalIgnoreCase)
+            && !wanted.EndsWith(Msg, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(live, wanted + Msg, StringComparison.OrdinalIgnoreCase);
     }
 
     public static string Describe(IReadOnlyList<AttachmentInfo> attachments)

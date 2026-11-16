@@ -527,4 +527,106 @@ public class AiSettingsTests
         s.AiDrafting.ReviseDrafts = false;
         Assert.False(s.Clone().AiDrafting.ReviseDrafts);
     }
+
+    [Fact]
+    public void RelatedMail_defaults_and_validation()
+    {
+        var a = new AiDraftingSettings();
+        Assert.True(a.RelatedMail);
+        Assert.False(a.RelatedMailNoticeShown);
+        Assert.Empty(a.Validate());
+        a.RelatedMail = false;
+        a.RelatedMailNoticeShown = true;
+        Assert.Empty(a.Validate());
+    }
+
+    [Fact]
+    public void RelatedMail_json_round_trip()
+    {
+        var old = Settings.FromJson("{\"AiDrafting\":{\"DailyCap\":7}}").AiDrafting;
+        Assert.True(old.RelatedMail);
+        Assert.False(old.RelatedMailNoticeShown);
+        var s = Settings.FromJson("{\"AiDrafting\":{\"RelatedMail\":false,\"RelatedMailNoticeShown\":true}}").AiDrafting;
+        Assert.False(s.RelatedMail);
+        Assert.True(s.RelatedMailNoticeShown);
+        Assert.Contains("\"RelatedMail\": true", S().ToJson());
+    }
+
+    [Fact]
+    public void RelatedMail_survives_clone()
+    {
+        var s = S();
+        s.AiDrafting.RelatedMail = false;
+        s.AiDrafting.RelatedMailNoticeShown = true;
+        var c = s.Clone().AiDrafting;
+        Assert.False(c.RelatedMail);
+        Assert.True(c.RelatedMailNoticeShown);
+    }
+
+    [Fact]
+    public void ReadAttachments_defaults_validation_json_and_clone()
+    {
+        var a = new AiDraftingSettings();
+        Assert.True(a.ReadAttachments);
+        Assert.False(a.AttachmentsNoticeShown);
+        Assert.Empty(a.Validate());
+        a.ReadAttachments = false;
+        a.AttachmentsNoticeShown = true;
+        Assert.Empty(a.Validate());
+
+        var defaults = Settings.FromJson("{\"AiDrafting\":{}}").AiDrafting;
+        Assert.True(defaults.ReadAttachments);
+        Assert.False(defaults.AttachmentsNoticeShown);
+
+        var s = Settings.FromJson("{\"AiDrafting\":{\"ReadAttachments\":false,\"AttachmentsNoticeShown\":true}}");
+        Assert.False(s.AiDrafting.ReadAttachments);
+        Assert.True(s.AiDrafting.AttachmentsNoticeShown);
+        var c = s.Clone().AiDrafting;
+        Assert.False(c.ReadAttachments);
+        Assert.True(c.AttachmentsNoticeShown);
+        var back = Settings.FromJson(s.ToJson()).AiDrafting;
+        Assert.False(back.ReadAttachments);
+        Assert.True(back.AttachmentsNoticeShown);
+        Assert.Contains("\"ReadAttachments\": true", S().ToJson());
+    }
+
+    [Fact]
+    public void LearnFromEdits_and_EditsNoticeShown_defaults_json_and_clone()
+    {
+        var a = new AiDraftingSettings();
+        Assert.True(a.LearnFromEdits);
+        Assert.False(a.EditsNoticeShown);
+        Assert.Empty(a.Validate());
+
+        var defaults = Settings.FromJson("{\"AiDrafting\":{}}").AiDrafting;
+        Assert.True(defaults.LearnFromEdits);
+        Assert.False(defaults.EditsNoticeShown);
+
+        var s = Settings.FromJson("{\"AiDrafting\":{\"LearnFromEdits\":false,\"EditsNoticeShown\":true}}");
+        Assert.False(s.AiDrafting.LearnFromEdits);
+        Assert.True(s.AiDrafting.EditsNoticeShown);
+        var c = s.Clone().AiDrafting;
+        Assert.False(c.LearnFromEdits);
+        Assert.True(c.EditsNoticeShown);
+        var back = Settings.FromJson(s.ToJson()).AiDrafting;
+        Assert.False(back.LearnFromEdits);
+        Assert.True(back.EditsNoticeShown);
+        Assert.Contains("\"LearnFromEdits\": true", S().ToJson());
+    }
+
+    [Fact]
+    public void ReasonLine_defaults_validation_json_and_clone()
+    {
+        var a = new AiDraftingSettings();
+        Assert.True(a.ReasonLine);
+        Assert.Empty(a.Validate());
+        a.ReasonLine = false;
+        Assert.Empty(a.Validate());
+        Assert.True(Settings.FromJson("{\"AiDrafting\":{\"DailyCap\":7}}").AiDrafting.ReasonLine);
+        Assert.False(Settings.FromJson("{\"AiDrafting\":{\"ReasonLine\":false}}").AiDrafting.ReasonLine);
+        Assert.Contains("\"ReasonLine\": true", S().ToJson());
+        var s = S();
+        s.AiDrafting.ReasonLine = false;
+        Assert.False(s.Clone().AiDrafting.ReasonLine);
+    }
 }

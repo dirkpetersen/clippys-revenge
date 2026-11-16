@@ -260,13 +260,21 @@ public class SafetySourceScanTests
     [Fact]
     public void ProcessStart_OnlyInOutlookLauncher_AndLauncherUsesNoCom()
     {
-        AssertNone(Find(f => f.Code, @"\bProcess\s*\.\s*Start\b|\bShellExecute\w*\s*\(", f => f.Rel == Launcher || f.Rel == TrayFile || f.Rel == ClaudeCliFile || f.Rel == RestarterFile),
-            "Only OutlookLauncher.cs, TrayApp.cs (ShellOpen: folders, the skill file, the manual link), ClaudeCli.cs and UpdateRestarter.cs (the update handover) may start a process.");
+        AssertNone(Find(f => f.Code, @"\bProcess\s*\.\s*Start\b|\bShellExecute\w*\s*\(", f => f.Rel == Launcher || f.Rel == TrayFile || f.Rel == ClaudeCliFile || f.Rel == RestarterFile || f.Rel == NotepadFile),
+            "Only OutlookLauncher.cs, FactsNotepad.cs (notepad.exe), TrayApp.cs (ShellOpen: folders, the skill file, the manual link), ClaudeCli.cs and UpdateRestarter.cs (the update handover) may start a process.");
         // TrayApp.ShellOpen hands one path or URL to the shell (not Outlook); it is the only other Process.Start.
         var tray = Scan.Value.Files.Single(f => f.Rel == TrayFile);
         Assert.Single(Regex.Matches(tray.Code, @"\bProcess\s*\.\s*Start\b"));
         Assert.Matches(@"void\s+ShellOpen\s*\(string target\)\s*\{\s*Process\.Start\(new ProcessStartInfo\(target\)\s*\{\s*UseShellExecute\s*=\s*true\s*\}\)", tray.Code);
         Assert.DoesNotMatch(@"\bArgumentList\b|\.Arguments\b|\bVerb\s*=", tray.Code);
+
+        // FactsNotepad starts notepad.exe only: no shell, the path as one ArgumentList element, no Outlook.
+        var n = Scan.Value.Files.SingleOrDefault(f => f.Rel == NotepadFile);
+        Assert.NotNull(n);
+        Assert.Single(Regex.Matches(n!.Code, @"\bProcess\s*\.\s*Start\b"));
+        Assert.Matches(@"new\s+ProcessStartInfo\s*\(\s*""notepad\.exe""\s*\)\s*\{\s*UseShellExecute\s*=\s*false\s*\}", n.WithStrings);
+        Assert.Single(Regex.Matches(n.Code, @"\bArgumentList\s*\.\s*Add\s*\("));
+        Assert.DoesNotMatch(@"\.Arguments\b|\bVerb\s*=|UseShellExecute\s*=\s*true|Outlook\b|Marshal\b|Activator", n.Code);
 
         var l = Scan.Value.Files.SingleOrDefault(f => f.Rel == Launcher);
         Assert.NotNull(l);
@@ -284,6 +292,7 @@ public class SafetySourceScanTests
         Assert.Matches(@"Path\s*\.\s*GetFullPath\s*\(\s*paths\s*\.\s*ExePath\s*\)", r.Code);
     }
 
+    private const string NotepadFile = "src/ClippysRevenge.App/Tray/FactsNotepad.cs";
     private const string RestarterFile = "src/ClippysRevenge.App/UpdateRestarter.cs";
     private const string UpdateInstallFile = "src/ClippysRevenge.Core/UpdateInstall.cs";
     private const string KillRegex = @"\.\s*Kill\s*\(";
@@ -931,7 +940,8 @@ public class SafetySourceScanTests
         var name = Path.GetFileName(rel);
         return name.StartsWith("Draft", StringComparison.Ordinal) || name.StartsWith("Claude", StringComparison.Ordinal)
             || name.StartsWith("Style", StringComparison.Ordinal) || name.StartsWith("Anthropic", StringComparison.Ordinal)
-            || name.StartsWith("OutlookAiMailbox", StringComparison.Ordinal);
+            || name.StartsWith("Facts", StringComparison.Ordinal) || name.StartsWith("OutlookAiMailbox", StringComparison.Ordinal)
+            || name.StartsWith("Related", StringComparison.Ordinal) || name.StartsWith("OutlookAttachmentSource", StringComparison.Ordinal);
     }
 
     /// <summary>Forbidden Outlook-style calls in AI file code; File./Directory. calls (temp files, atomic rename) are exempt.</summary>
@@ -973,6 +983,14 @@ public class SafetySourceScanTests
         Assert.Empty(AiForbiddenHits("var x = list.Remove(y);"));
         Assert.True(IsAiFile("src/A/DraftWorker.cs"));
         Assert.True(IsAiFile("src/A/OutlookAiMailbox.cs"));
+        Assert.True(IsAiFile("src/A/FactsFile.cs"));
+        Assert.True(IsAiFile("src/A/FactsReporter.cs"));
+        Assert.True(IsAiFile("src/A/RelatedMail.cs"));
+        Assert.True(IsAiFile("src/A/DraftWorker.Related.cs"));
+        Assert.True(IsAiFile("src/A/DraftReasonLine.cs"));
+        Assert.True(IsAiFile("src/A/DraftWorker.Reason.cs"));
+        Assert.True(IsAiFile("src/A/OutlookAttachmentSource.cs"));
+        Assert.True(IsAiFile("src/A/DraftAttachments.Com.cs"));
         Assert.False(IsAiFile("src/A/OutlookMail.cs"));
     }
 
@@ -1094,5 +1112,412 @@ public class SafetySourceScanTests
             Assert.Contains(s, f.WithStrings);
         }
         Assert.DoesNotMatch(@"\bworker\.|\bstores\.|\bRunAsync\b|\bEnsureResolvedAsync\b|\bOutlookMail\b", f.Code);
+    }
+
+    // ---- Attachment links (M17.3, SPEC 24.6) ----
+
+    private static bool IsLinkFile(string rel)
+    {
+        var name = Path.GetFileName(rel);
+        return name.StartsWith("AttachmentLinks", StringComparison.Ordinal)
+            || name is "FilesEndpoint.cs" or "PrivateFolder.cs";
+    }
+
+    private static readonly Regex LinkLogArgBad = new(
+        @"\b(token|Token|tempPath|TempPath|path|Path|FileName|fileName|filename|original|originalName|url|Url|Folder|folder|link|id)\b");
+
+    /// <summary>Log calls whose arguments (text up to the first ';', strings blanked) name a token, path, url or file name.</summary>
+    internal static List<string> LinkLogHits(string code, string rel)
+    {
+        var hits = new List<string>();
+        foreach (Match m in LogCall.Matches(code))
+        {
+            var end = code.IndexOf(';', m.Index);
+            var call = code[m.Index..(end < 0 ? code.Length : end)];
+            if (LinkLogArgBad.IsMatch(call))
+            {
+                hits.Add($"{rel}:{LineOf(code, m.Index)}: {call.Trim()}");
+            }
+        }
+        return hits;
+    }
+
+    [Fact]
+    public void LinkFiles_NeverTouchTheIndex()
+    {
+        var files = Scan.Value.Files.Where(f => IsLinkFile(f.Rel)).ToList();
+        foreach (var rel in new[]
+        {
+            "src/ClippysRevenge.Core/AttachmentLinks.cs",
+            "src/ClippysRevenge.Core/AttachmentLinks.Helpers.cs",
+            "src/ClippysRevenge.Core/AttachmentLinks.Tool.cs",
+            "src/ClippysRevenge.Core/FilesEndpoint.cs",
+            "src/ClippysRevenge.App/PrivateFolder.cs",
+        })
+        {
+            Assert.Contains(files, f => f.Rel == rel);
+        }
+        var hits = files.Where(f => Regex.IsMatch(f.Code, @"\b(EmailIndex|MailboxIndexes|UpsertBatch|SetThreadMeta)\b"))
+            .Select(f => f.Rel).ToList();
+        AssertNone(hits, "Attachment link files must never touch the email index (attachment content never enters the index).");
+    }
+
+    [Fact]
+    public void LinkFiles_LogNoTokenPathOrName()
+    {
+        var files = Scan.Value.Files.Where(f => IsLinkFile(f.Rel)).ToList();
+        AssertNone(files.SelectMany(f => LinkLogHits(f.Code, f.Rel)).ToList(),
+            "Link files must not log a token, path, url or file name.");
+        foreach (var rel in new[] { "src/ClippysRevenge.Core/AttachmentLinks.cs", "src/ClippysRevenge.Core/AttachmentLinks.Tool.cs" })
+        {
+            Assert.True(LogCall.Matches(files.Single(f => f.Rel == rel).Code).Count >= 1, rel);
+        }
+    }
+
+    [Fact]
+    public void LinkLogMatcher_CatchesPlantedViolations()
+    {
+        Assert.Single(LinkLogHits("_log?.LogDebug(\"\", link.Token);", "x"));
+        Assert.Single(LinkLogHits("log.LogWarning(\"\", tempPath);", "x"));
+        Assert.Single(LinkLogHits("log.LogDebug(\"\", Path.GetFileName(p));", "x"));
+        Assert.Single(LinkLogHits("log.LogInformation(\"\", url);", "x"));
+        Assert.Single(LinkLogHits("log.LogDebug(\"\", saved.FileName);", "x"));
+        Assert.Single(LinkLogHits("log.LogDebug(\"\", id);", "x"));
+        Assert.Empty(LinkLogHits("_log?.LogDebug(\"\", expired, _links.Count);", "x"));
+        Assert.Empty(LinkLogHits("log.LogWarning(\"\", ex.GetType().Name);", "x"));
+        Assert.Empty(LinkLogHits("log.LogDebug(\"\", saved.Size, _links.OpenCount);", "x"));
+        Assert.Empty(LinkLogHits("log.LogDebug(\"\", ex.Reason);", "x"));
+    }
+
+    [Fact]
+    public void SaveAsFile_OnlyInOutlookMailAttachments()
+    {
+        const string rel = "src/ClippysRevenge.App/OutlookMail.Attachments.cs";
+        // Two for the links and the plain saves, one (SaveForAi) for ReadAttachmentForAi (M19.7, SPEC 26.11).
+        AssertNone(Find(f => f.Code, @"\bSaveAsFile\s*\(", f => f.Rel == rel),
+            "SaveAsFile( is only allowed in OutlookMail.Attachments.cs.");
+        var inFile = Find(f => f.Code, @"\bSaveAsFile\s*\(", f => f.Rel != rel);
+        Assert.Equal(3, inFile.Count);
+    }
+
+    [Fact]
+    public void FilesRoute_MappedOnce()
+    {
+        const string host = "src/ClippysRevenge.Core/McpHttpHost.cs";
+        const string endpoint = "src/ClippysRevenge.Core/FilesEndpoint.cs";
+        var mapCalls = Find(f => f.Code, @"FilesEndpoint\s*\.\s*Map\s*\(");
+        Assert.Single(mapCalls);
+        Assert.StartsWith(host + ":", mapCalls[0]);
+
+        // OneDriveMap.Map maps a cloud link to a synced file (M19.3), not an HTTP route.
+        var routes = Find(f => f.Code, @"(?<!FilesEndpoint|OneDriveMap)\s*\.\s*Map(Get|Post|Put|Patch|Delete|Methods|Fallback)?\s*\(");
+        Assert.Single(routes);
+        Assert.StartsWith(endpoint + ":", routes[0]);
+
+        var literals = Scan.Value.Files
+            .Where(f => f.Literals.Any(l => l[(l.IndexOf('|') + 1)..].StartsWith("/files", StringComparison.Ordinal)))
+            .Select(f => f.Rel).ToList();
+        Assert.All(literals, rel => Assert.True(
+            rel is "src/ClippysRevenge.Core/AttachmentLinks.cs" or "src/ClippysRevenge.Core/RollingFileLogger.cs", rel));
+    }
+
+    [Fact]
+    public void AttachmentLinkTool_Registered()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/AttachmentTools.cs");
+        Assert.Contains("Name = \"attachment_link\", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false", f.WithStrings);
+        Assert.Contains("[Description(LinkTexts.ToolDescription)]", f.WithStrings);
+        var start = f.Code.IndexOf("AttachmentLink(", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var end = f.Code.IndexOf("=>", start, StringComparison.Ordinal);
+        Assert.True(end > start);
+        Assert.DoesNotContain("save_dir", f.WithStrings[f.WithStrings.IndexOf("AttachmentLink(", StringComparison.Ordinal)..]);
+    }
+
+    [Fact]
+    public void PrivateFolder_StaysSmall()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/PrivateFolder.cs");
+        Assert.Matches(@"SetAccessRuleProtection\s*\(\s*isProtected:\s*true", f.Code);
+        Assert.Matches(@"\bLinkTarget\b", f.Code);
+        Assert.DoesNotMatch(@"\bProcess\b|\bDelete\s*\(|\bMove\s*\(|\bLog\w*\s*\(", f.Code);
+        Assert.DoesNotContain(f.Literals, l => l.Contains("icacls", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Program_CleansLinksBeforeTheHostStarts()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/Program.cs");
+        var clean = f.Code.IndexOf("attachmentLinks.CleanUpAtStart(", StringComparison.Ordinal);
+        var start = f.Code.IndexOf("StartHostAsync(host", StringComparison.Ordinal);
+        Assert.True(clean >= 0, "CleanUpAtStart missing");
+        Assert.True(start > clean, "CleanUpAtStart must run before StartHostAsync(host");
+        Assert.Contains("Links = attachmentLinks", f.Code);
+        Assert.Contains("links.Clear()", f.Code);
+        Assert.Contains("attachmentLinks.Dispose()", f.Code);
+    }
+
+    // ---- Attachment text for AI drafts (M19.7, SPEC 26.11) ----
+
+    private const string AttachmentsAppFile = "src/ClippysRevenge.App/OutlookMail.Attachments.cs";
+    private const string AttachmentsForbiddenCall = @"\.\s*(Save|Display|Send|Move|MoveTo|Copy)\s*\(";
+    private const string AttachmentsForbiddenDelete = @"(?<!File\s*\.\s*)\b(Delete|PermanentDelete)\s*\(";
+    private const string IndexNetworkProcessRegex =
+        @"\b(UpsertBatch|SetThreadMeta|UpsertDecision|AddAiCall|RecordAiDraft|MailboxIndexes|HttpClient|HttpWebRequest|WebRequest|WebClient|Process|ProcessStartInfo|UseShellExecute)\b";
+    private const string ReadLogArgBad =
+        @"\b(path|Path|tempPath|FileName|fileName|filename|Name|name|DisplayName|url|Url|Uri|uri|MountPoint|UrlPrefix|Folder|folder|link|Link|EntryId|entryId|id|Subject|subject|Body|body|text|Text|Message)\b";
+    private const string RegistryWriteRegex =
+        @"\b(CreateSubKey|SetValue|DeleteValue|DeleteSubKey|DeleteSubKeyTree|SetAccessControl)\b|writable\s*:\s*true|RegistryKeyPermissionCheck\s*\.\s*ReadWriteSubTree";
+
+    /// <summary>Violations of the SPEC 26.11 rules for OutlookMail.Attachments.cs; empty when it complies.</summary>
+    internal static List<string> AttachmentsFileViolations(string code)
+    {
+        var v = new List<string>();
+        foreach (Match m in Regex.Matches(code, @"\.\s*Close\s*\("))
+        {
+            if (!Regex.IsMatch(code[(m.Index + m.Length)..], @"\A\s*Outlook\s*\.\s*OlInspectorClose\s*\.\s*olDiscard\s*\)"))
+                v.Add($"line {LineOf(code, m.Index)}: Close must be Close(Outlook.OlInspectorClose.olDiscard)");
+        }
+        foreach (Match m in Regex.Matches(code, AttachmentsForbiddenCall))
+            v.Add($"line {LineOf(code, m.Index)}: {m.Value.Trim()}");
+        foreach (Match m in Regex.Matches(code, AttachmentsForbiddenDelete))
+            v.Add($"line {LineOf(code, m.Index)}: {m.Value.Trim()}");
+        foreach (Match m in LogCall.Matches(code))
+            v.Add($"line {LineOf(code, m.Index)}: log call");
+        return v;
+    }
+
+    internal static bool IsAttachmentReadFile(string rel)
+    {
+        var name = Path.GetFileName(rel);
+        return name.StartsWith("AttachmentText", StringComparison.Ordinal)
+            || name.StartsWith("OneDrive", StringComparison.Ordinal)
+            || name.StartsWith("DraftAttachments", StringComparison.Ordinal)
+            || name is "OutlookAttachmentSource.cs" or "AiFiles.cs";
+    }
+
+    /// <summary>Log calls whose arguments (up to ';', GetType().Name removed) name a path, name, url, id or text.</summary>
+    internal static List<string> AttachmentReadLogHits(string code, string rel)
+    {
+        var hits = new List<string>();
+        foreach (Match m in LogCall.Matches(code))
+        {
+            var end = code.IndexOf(';', m.Index);
+            var call = code[m.Index..(end < 0 ? code.Length : end)];
+            call = Regex.Replace(call, @"GetType\(\)\s*\.\s*Name", "");
+            if (Regex.IsMatch(call, ReadLogArgBad)) hits.Add($"{rel}:{LineOf(code, m.Index)}: {call.Trim()}");
+        }
+        return hits;
+    }
+
+    [Fact]
+    public void OpenSharedItem_OnlyOnceInOutlookMailAttachments()
+    {
+        var hits = Find(f => f.Code, @"\bOpenSharedItem\s*\(");
+        Assert.True(hits.Count == 1 && hits[0].StartsWith(AttachmentsAppFile + ":", StringComparison.Ordinal),
+            "OpenSharedItem( is allowed once, in OutlookMail.Attachments.cs. Found:" + Environment.NewLine + string.Join(Environment.NewLine, hits));
+    }
+
+    [Fact]
+    public void AttachmentsFile_OnlyReads()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == AttachmentsAppFile);
+        var v = AttachmentsFileViolations(f.Code);
+        Assert.True(v.Count == 0, string.Join(Environment.NewLine, v));
+        Assert.Contains("Close(Outlook.OlInspectorClose.olDiscard)", f.Code);
+    }
+
+    [Theory]
+    [InlineData("mi.Close(Outlook.OlInspectorClose.olSave);")]
+    [InlineData("mi.Close(0);")]
+    [InlineData("mi.Save();")]
+    [InlineData("mi.Copy();")]
+    [InlineData("mi.Delete();")]
+    [InlineData("mi . Move (f);")]
+    [InlineData("_log?.LogDebug(\"\", 1);")]
+    public void AttachmentsFileMatcher_CatchesPlantedViolations(string code) =>
+        Assert.NotEmpty(AttachmentsFileViolations(code));
+
+    [Fact]
+    public void AttachmentsFileMatcher_AcceptsTheCompliantShape() =>
+        Assert.Empty(AttachmentsFileViolations(
+            "mi.Close(Outlook.OlInspectorClose.olDiscard); File.Delete(p); files.Discard(p); att.SaveAsFile(p); DeleteQuietly(p);"));
+
+    [Fact]
+    public void AttachmentReadFiles_NoIndexWritesNoNetworkNoProcess()
+    {
+        var files = Scan.Value.Files.Where(f => IsAttachmentReadFile(f.Rel)).ToList();
+        foreach (var rel in new[]
+        {
+            "src/ClippysRevenge.Core/AttachmentText.cs", "src/ClippysRevenge.Core/OneDriveMap.cs",
+            "src/ClippysRevenge.Core/OneDriveScopes.cs", "src/ClippysRevenge.Core/OneDriveLinks.cs",
+            "src/ClippysRevenge.Core/DraftAttachments.cs", "src/ClippysRevenge.Core/DraftAttachments.Com.cs",
+            "src/ClippysRevenge.Core/AiFiles.cs", "src/ClippysRevenge.App/OutlookAttachmentSource.cs",
+            "src/ClippysRevenge.App/OneDriveRegistry.cs",
+        })
+            Assert.Contains(files, f => f.Rel == rel);
+
+        var re = new Regex(IndexNetworkProcessRegex);
+        var hits = files.SelectMany(f => re.Matches(f.Code).Select(m => $"{f.Rel}:{LineOf(f.Code, m.Index)}: {m.Value}")).ToList();
+        AssertNone(hits, "Attachment read files must not write the index, use the network or start a process.");
+        AssertNone(files.Where(f => Path.GetFileName(f.Rel).StartsWith("DraftAttachments", StringComparison.Ordinal)
+                && Regex.IsMatch(f.Code, @"\bEmailIndex\b")).Select(f => f.Rel).ToList(),
+            "DraftAttachments*.cs never reference EmailIndex.");
+
+        Assert.Matches(IndexNetworkProcessRegex, "new HttpClient()");
+        Assert.Matches(IndexNetworkProcessRegex, "Process.Start(x)");
+        Assert.Matches(IndexNetworkProcessRegex, "ix.UpsertDecision(d)");
+        Assert.Matches(IndexNetworkProcessRegex, "MailboxIndexes m");
+    }
+
+    [Fact]
+    public void AttachmentReadFiles_LogNoNamesPathsOrText()
+    {
+        var files = Scan.Value.Files.Where(f => IsAttachmentReadFile(f.Rel)).ToList();
+        AssertNone(files.SelectMany(f => AttachmentReadLogHits(f.Code, f.Rel)).ToList(),
+            "Attachment read files must not log a path, name, URL, entry id, subject, body or text.");
+
+        foreach (var planted in new[]
+        {
+            "_logger?.LogWarning(\"\", item.Name);", "log.LogDebug(\"\", local.Path);", "log.LogDebug(\"\", link.Url);",
+            "log.LogDebug(\"\", text);", "log.LogWarning(\"\", ex.Message);", "log.LogDebug(\"\", root.MountPoint);",
+            "log.LogDebug(\"\", p.EntryId);",
+        })
+            Assert.Single(AttachmentReadLogHits(planted, "x"));
+        foreach (var fine in new[]
+        {
+            "_logger?.LogWarning(\"\", e.GetType().Name);",
+            "_log?.LogDebug(\"\", c.Read, c.Truncated, c.Chars, c.ElapsedMs);",
+            "_logger?.LogWarning(\"\", errorType);", "log.LogDebug(\"\", count);",
+        })
+            Assert.Empty(AttachmentReadLogHits(fine, "x"));
+    }
+
+    [Fact]
+    public void OneDriveRegistry_ReadOnly()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/OneDriveRegistry.cs");
+        Assert.Contains("OpenSubKey(", f.Code);
+        Assert.DoesNotMatch(RegistryWriteRegex, f.Code);
+        Assert.Matches(RegistryWriteRegex, "k.SetValue(\"a\", 1)");
+        Assert.Matches(RegistryWriteRegex, "OpenSubKey(p, writable: true)");
+    }
+
+    [Fact]
+    public void Program_WiresAttachmentReading()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/Program.cs");
+        var clean = f.Code.IndexOf("aiFiles.CleanUpAtStart(", StringComparison.Ordinal);
+        var worker = f.Code.IndexOf("new DraftWorker(", StringComparison.Ordinal);
+        Assert.True(clean >= 0 && worker > clean, "aiFiles.CleanUpAtStart( must come before new DraftWorker(");
+        foreach (var s in new[] { "AiFilePaths.Default(", "new OutlookAttachmentSource(", "new DraftAttachments(", "Attachments: draftAttachments" })
+            Assert.Contains(s, f.Code);
+    }
+
+    [Fact]
+    public void SettingsForm_BindsReadAttachments()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/Tray/SettingsForm.Ai.cs");
+        Assert.Contains("AiTabTexts.ReadAttachmentsText", f.Code);
+        Assert.Matches(@"AiDraft\s*\.\s*ReadAttachments\s*=", f.Code);
+        Assert.Matches(@"\.Checked\s*=\s*d\s*\.\s*ReadAttachments", f.Code);
+    }
+
+    // ---- Learning from edits (M20.1, SPEC 27) ----
+
+    private const string EditLearningFile = "src/ClippysRevenge.Core/EditLearning.cs";
+    private const string EditIndexFile = "src/ClippysRevenge.Core/EmailIndex.Edits.cs";
+    private const string EditWorkerFile = "src/ClippysRevenge.Core/DraftWorker.Edits.cs";
+
+    private static readonly Regex EditsForbiddenType = new(
+        @"\b(IAiMailbox|IReplyDraftWriter|IMailSource|IReconcileSource|IAttachmentSource|IFreeBusySource|IDraftModel|ComWorker)\b|Microsoft\.Office\.Interop");
+
+    private static readonly Regex EditsLogStatement = new(@"\bLog(Debug|Information|Warning|Error|Trace|Critical)\s*\(");
+    private static readonly Regex EditsLogBad = new(@"Text|Body|Html|Imid|InReplyTo|EntryId", RegexOptions.IgnoreCase);
+
+    /// <summary>Log statements (up to their ");") whose arguments, with string literals removed, name a text or an id.</summary>
+    internal static List<string> EditLogHits(string code, string rel)
+    {
+        var hits = new List<string>();
+        foreach (Match m in EditsLogStatement.Matches(code))
+        {
+            var end = code.IndexOf(");", m.Index, StringComparison.Ordinal);
+            var call = code[m.Index..(end < 0 ? code.Length : end)];
+            if (EditsLogBad.IsMatch(call)) hits.Add($"{rel}:{LineOf(code, m.Index)}: {call.Trim()}");
+        }
+        return hits;
+    }
+
+    [Fact]
+    public void EditLearning_IsIndexOnly()
+    {
+        foreach (var rel in new[] { EditLearningFile, EditIndexFile })
+        {
+            var f = Scan.Value.Files.Single(x => x.Rel == rel);
+            Assert.DoesNotMatch(EditsForbiddenType, f.Code);
+        }
+        Assert.Matches(EditsForbiddenType, "private readonly IAiMailbox _m;");
+        Assert.Matches(EditsForbiddenType, "using Microsoft.Office.Interop.Outlook;");
+        Assert.Matches(EditsForbiddenType, "ComWorker w;");
+
+        var ctors = typeof(EditLearning).GetConstructors();
+        Assert.NotEmpty(ctors);
+        foreach (var p in ctors.SelectMany(c => c.GetParameters()))
+            Assert.False(p.ParameterType.IsInterface && p.ParameterType != typeof(Microsoft.Extensions.Logging.ILogger),
+                "EditLearning must not take a COM-side interface: " + p.ParameterType.Name);
+    }
+
+    // ---- Learning from edits, style prompt (M20.2, SPEC 27.6) ----
+
+    [Fact]
+    public void SettingsForm_BindsLearnFromEdits()
+    {
+        var f = Scan.Value.Files.Single(x => x.Rel == "src/ClippysRevenge.App/Tray/SettingsForm.Ai.cs");
+        Assert.Contains("AiTabTexts.LearnFromEditsText", f.Code);
+        Assert.Matches(@"AiDraft\s*\.\s*LearnFromEdits\s*=", f.Code);
+        Assert.Matches(@"\.Checked\s*=\s*d\s*\.\s*LearnFromEdits", f.Code);
+    }
+
+    private static readonly string[] StyleEditsBadTokens = ["DraftText", "SentText", "Pairs[", "EditsBlock", "UserPrompt"];
+
+    /// <summary>Log statements (up to their ");", string literals removed) that name an edit text or the prompt.</summary>
+    internal static List<string> StyleEditLogHits(string code, string rel)
+    {
+        var hits = new List<string>();
+        foreach (Match m in EditsLogStatement.Matches(code))
+        {
+            var end = code.IndexOf(");", m.Index, StringComparison.Ordinal);
+            var call = code[m.Index..(end < 0 ? code.Length : end)];
+            if (StyleEditsBadTokens.Any(t => call.Contains(t, StringComparison.Ordinal)))
+                hits.Add($"{rel}:{LineOf(code, m.Index)}: {call.Trim()}");
+        }
+        return hits;
+    }
+
+    [Fact]
+    public void StyleEdits_LogNoTexts()
+    {
+        const string rel = "src/ClippysRevenge.Core/StyleSkill.cs";
+        var f = Scan.Value.Files.Single(x => x.Rel == rel);
+        AssertNone(StyleEditLogHits(f.Code, rel), "Log statements in StyleSkill.cs must not take an edit text or the prompt.");
+        Assert.Single(StyleEditLogHits(Strip("_logger?.LogDebug(\"x {T}\", edits.Pairs[0].DraftText);", true, null), "x"));
+        Assert.Single(StyleEditLogHits(Strip("_logger?.LogDebug(\"x {T}\", StylePrompt.EditsBlock(e));", true, null), "x"));
+        Assert.Empty(StyleEditLogHits(Strip("_logger?.LogDebug(\"x {A}\", e.Pairs.Count);", true, null), "x"));
+    }
+
+    [Fact]
+    public void EditFiles_LogNoTexts()
+    {
+        var hits = new List<string>();
+        foreach (var rel in new[] { EditLearningFile, EditIndexFile, EditWorkerFile })
+        {
+            var f = Scan.Value.Files.Single(x => x.Rel == rel);
+            hits.AddRange(EditLogHits(f.Code, rel));
+        }
+        AssertNone(hits, "Log statements in the edit-learning files must not take a text, body, imid or entry id.");
+        Assert.Single(EditLogHits("_log?.LogWarning(\"x {T}\", sentText);", "x"));
+        Assert.Single(EditLogHits("_log?.LogDebug(\"x\", row.InReplyTo);", "x"));
+        Assert.Single(EditLogHits("_log?.LogWarning(\"x\", made.EntryId);", "x"));
+        Assert.Empty(EditLogHits("_log?.LogWarning(\"x {Type}\", ex.GetType().Name);", "x"));
     }
 }

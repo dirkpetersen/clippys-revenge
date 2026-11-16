@@ -60,6 +60,7 @@ internal static class LiveClaude
             Effort = Effort,
             TimeoutSeconds = 120,
             ClaudeCliPath = "",
+            EditsNoticeShown = true,   // no extra edits notice event or balloon (M20.2)
         };
         s.RecordConsent(now);
         return s;
@@ -127,8 +128,8 @@ internal sealed class FixedSelectionMailbox(IAiMailbox inner, SelectedEmail sele
 }
 
 /// <summary>Wraps the real model. Checks every request before the CLI runs, so a live test can't send more than planned.</summary>
-internal sealed class GuardedModel(IDraftModel inner, string expectedModel, string requiredToken, bool? meetingNote = null)
-    : IDraftModel
+internal sealed class GuardedModel(IDraftModel inner, string expectedModel, string requiredToken, bool? meetingNote = null,
+    Func<ModelRequest, string?>? extraCheck = null) : IDraftModel
 {
     private static readonly string MeetingNoteHead = DraftPrompt.MeetingNote[..(DraftPrompt.MeetingNote.IndexOf('\n') + 1)];
 
@@ -164,7 +165,7 @@ internal sealed class GuardedModel(IDraftModel inner, string expectedModel, stri
             : !request.SystemPrompt.Contains(DraftPrompt.NoStyleGuideText, StringComparison.Ordinal) ? "style"
             : MeetingNoteWrong(request.SystemPrompt) ? "meeting-note"
             : request.UserPrompt.Contains("signature_added: yes", StringComparison.Ordinal) ? "signature"
-            : null;
+            : extraCheck?.Invoke(request);
         if (reason is not null)
         {
             Tripped = reason;

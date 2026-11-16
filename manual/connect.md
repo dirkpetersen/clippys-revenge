@@ -23,7 +23,7 @@ Then start Claude Code and run `/mcp` to check that `clippy` is connected.
 !!! tip
     **Settings, Connection** has the same command, a **Test connection** button
     and the token. The command box hides the token until you press **Show**;
-    **Copy** always copies the full command.
+    **Copy command** always copies the full command.
 
 The command contains your token, so treat it like a password. Don't paste it into
 chats, tickets or shared notes.
@@ -34,7 +34,8 @@ The default is `8765`. You can change it in **Settings, Connection** to any numb
 from 1024 to 65535. Clippy asks before it applies the change, because Claude Code
 must then be set up again with the new command. If the new port can't be opened
 (another program uses it), the server stays on the old port, nothing is saved, and
-the Port field says so.
+the Port field says `Port <new> is in use or can't be opened. The server stays on
+port <old>.`
 
 ## The token
 
@@ -42,7 +43,7 @@ The token is a random 32-byte value in hex. It is stored encrypted for your Wind
 user and never written to `settings.json` or to the log.
 
 - **Copy auth token** in the tray menu copies it.
-- **Regenerate auth token…** in the tray menu (or **Regenerate** in Settings,
+- **Regenerate auth token…** in the tray menu (or **Regenerate…** in Settings,
   Connection) creates a new one. The old token stops working at once, so run the new
   `claude mcp add` command again. Clippy asks you to confirm first, and Cancel is
   the default. In the Settings window the new token is applied when you press OK
@@ -82,9 +83,63 @@ and it has no dependency on WSL interop: WSL talks to it over TCP. The same
 snippet is shown in **Settings, Connection**.
 
 !!! note "Files go to Windows folders"
-    Saved attachments land in a Windows folder (by default
-    `%USERPROFILE%\Downloads\Clippy's Revenge`). From WSL you reach it as
-    `/mnt/c/Users/<you>/Downloads/Clippy's Revenge`.
+    Attachments saved with `get_attachment` or `save_attachments` land in a Windows
+    folder (by default `%USERPROFILE%\Downloads\Clippy's Revenge`). From WSL you
+    reach it as `/mnt/c/Users/<you>/Downloads/Clippy's Revenge`. To get an
+    attachment straight into the folder where Claude Code works in WSL, use
+    [`attachment_link`](tools.md#attachment_link) and set `CLIPPY_TOKEN` as below.
+
+### Set CLIPPY_TOKEN for downloads
+
+The `claude mcp add` command stores your token in Claude Code's own config, but the
+shell where Claude Code runs commands doesn't have it. An
+[attachment download link](tools.md#attachment_link) is fetched by that shell with
+`curl`, and it needs your token as well as the link. So you put the token in the
+shell's environment once:
+
+1. Open **Settings, Connection**. Next to **From WSL** there is a line that reads
+   `export CLIPPY_TOKEN=••••••••`. The token is masked until you press **Show**
+   next to the auth token.
+2. Press **Copy WSL token line**. This copies the full line,
+   `export CLIPPY_TOKEN=<your token>`, to the clipboard, even while the line on
+   screen is masked.
+3. In WSL, add the line to the end of `~/.bashrc`, then reload it:
+
+    ```bash
+    echo 'export CLIPPY_TOKEN=<paste the token here>' >> ~/.bashrc
+    source ~/.bashrc
+    ```
+
+    Or open `~/.bashrc` in an editor and paste the copied line.
+
+Check it from WSL. This should print the length of your token (64 characters) and
+not `0`:
+
+```bash
+echo -n "$CLIPPY_TOKEN" | wc -c
+```
+
+To test the endpoint itself, ask Claude Code for an attachment (see
+[`attachment_link`](tools.md#attachment_link)), or try an unknown link, which must
+answer `404` once the token is accepted and `401` when it isn't:
+
+```bash
+curl -i -H "Authorization: Bearer $CLIPPY_TOKEN" \
+  http://127.0.0.1:8765/files/0000000000000000000000000000000000000000000
+# 404 = token accepted, no such link.  401 = token missing or wrong.
+```
+
+Use your own port instead of `8765` if you changed it.
+
+After **Regenerate auth token**, update the export as well, exactly like the
+`claude mcp add` command: copy the line again, replace the old one in `~/.bashrc`
+and run `source ~/.bashrc` (or open a new shell). Changing the port needs no change
+to `CLIPPY_TOKEN`; the link Claude gets always names the current port.
+
+!!! warning "Treat the line like a password"
+    `~/.bashrc` now holds your token. It is the same secret that is already in
+    Claude Code's config, and it only works on your own PC (`127.0.0.1`). Don't
+    paste the line into chats or tickets.
 
 ## Check that it works
 
@@ -113,6 +168,8 @@ yet. The result is one of:
 | `✗ The server on 127.0.0.1:<port> didn't answer within 5 s.` | Wait a moment and try again. |
 | `✗ The server answered without a token (HTTP <code>). Another program may be using port <port>.` | Change the port. |
 | `✗ The server rejected the token (HTTP 401).` | Restart Clippy. If it persists, regenerate the token. |
+| `✗ The server answered HTTP <code> to initialize.` | The server has a problem, or another program holds the port. Check the [Activity](activity.md) window, then restart Clippy or change the port. |
+| `✗ The server answered, but not with an MCP initialize result.` | Another program holds the port. Change the port. |
 | `✗ Another MCP server (<name>) is answering on port <port>.` | Another program holds the port. Change the port. |
 
 ## Troubleshooting

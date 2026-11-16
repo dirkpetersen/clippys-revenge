@@ -14,6 +14,9 @@ public class MailTextTests
     {
         { "Thanks, will do.\r\n\r\nDirk\r\n\r\n________________________________\r\nFrom: Ann Lee <ann@x.edu>\r\nSent: Monday, November 10, 2026 9:14 AM\r\nTo: Dirk P <d@x.edu>\r\nSubject: Budget\r\n\r\nCan you send it?", null, "Thanks, will do.\n\nDirk" },
         { "Sure.\n\nFrom: Ann Lee <ann@x.edu>\nSent: Monday, November 10, 2026 9:14 AM\nTo: Dirk\nCc: Bo\nSubject: Budget\n\nold", null, "Sure." },
+        { "Tack.\n\nFrån: Ann <a@x.se>\nSkickat: den 10 november 2026 09:14\nTill: Dirk\nÄmne: Budget\n\nText", null, "Tack." },
+        { "Dziękuję.\n\nOd: Ann <a@x.pl>\nWysłano: 10 listopada 2026 09:14\nDo: Dirk\nTemat: Budget\n\nTekst", null, "Dziękuję." },
+        { "了解です。\n\n差出人: Ann <a@x.jp>\n送信日時: 2026年11月10日 09:14\n宛先: Dirk\n件名: Budget\n\n本文", null, "了解です。" },
         { "Passt.\n\nVon: Ann Lee <ann@x.de>\nGesendet: Montag, 10. November 2026 09:14\nAn: Dirk\nBetreff: Budget\n\nText", null, "Passt." },
         { "D'accord.\n\nDe : Ann\nEnvoyé : lundi 10 novembre 2026 09:14\nÀ : Dirk\nObjet : Budget\n\nTexte", null, "D'accord." },
         { "D'accord.\n\nDe : Ann\nEnvoyé : lundi 10 novembre 2026 09:14\nÀ : Dirk\nObjet : Budget\n\nTexte", null, "D'accord." },

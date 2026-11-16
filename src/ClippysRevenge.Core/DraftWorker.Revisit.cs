@@ -144,11 +144,10 @@ public sealed partial class DraftWorker
         var email = new PromptEmail(detail.SenderName, detail.SenderEmail, detail.To, detail.Cc, detail.EventTime,
             detail.Subject, NonInlineNames(detail.Attachments), detail.Body);
         var input = PromptInput(s.Settings, s.Key, email, thread);
-        var request = new ModelRequest(
-            DraftPrompt.RevisitSystemPrompt(s.Identity.DisplayName, s.UserSmtp, _s.Style.ReadForPrompt(), ai.MeetingTimes),
-            DraftPrompt.RevisitUserPrompt(new RevisitPromptInput(input, info!.PlainBody, t.Draft.Created)),
-            DraftModel.RevisitSchema, ai.Model, ai.Effort, TimeSpan.FromSeconds(ai.TimeoutSeconds),
-            DraftModel.DraftMaxOutputTokens);
+        var related = FindRelated(ai, s.Index,
+            new RelatedAnchor(targetId, detail.InternetMessageId, topic, detail.EventTime, detail.SenderEmail, detail.Subject, detail.Body),
+            input.SignatureText, s.UserSmtp, s.MailboxSmtp);
+        input = input with { Related = related };
 
         var callCt = p.CallToken ?? ct;
         if (callCt.IsCancellationRequested) return DraftPassEnd.Cancelled;
@@ -158,7 +157,28 @@ public sealed partial class DraftWorker
             p.Total++;
             _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
         }
-        var result = await _s.Model.RunAsync(request, callCt).ConfigureAwait(false);
+        AttachmentSet attachments;
+        try
+        {
+            attachments = await CollectAttachmentsAsync(ai, s.Index, s.Key,
+                new AttachmentAnchor(targetId, topic, detail.EventTime, detail.Subject, detail.Body, detail.SenderName,
+                    detail.SenderEmail, detail.Attachments), input.SignatureText, s.Identity, s.UserSmtp, s.Priority,
+                t.Draft.DraftEntryId, callCt).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (callCt.IsCancellationRequested)
+        {
+            return DraftPassEnd.Cancelled;
+        }
+        input = input with { Attachments = attachments.Items.Count > 0 ? attachments.Items : null };
+        var request = new ModelRequest(
+            DraftPrompt.RevisitSystemPrompt(s.Identity.DisplayName, s.UserSmtp, _s.Style.ReadForPrompt(), ai.MeetingTimes,
+                _s.Facts?.ReadForPrompt() ?? "", DraftPrompt.HasRelated(input), ai.ReasonLine,
+                attachments: DraftPrompt.HasAttachments(input)),
+            DraftPrompt.RevisitUserPrompt(new RevisitPromptInput(input, info!.PlainBody, t.Draft.Created)),
+            DraftModel.RevisitSchema, ai.Model, ai.Effort, TimeSpan.FromSeconds(ai.TimeoutSeconds),
+            DraftModel.DraftMaxOutputTokens);
+        var result = await _s.Model.RunAsync(request with { Kind = ModelCallKind.Revisit }, callCt).ConfigureAwait(false);
+        p.Usage = p.Usage.AddCall(result);
         if (!p.Rescan)
         {
             p.Done++;
@@ -227,7 +247,7 @@ public sealed partial class DraftWorker
                 return null;
 
             case RevisitAction.Replace:
-                return await ReplaceAsync(p, s, t, upTo, reply, detail, targetId, now, ct).ConfigureAwait(false);
+                return await ReplaceAsync(p, s, t, upTo, reply, detail, targetId, now, attachments, ct).ConfigureAwait(false);
 
             default:
                 return await RemoveAsync(p, s, t, upTo, now, ct).ConfigureAwait(false);
@@ -290,7 +310,8 @@ public sealed partial class DraftWorker
 
     /// <summary>SPEC 23.6 step 6 "replace": the new draft is saved first, then the old one is moved.</summary>
     private async Task<DraftPassEnd?> ReplaceAsync(PassState p, RevisitScope s, AiDraftThread t, DateTimeOffset upTo,
-        RevisitReply reply, EmailDetail detail, string targetId, DateTimeOffset now, CancellationToken ct)
+        RevisitReply reply, EmailDetail detail, string targetId, DateTimeOffset now, AttachmentSet attachments,
+        CancellationToken ct)
     {
         var id = t.Draft.DraftEntryId;
         var fp = t.Draft.Fingerprint;
@@ -392,7 +413,8 @@ public sealed partial class DraftWorker
         RepliedDraft made;
         try
         {
-            made = await _s.Writer.ReplyAsync(MakePlan(targetId, reply.ReplyAll ?? false, html, s.Priority), ct).ConfigureAwait(false);
+            made = await _s.Writer.ReplyAsync(MakePlan(targetId, reply.ReplyAll ?? false, html, s.Priority,
+                ReasonTop(ai, reply.NoteForUser) + AttachmentNotes.Html(attachments.Notes)), ct).ConfigureAwait(false);
         }
         catch (ItemNotFoundException)
         {
@@ -444,6 +466,7 @@ public sealed partial class DraftWorker
         {
             _log?.LogWarning("AI drafts: couldn't record a revisit ({Type}).", ex.GetType().Name);
         }
+        RecordDraftText(detail.InternetMessageId, html, attachments.Counts, made);
         try
         {
             s.Index.AddRevisit(id, created, AiRevisitOutcome.Replace, 1);
@@ -483,7 +506,7 @@ public sealed partial class DraftWorker
         var moved = move?.Status == ObsoleteDraftStatus.Moved;
         if (!moveThrew && move!.Status == ObsoleteDraftStatus.NoDeletedItems)
             _s.Hub.Event(ActivityKind.Ai, RevisitTexts.MoveFailed);
-        _s.Hub.Event(ActivityKind.Draft, RevisitTexts.ForReplace(move?.Status, made.Subject),
+        _s.Hub.Event(ActivityKind.Draft, RevisitTexts.ForReplace(move?.Status, made.Subject, DraftAttachmentTexts.EventSuffix(attachments.Counts)),
             mailbox: string.IsNullOrEmpty(tag) ? null : tag);
         s.Index.SetAiDraftState(id, moved ? AiDraftState.Replaced : AiDraftState.Left, upTo, 0, now);
         RevisitOutcome(moved ? "replaced" : "replaced_left");

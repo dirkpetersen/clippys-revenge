@@ -78,6 +78,42 @@ public class MailFoldersTests
     }
 
     [Fact]
+    public void FromOutlook_canonicalizes_localized_drafts_and_deleted_items()
+    {
+        Assert.Equal("Drafts",
+            MailFolderPath.FromOutlook("\\\\Bob\\Entwürfe", "Posteingang", "Gesendete Elemente", "Entwürfe", "Gelöschte Elemente"));
+        Assert.Equal("Deleted Items",
+            MailFolderPath.FromOutlook("\\\\Bob\\Gelöschte Elemente", "Posteingang", "Gesendete Elemente", "Entwürfe", "Gelöschte Elemente"));
+        Assert.Equal("Drafts\\Alt",
+            MailFolderPath.FromOutlook("\\\\Bob\\entwürfe\\Alt", "Posteingang", "Gesendete Elemente", "Entwürfe", "Gelöschte Elemente"));
+        Assert.Equal("Deleted Items\\2025",
+            MailFolderPath.FromOutlook("\\\\Bob\\Gelöschte Elemente\\2025", "Posteingang", "Gesendete Elemente", "Entwürfe", "Gelöschte Elemente"));
+        // Other folders untouched; a nested folder with the localized name is not the default folder.
+        Assert.Equal("Archive\\Entwürfe",
+            MailFolderPath.FromOutlook("\\\\Bob\\Archive\\Entwürfe", "Posteingang", "Gesendete Elemente", "Entwürfe", "Gelöschte Elemente"));
+        Assert.Equal("Entwürfe",
+            MailFolderPath.FromOutlook("\\\\Bob\\Entwürfe", "Inbox", "Sent Items"));
+        Assert.Equal("Drafts", MailFolderPath.FromOutlook("\\\\Bob\\Drafts", "Inbox", "Sent Items", "Drafts", "Deleted Items"));
+    }
+
+    [Fact]
+    public void Parse_drafts_and_deleted_items_roots_and_round_trip()
+    {
+        var d = MailFolderPath.Parse(" drafts/Old ");
+        Assert.Equal(FolderRoot.Drafts, d.Root);
+        Assert.Equal("Drafts\\Old", d.Canonical);
+        Assert.Equal(["Old"], d.SubPath);
+        var x = MailFolderPath.Parse("DELETED ITEMS");
+        Assert.Equal(FolderRoot.DeletedItems, x.Root);
+        Assert.Equal("Deleted Items", x.Canonical);
+        Assert.Empty(x.SubPath);
+        Assert.Equal(EventTimeField.Received, MailFolderPath.TimeFieldFor(x));
+        Assert.Equal(x.Canonical, MailFolderPath.Canonicalize(x.Canonical));
+        Assert.Equal(FolderRoot.StoreRoot, MailFolderPath.Parse("Draftsx").Root);
+        var fromOutlook = MailFolderPath.FromOutlook("\\\\Bob\\Entwürfe\\Alt", "Inbox", "Sent Items", "Entwürfe", "Gelöschte Elemente");
+        Assert.Equal(fromOutlook, MailFolderPath.Parse(fromOutlook!).Canonical);
+    }
+    [Fact]
     public void NotFoundException_messages()
     {
         var own = new MailFolderNotFoundException("", "Inbox\\Gone");

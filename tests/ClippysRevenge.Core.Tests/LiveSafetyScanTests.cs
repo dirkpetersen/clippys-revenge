@@ -110,4 +110,30 @@ public class LiveSafetyScanTests
         Assert.Contains("GetItemFromID(tracked.EntryId, tracked.StoreId)", fixture, StringComparison.Ordinal);
         Assert.Contains("StartsWith(\"[\" + RunToken + \"] \"", fixture, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Live_link_test_uses_its_own_host_and_folder()
+    {
+        var text = File.ReadAllText(Path.Combine(LiveDir(), "LiveAttachmentLinkTests.cs"));
+        foreach (var needed in new[] { "StartAsync(0", "PrivateFolder.Ensure", "fx.TempRoot, \"links\"" })
+            Assert.True(text.Contains(needed, StringComparison.Ordinal), "The live link test is missing: " + needed);
+        foreach (var banned in new[] { "LinkPaths.Default", "LocalApplicationData", "ClippysRevenge\\\\links" })
+            Assert.False(text.Contains(banned, StringComparison.Ordinal), "The live link test must not use: " + banned);
+    }
+
+    [Fact]
+    public void Live_attachment_tests_use_their_own_ai_folder_and_never_delete_recursively()
+    {
+        var content = File.ReadAllText(Path.Combine(LiveDir(), "LiveAttachmentContent.cs"));
+        foreach (var needed in new[] { "fx.TempRoot, \"ai-files\"", "PrivateFolder.Ensure", "\"clippy-live\"", "FileMode.CreateNew" })
+            Assert.True(content.Contains(needed, StringComparison.Ordinal), "LiveAttachmentContent.cs is missing: " + needed);
+
+        foreach (var name in new[] { "LiveAttachmentContent.cs", "LiveAttachmentContentTests.cs", "LiveAttachmentProbeTests.cs" })
+        {
+            var text = File.ReadAllText(Path.Combine(LiveDir(), name));
+            foreach (var banned in new[] { "AiFilePaths.Default", "LocalApplicationData", "ClippysRevenge\\ai-files", "recursive: true",
+                         "DeleteSubKey", "SetValue(", "CreateSubKey" })
+                Assert.False(text.Contains(banned, StringComparison.Ordinal), name + " must not use: " + banned);
+        }
+    }
 }

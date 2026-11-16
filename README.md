@@ -44,6 +44,13 @@ Turn on [AI drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/) a
 - **Outdated drafts.** When a newer message arrives in a thread where Clippy left an unsent AI draft, Clippy re-checks it: it keeps the draft, replaces it, or moves it to **Deleted Items** when no reply is needed any more. It only does this for a draft you haven't edited, opened or sent, and never empties Deleted Items. Turn it off with **Update or remove my AI drafts when a thread moves on** in Settings. See [Outdated drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#outdated-drafts).
 - **Rescan.** Tray, **AI drafts**, **Rescan emails from the last 24 hours…** drafts replies for the last day of mail, with a confirmation, a daily limit and **Cancel rescan**.
 - **Writing style.** Built from your Sent Items, which Clippy indexes before the Inbox, so it is ready early.
+- **Facts about you.** Tray, **AI drafts**, **Edit my facts…** opens a skill file (`%USERPROFILE%\.claude\skills\my-email-context\SKILL.md`) with your Zoom link, office hours, standard answers, who people are and how you want replies written. Clippy adds it to every draft request. See [Facts about you](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#facts-about-you).
+- **Related earlier mail.** Up to 5 related earlier emails from the same mailbox go with each draft request so replies fit the history. On by default; **Include related earlier emails** in Settings turns it off. See [Related earlier mail](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#related-earlier-mail).
+- **Reason line.** Each AI draft starts with a yellow `Clippy: …` line saying why it was drafted. Delete it before sending. See [The reason line](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#the-reason-line).
+- **Attachments and shared files.** Drafts use what attachments say. Clippy reads the text of PDF, Word, Excel, PowerPoint, text, HTML and `.eml` attachments and attached emails of the email and its thread (up to 20 files and 40,000 characters per draft), and of OneDrive/SharePoint files linked in them that are already synced to your PC (only links from you or your own organization, nothing fetched from the network), and sends it to Claude for that one draft. Nothing is stored. Files it couldn't read get a yellow note at the top. On by default; **Read attachments and synced shared files for drafts** in Settings turns it off. See [Attachments and shared files](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#attachments-and-shared-files).
+- **Token tally.** A greyed `Today: 18 AI calls, ~210k tokens (in 190k / out 20k)` line in the tray's AI drafts menu and in Activity. See [Token tally](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#token-tally).
+- **Don't draft for this sender.** Two tray items add the selected email's sender or domain to **Never draft for**; undo it by deleting the line in Settings. See [Don't draft for this sender](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#dont-draft-for-this-sender).
+- **Learning from your edits.** When you send a reply that began as an AI draft, Clippy keeps a redacted draft/sent pair in its local index (newest 20 with text, purged after 30 to 90 days; drafts that used attachment text are never kept). With the weekly writing-style update, up to 20 pairs (at least 3 needed) go to Claude, which adds an "Edits I usually make to drafts" section to your style. On by default; **Learn from how I edit Clippy's drafts** in Settings turns it off. See [Learning from how you edit drafts](https://dirkpetersen.github.io/clippys-revenge/ai-drafts/#learning-from-how-you-edit-drafts).
 
 More in the manual: [tray menu](https://dirkpetersen.github.io/clippys-revenge/tray/), [every setting](https://dirkpetersen.github.io/clippys-revenge/settings/) and [Activity messages](https://dirkpetersen.github.io/clippys-revenge/activity/).
 
@@ -116,7 +123,8 @@ Clippy attaches to a running Outlook and never starts it by itself. If
 Outlook isn't running, indexing waits. The tray's **Start Outlook** item
 (shown only then) is the one place that starts it. Other tray items: Sync
 now, Pause indexing, Rebuild index, Shared mailboxes, AI drafts, Draft invites,
-Activity, Settings, Open log folder, Open data folder, About. Every item is
+Copy auth token, Regenerate auth token, Activity, Settings, Open log folder,
+Open data folder, About, Start with Windows and Exit. Every item is
 explained in the [tray menu reference](https://dirkpetersen.github.io/clippys-revenge/tray/).
 
 ## WSL setup
@@ -140,6 +148,12 @@ curl -i -X POST http://127.0.0.1:8765/mcp     # expect: 401 Unauthorized
 The app listens on `127.0.0.1` only. It does not bind to the WSL virtual
 adapter, and there is no WSL interop dependency: WSL talks to it over TCP.
 
+To let Claude Code in WSL download attachments with `attachment_link`, put your
+token in the WSL shell once: press **Copy WSL token line** in Settings, Connection
+(the on-screen line is masked) and add the copied
+`export CLIPPY_TOKEN=<token>` line to `~/.bashrc`. After **Regenerate auth token**,
+copy it again. Details: [Connect](https://dirkpetersen.github.io/clippys-revenge/connect/#set-clippy_token-for-downloads).
+
 ## Tools
 
 Tool names are snake_case. `mailbox` is optional (empty = your own mailbox, or
@@ -151,6 +165,7 @@ a configured shared mailbox's address; search tools also accept `all`).
 | `get_message` | Full message by id, fetched live from Outlook |
 | `get_attachment` | Saves one attachment to a permitted folder, returns its path |
 | `save_attachments` | Saves the attachments of all messages matching a search |
+| `attachment_link` | One-time download link for one attachment (10 minutes, one download, up to 100 MB), plus the `curl` command that saves it in the shell's current folder. Needs `CLIPPY_TOKEN` in the shell. The file content never goes through the model |
 | `create_draft` | Saves a new draft (never sends), with signature and attachments |
 | `reply_draft` | Saves a reply or reply-all draft (never sends) |
 | `list_events` | Calendar events in a date range |
@@ -179,7 +194,11 @@ a configured shared mailbox's address; search tools also accept `all`).
 - **Never deletes email.** Clippy never calls delete and never empties Deleted
   Items. It never moves your mail. The one exception is its own outdated, unedited AI
   drafts (see above), which go to Deleted Items and can be dragged back.
-- **Attachments' content is never indexed.** Only file names are stored.
+- **Attachments' content is never indexed or stored.** Only file names are stored. For AI drafts the text of attachments and synced shared files is read in memory, sent to Claude for that one draft, and never written anywhere (Outlook attachments pass through the private folder `%LOCALAPPDATA%\ClippysRevenge\ai-files\` and are deleted at once).
+- **Download links need two secrets.** `GET /files/<link token>` needs your
+  bearer token and the single-use link token. The copy sits in a folder only your
+  user can read (`%LOCALAPPDATA%\ClippysRevenge\links\`) and is deleted after the
+  download, on expiry and at app start. Tokens are masked in logs.
 - **File access is restricted by `PathPolicy`.** Every path a tool reads or
   writes must be inside an allowed folder: the attachment folder
   (`%USERPROFILE%\Downloads\Clippy's Revenge` by default, always allowed) and
@@ -206,7 +225,7 @@ no extra encryption layer.
 Mailboxes mounted in your Outlook profile appear under tray menu **Shared
 mailboxes**. Checking one starts indexing it into its own index file;
 unchecking asks whether to delete that index. Tools reach it with
-`mailbox="helpdesk@example.edu"`, or search all of them with `mailbox="all"`.
+`mailbox="<the shared mailbox's address>"`, or search all of them with `mailbox="all"`.
 
 ## Troubleshooting
 

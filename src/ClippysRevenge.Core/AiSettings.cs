@@ -53,6 +53,27 @@ public sealed partial class AiDraftingSettings
     /// <summary>Revisit Clippy's own unsent AI drafts when the thread moves on (SPEC 19.2, 23).</summary>
     public bool ReviseDrafts { get; set; } = true;
 
+    /// <summary>Add up to 5 related earlier emails from the local index to drafting prompts (SPEC 19.2, 25.3).</summary>
+    public bool RelatedMail { get; set; } = true;
+
+    /// <summary>Start each AI draft with a highlighted note on why it was drafted (SPEC 19.2, 25.4).</summary>
+    public bool ReasonLine { get; set; } = true;
+
+    /// <summary>Internal: the one-time related-mail notice was shown (SPEC 25.3). Not in the Settings window.</summary>
+    public bool RelatedMailNoticeShown { get; set; }
+
+    /// <summary>Read attachment text and synced OneDrive/SharePoint files into drafting prompts (SPEC 19.2, 26).</summary>
+    public bool ReadAttachments { get; set; } = true;
+
+    /// <summary>Internal: the one-time attachments notice was shown (SPEC 26.10). Not in the Settings window.</summary>
+    public bool AttachmentsNoticeShown { get; set; }
+
+    /// <summary>Keep redacted draft/sent pairs of sent AI drafts for the style skill (SPEC 19.2, 27).</summary>
+    public bool LearnFromEdits { get; set; } = true;
+
+    /// <summary>Internal: the one-time edits notice was shown (SPEC 27.6). Not in the Settings window.</summary>
+    public bool EditsNoticeShown { get; set; }
+
     [JsonIgnore] public bool HasConsent => ConsentedAtUtc is not null;
 
     [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9._\[\]-]*\z")]

@@ -26,6 +26,10 @@ public sealed class McpHostOptions
     /// <summary>Called after Logging.ClearProviders(). Null = no logging.</summary>
     public Action<ILoggingBuilder>? ConfigureLogging { get; init; }
     public TimeProvider Time { get; init; } = TimeProvider.System;
+
+    /// <summary>The one-time download link store (SPEC 24.4). The app passes its single instance (M17.3); it outlives
+    /// host restarts and is never disposed or cleared by the host. Null = every GET /files/{token} answers 404.</summary>
+    public AttachmentLinks? Links { get; init; }
 }
 
 public sealed class McpHttpHost : IAsyncDisposable
@@ -283,6 +287,8 @@ public sealed class McpHttpHost : IAsyncDisposable
         builder.Configuration.Sources.Clear();
         builder.Logging.ClearProviders();
         _options.ConfigureLogging?.Invoke(builder.Logging);
+        // The request path of GET /files/{token} holds a secret; ASP.NET Core and Kestrel log it below Warning.
+        builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
         builder.WebHost.ConfigureKestrel(k =>
         {
             k.Listen(IPAddress.Loopback, port);
@@ -324,6 +330,8 @@ public sealed class McpHttpHost : IAsyncDisposable
         var app = builder.Build();
         app.UseBearerAuth();
         app.MapMcp(McpPath);
+        FilesEndpoint.Map(app, _options.Links, hub, time,
+            app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(FilesEndpoint)));
         return app;
     }
 
