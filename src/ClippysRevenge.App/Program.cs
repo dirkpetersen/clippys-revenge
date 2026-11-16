@@ -196,7 +196,7 @@ internal static class Program
                 new StyleSkillFiles(StylePaths.Default(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), dataDir)),
                 () => indexesRef.For(null), () => draftModelRef, () => settings.AiDrafting,
                 () => StyleCorpus.SignatureTexts(kind => signatures.Default(kind)), hub,
-                logger: loggerFactory.CreateLogger<StyleSkill>());
+                logger: loggerFactory.CreateLogger<StyleSkill>(), sentIndexed: () => syncRef.OwnSentBackfillComplete);
             var styleGuide = new StyleGuideSource(styleSkill,
                 ct => AiOwner.ResolveAsync(aiMailboxRef, indexesRef, WorkPriority.Background, ct),
                 hub, loggerFactory.CreateLogger<StyleGuideSource>());
@@ -207,6 +207,7 @@ internal static class Program
                 Logger: loggerFactory.CreateLogger<DraftWorker>(), FreeBusy: freeBusy));
             var draftsRef = drafts;
             sync.CycleCompleted += _ => draftsRef.Wake();
+            sync.OwnSentBackfillCompleted += () => draftsRef.Wake();
             }
             catch (Exception ex)
             {

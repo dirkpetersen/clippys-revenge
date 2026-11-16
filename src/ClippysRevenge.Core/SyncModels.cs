@@ -114,8 +114,30 @@ public static class SyncLabels
         canonicalPath == FolderPaths.SentItems ? "Sent" : canonicalPath;
 }
 
+/// <summary>The Sent group of one mailbox cycle (SPEC 10 "Sent Items ready").</summary>
+/// <param name="Mailbox">"" or a normalized SMTP key.</param>
+/// <param name="Complete">Every folder under Sent Items in the plan is missing in Outlook or has backfill_complete.</param>
+/// <param name="FinishedNow">Complete, and at least one of those folders started this cycle with an incomplete backfill.</param>
+public sealed record SentGroupResult(string Mailbox, bool Complete, bool FinishedNow);
+
 public static class SyncPlanner
 {
+    /// <summary>
+    /// SPEC 10 folder order: "Sent Items", then other folders under Sent Items, then "Inbox", then the rest.
+    /// Stable (configured order within each rank). Input is canonical; output has the same elements.
+    /// </summary>
+    public static IReadOnlyList<string> ProcessingOrder(IReadOnlyList<string> folders)
+    {
+        ArgumentNullException.ThrowIfNull(folders);
+        return folders.OrderBy(Rank).ToList();
+
+        static int Rank(string p) =>
+            p.Equals(FolderPaths.SentItems, StringComparison.Ordinal) ? 0
+            : FolderPaths.IsUnderSentItems(p) ? 1
+            : p.Equals(FolderPaths.Inbox, StringComparison.Ordinal) ? 2
+            : 3;
+    }
+
     /// <summary>
     /// Own mailbox first, then every enabled shared mailbox in list order. Keys are normalized; duplicate
     /// keys keep the first; entries without a valid address are skipped; folders are canonical and

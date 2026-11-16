@@ -611,4 +611,141 @@ public class SyncEngineTests : IDisposable
         Assert.True(r.NotMounted);
         Assert.Null(_ix.GetDecision("old2"));
     }
+
+    // ---- Sent Items first (M16.11) ----
+
+    private void SentFirstSetup()
+    {
+        _src.Folder("", "Sent Items");
+        for (var i = 0; i < 3; i++) _src.Put("", "Inbox", Old(i));
+        for (var i = 10; i < 12; i++) _src.Put("", "Sent Items", Old(i));
+    }
+
+    private Task<MailboxSyncResult> RunSent(MailboxPlan plan, List<SentGroupResult> calls, Action? atCall = null) =>
+        _engine.SyncMailboxAsync(plan, _ix, TestContext.Current.CancellationToken, r =>
+        {
+            calls.Add(r);
+            atCall?.Invoke();
+        });
+
+    [Fact]
+    public async Task SentFirst_FoldersAndBackfillEventsInOrder()
+    {
+        SentFirstSetup();
+        await Run(Plan("", 12, "Inbox", "Sent Items"));
+        Assert.Equal(["Sent Items", "Inbox"], _src.CallsOf("GetFolderAsync").Select(c => (string)c.Args[0]!));
+        Assert.Equal("Sent Items", (string)_src.CallsOf("ListRangeAsync")[0].Args[0]!);
+        var texts = _hub.GetEvents().Where(e => e.Kind == ActivityKind.Backfill).Select(e => e.Summary).ToList();
+        Assert.StartsWith("Sent: backfill started, 2 emails", texts[0]);
+        Assert.Equal("Sent: backfill complete", texts[1]);
+        Assert.StartsWith("Inbox: backfill started, 3 emails", texts[2]);
+        Assert.Equal("Inbox: backfill complete", texts[3]);
+    }
+
+    [Fact]
+    public async Task SentFirst_TextAndResultsKeepConfiguredOrder()
+    {
+        SentFirstSetup();
+        var r = await Run(Plan("", 12, "Inbox", "Sent Items"));
+        var ev = Assert.Single(_hub.GetEvents(), e => e.Kind == ActivityKind.Sync);
+        Assert.Equal("Inbox +3, Sent +2 (0.0 s)", ev.Summary);
+        Assert.Equal(["Inbox", "Sent Items"], r.Folders.Select(f => f.Folder));
+    }
+
+    [Fact]
+    public async Task SentGroup_CalledOnceMidCycle()
+    {
+        SentFirstSetup();
+        var calls = new List<SentGroupResult>();
+        IReadOnlyDictionary<string, long>? counts = null;
+        var inboxCalls = -1;
+        await RunSent(Plan("", 12, "Inbox", "Sent Items"), calls, () =>
+        {
+            counts = _ix.Status().FolderCounts;
+            inboxCalls = _src.CallsOf("GetFolderAsync").Count(c => (string)c.Args[0]! == "Inbox");
+        });
+        Assert.Equal(new SentGroupResult("", true, true), Assert.Single(calls));
+        Assert.Equal(2, counts!["Sent Items"]);
+        Assert.False(counts.ContainsKey("Inbox"));
+        Assert.Equal(0, inboxCalls);
+    }
+
+    [Fact]
+    public async Task SentGroup_AlreadyComplete_NotFinishedNow()
+    {
+        SentFirstSetup();
+        var plan = Plan("", 12, "Inbox", "Sent Items");
+        await RunSent(plan, []);
+        var calls = new List<SentGroupResult>();
+        await RunSent(plan, calls);
+        Assert.Equal(new SentGroupResult("", true, false), Assert.Single(calls));
+    }
+
+    [Fact]
+    public async Task SentGroup_NoSentFolder_CalledBeforeFirstFolder()
+    {
+        AddOld(2);
+        var calls = new List<SentGroupResult>();
+        var getFolderCalls = -1;
+        await RunSent(Plan(), calls, () => getFolderCalls = _src.CallsOf("GetFolderAsync").Count);
+        Assert.Equal(new SentGroupResult("", true, false), Assert.Single(calls));
+        Assert.Equal(0, getFolderCalls);
+    }
+
+    [Fact]
+    public async Task SentGroup_MissingSentItems_CompleteNotFinishedNow()
+    {
+        AddOld(2);
+        var calls = new List<SentGroupResult>();
+        var r = await RunSent(Plan("", 12, "Inbox", "Sent Items"), calls);
+        Assert.Equal(new SentGroupResult("", true, false), Assert.Single(calls));
+        Assert.Equal(["Inbox", "Sent Items"], r.Folders.Select(f => f.Folder));
+        Assert.True(r.Folders[1].Missing);
+    }
+
+    [Fact]
+    public async Task SentGroup_SubfolderInGroup_CalledAfterLastSentFolder()
+    {
+        _src.Folder("", "Sent Items\\Old");
+        SentFirstSetup();
+        _src.Put("", "Sent Items\\Old", Old(20));
+        var calls = new List<SentGroupResult>();
+        var seen = new List<string>();
+        await RunSent(Plan("", 12, "Inbox", "Sent Items\\Old", "Sent Items"), calls,
+            () => seen.AddRange(_src.CallsOf("GetFolderAsync").Select(c => (string)c.Args[0]!)));
+        Assert.Equal(["Sent Items", "Sent Items\\Old", "Inbox"],
+            _src.CallsOf("GetFolderAsync").Select(c => (string)c.Args[0]!));
+        Assert.Equal(["Sent Items", "Sent Items\\Old"], seen);
+        Assert.Equal(new SentGroupResult("", true, true), Assert.Single(calls));
+    }
+
+    [Fact]
+    public async Task SentGroup_ThrowBeforeGroupEnds_NoCallback()
+    {
+        SentFirstSetup();
+        _src.ThrowOn("ReadAsync", 1, new MailSourceUnavailableException("x"));
+        var calls = new List<SentGroupResult>();
+        await Assert.ThrowsAsync<MailSourceUnavailableException>(() => RunSent(Plan("", 12, "Inbox", "Sent Items"), calls));
+        Assert.Empty(calls);
+    }
+
+    [Fact]
+    public async Task SentGroup_CallbackExceptionIsContained()
+    {
+        SentFirstSetup();
+        var r = await _engine.SyncMailboxAsync(Plan("", 12, "Inbox", "Sent Items"), _ix,
+            TestContext.Current.CancellationToken, _ => throw new InvalidOperationException("boom"));
+        Assert.False(r.NotMounted);
+        Assert.NotNull(_ix.Get("m000"));
+    }
+
+    [Fact]
+    public async Task SentGroup_NotMounted_NoCallback()
+    {
+        _src.Box("").Mounted = false;
+        var calls = new List<SentGroupResult>();
+        var r = await RunSent(Plan(), calls);
+        Assert.True(r.NotMounted);
+        Assert.Empty(calls);
+    }
 }

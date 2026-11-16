@@ -616,4 +616,72 @@ public class StyleSkillTests : IDisposable
         await Assert.ThrowsAsync<ArgumentException>(() => _skill.RunIfDueAsync(new Recipient("x", "dirk"), Ct));
         await Assert.ThrowsAsync<ArgumentNullException>(() => _skill.RegenerateAsync(null!, false, Ct));
     }
+
+    // ---- Sent Items first (M16.11) ----
+
+    private bool _ready;
+
+    private StyleSkill Gated(Func<bool>? sentIndexed = null) =>
+        new(_files, () => _indexFactory(), () => _model, () => _settings, () => _sigs, _hub, _time, _log,
+            sentIndexed ?? (() => _ready));
+
+    [Fact]
+    public async Task SentIndexed_false_waits_without_events_calls_or_files()
+    {
+        Add(30);
+        var skill = Gated();
+        Assert.IsType<StyleRunResult.NotDue>(await skill.RunIfDueAsync(Owner, Ct));
+        Assert.Empty(_model.Requests);
+        Assert.Empty(AiEvents());
+        Assert.False(File.Exists(UserFile));
+        Assert.False(File.Exists(_files.Paths.AppCopyFile));
+    }
+
+    [Fact]
+    public async Task SentIndexed_turning_true_runs_at_once_without_a_timer()
+    {
+        Add(30);
+        var skill = Gated();
+        Assert.IsType<StyleRunResult.NotDue>(await skill.RunIfDueAsync(Owner, Ct));
+        _ready = true;
+        Assert.IsType<StyleRunResult.Updated>(await skill.RunIfDueAsync(Owner, Ct));
+        Assert.Single(_model.Requests);
+    }
+
+    [Fact]
+    public async Task SentIndexed_true_never_runs_twice()
+    {
+        Add(30);
+        _ready = true;
+        var skill = Gated();
+        Assert.IsType<StyleRunResult.Updated>(await skill.RunIfDueAsync(Owner, Ct));
+        Assert.IsType<StyleRunResult.NotDue>(await skill.RunIfDueAsync(Owner, Ct));
+        Assert.Single(_model.Requests);
+    }
+
+    [Fact]
+    public async Task SentIndexed_throwing_delegate_counts_as_ready()
+    {
+        Add(30);
+        var skill = Gated(() => throw new InvalidOperationException("boom"));
+        Assert.IsType<StyleRunResult.Updated>(await skill.RunIfDueAsync(Owner, Ct));
+    }
+
+    [Fact]
+    public async Task SentIndexed_false_does_not_gate_regenerate()
+    {
+        Add(30);
+        var skill = Gated();
+        Assert.IsType<StyleRunResult.Updated>(await skill.RegenerateAsync(Owner, false, Ct));
+    }
+
+    [Fact]
+    public async Task SentIndexed_false_still_refreshes_the_meeting_section()
+    {
+        _files.Write(LegacyText(), T0.AddDays(-1), 30, T0.AddDays(-2));
+        var skill = Gated();
+        Assert.IsType<StyleRunResult.NotDue>(await skill.RunIfDueAsync(Owner, Ct));
+        Assert.Single(AiEvents(), e => e.Summary == MeetingEvent);
+        Assert.Empty(_model.Requests);
+    }
 }

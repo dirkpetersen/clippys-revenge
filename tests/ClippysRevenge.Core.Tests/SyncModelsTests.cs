@@ -84,4 +84,22 @@ public class SyncModelsTests
     [Fact]
     public void IsUnderInbox_null_throws() =>
         Assert.Throws<ArgumentNullException>(() => FolderPaths.IsUnderInbox(null!));
+
+    [Theory]
+    [InlineData("Inbox|Sent Items", "Sent Items|Inbox")]
+    [InlineData("Inbox\\Projects|Archive|Inbox|Sent Items\\Old|Sent Items", "Sent Items|Sent Items\\Old|Inbox|Inbox\\Projects|Archive")]
+    [InlineData("B|A|Inbox", "Inbox|B|A")]
+    [InlineData("Sent Items Archive|Inbox", "Inbox|Sent Items Archive")]
+    [InlineData("", "")]
+    [InlineData("Sent Items", "Sent Items")]
+    [InlineData("Sent Items\\B|Sent Items\\A", "Sent Items\\B|Sent Items\\A")]
+    public void ProcessingOrder_SentFirstThenInboxThenRest(string input, string expected)
+    {
+        string[] Split(string s) => s.Length == 0 ? [] : s.Split('|');
+        Assert.Equal(Split(expected), SyncPlanner.ProcessingOrder(Split(input)));
+    }
+
+    [Fact]
+    public void ProcessingOrder_Null_Throws() =>
+        Assert.Throws<ArgumentNullException>(() => SyncPlanner.ProcessingOrder(null!));
 }

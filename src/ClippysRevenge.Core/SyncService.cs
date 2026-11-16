@@ -33,6 +33,7 @@ public sealed class SyncService : BackgroundService
     private DateTimeOffset? _lastSync;
     private DateTimeOffset? _cycleEnd;
     private int _rebuilds;
+    private bool _ownSentComplete;
 
     public SyncService(IMailSource source, MailboxIndexes indexes, Func<Settings> settings,
         ActivityHub hub, BalloonCenter balloons, TimeProvider? time = null, ILogger<SyncService>? logger = null,
@@ -59,6 +60,20 @@ public sealed class SyncService : BackgroundService
     /// <summary>Raised after every cycle that was not aborted (also when nothing changed). Handlers run on the sync
     /// thread and must not block. Each handler is called separately; exceptions are caught and logged (SPEC 10).</summary>
     public event Action<SyncCycleResult>? CycleCompleted;
+
+    /// <summary>Raised on the sync thread when an own-mailbox cycle finishes the Sent Items backfill (SentGroupResult
+    /// FinishedNow). Handlers must not block; each is called on its own, and its exceptions are caught and logged.</summary>
+    public event Action? OwnSentBackfillCompleted;
+
+    /// <summary>The own mailbox's Sent Items are fully indexed (SPEC 10). False at start-up and after a Rebuild of the
+    /// own mailbox; then the last Sent-group result of an own-mailbox cycle. Thread-safe, never touches SQLite.</summary>
+    public bool OwnSentBackfillComplete
+    {
+        get
+        {
+            lock (_lock) return _ownSentComplete;
+        }
+    }
 
     public bool IsPaused
     {
@@ -185,6 +200,7 @@ public sealed class SyncService : BackgroundService
                 {
                     _errorScopes.Remove(k, out scope);
                     _counts[k] = 0;
+                    if (k == MailboxIndexes.OwnMailbox) _ownSentComplete = false;
                 }
                 scope?.Dispose();
                 _indexes.Reset(k);
@@ -365,6 +381,26 @@ public sealed class SyncService : BackgroundService
         }
     }
 
+    private void OnSentGroup(SentGroupResult r)
+    {
+        if (r.Mailbox != MailboxIndexes.OwnMailbox) return;
+        lock (_lock) _ownSentComplete = r.Complete;
+        if (!r.FinishedNow) return;
+        var handlers = OwnSentBackfillCompleted;
+        if (handlers is null) return;
+        foreach (var d in handlers.GetInvocationList())
+        {
+            try
+            {
+                ((Action)d)();
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning("A OwnSentBackfillCompleted handler failed ({Type}).", ex.GetType().Name);
+            }
+        }
+    }
+
     /// <summary>Returns false when the cycle must stop.</summary>
     private async Task<bool> SyncOneAsync(MailboxPlan plan, List<MailboxSyncResult> results,
         CancellationToken stop, CancellationToken ct)
@@ -373,7 +409,7 @@ public sealed class SyncService : BackgroundService
         try
         {
             var index = _indexes.Add(key);
-            var r = await _engine.SyncMailboxAsync(plan, index, ct).ConfigureAwait(false);
+            var r = await _engine.SyncMailboxAsync(plan, index, ct, OnSentGroup).ConfigureAwait(false);
             results.Add(r);
             var total = index.Status().TotalEmails;
             lock (_lock) _counts[key] = total;

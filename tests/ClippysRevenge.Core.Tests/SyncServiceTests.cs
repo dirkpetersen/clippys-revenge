@@ -568,4 +568,121 @@ public class SyncServiceTests : IDisposable
         await Settle();
         Assert.Equal(1, CompletedCount());
     }
+
+    // ---- OwnSentBackfillCompleted (M16.11) ----
+
+    private void OwnSentSetup(bool withSentFolder = true)
+    {
+        _settings.IndexedFolders = ["Inbox", "Sent Items"];
+        AddMails(2);
+        if (withSentFolder) AddMails(2, folder: "Sent Items", start: 10);
+    }
+
+    private async Task NextCycle(SyncService svc)
+    {
+        _time.Advance(TimeSpan.FromSeconds(10));
+        svc.SyncNow();
+        await WaitCycle();
+    }
+
+    [Fact]
+    public async Task OwnSent_FlagFalseBeforeFirstCycleTrueAfter()
+    {
+        OwnSentSetup();
+        var svc = Make();
+        Assert.False(svc.OwnSentBackfillComplete);
+        await svc.StartAsync(CancellationToken.None);
+        await WaitCycle();
+        Assert.True(svc.OwnSentBackfillComplete);
+    }
+
+    [Fact]
+    public async Task OwnSent_EventRaisedOnceBeforeCycleCompleted()
+    {
+        OwnSentSetup();
+        var order = new List<string>();
+        var svc = Make();
+        svc.OwnSentBackfillCompleted += () => { lock (order) order.Add("sent"); };
+        svc.CycleCompleted += _ => { lock (order) order.Add("cycle"); };
+        await svc.StartAsync(CancellationToken.None);
+        await WaitCycle();
+        await NextCycle(svc);
+        await Settle();
+        lock (order) Assert.Equal(["sent", "cycle", "cycle"], order);
+    }
+
+    [Fact]
+    public async Task OwnSent_SharedMailboxDoesNotRaiseOrChangeFlag()
+    {
+        OwnSentSetup();
+        var count = 0;
+        var svc = Make();
+        svc.OwnSentBackfillCompleted += () => Interlocked.Increment(ref count);
+        await svc.StartAsync(CancellationToken.None);
+        await WaitCycle();
+        Assert.Equal(1, count);
+        await svc.StopAsync(CancellationToken.None);
+        _indexes!.Dispose();
+        _svc = null;
+
+        _settings.SharedMailboxes.Add(new SharedMailbox { Smtp = A, Enabled = true, IndexedFolders = ["Inbox", "Sent Items"] });
+        _src.Folder(A, "Inbox");
+        AddMails(2, A, "Sent Items", 30);
+        var svc2 = Make();
+        svc2.OwnSentBackfillCompleted += () => Interlocked.Increment(ref count);
+        await svc2.StartAsync(CancellationToken.None);
+        await WaitCycle();
+        Assert.Equal(1, count);
+        Assert.True(svc2.OwnSentBackfillComplete);
+        Assert.Equal(2, _indexes!.For(A).Status().FolderCounts["Sent Items"]);
+    }
+
+    [Fact]
+    public async Task OwnSent_RebuildResetsOwnFlagOnly()
+    {
+        OwnSentSetup();
+        AddShared(A);
+        var count = 0;
+        var svc = Make();
+        svc.OwnSentBackfillCompleted += () => Interlocked.Increment(ref count);
+        await svc.StartAsync(CancellationToken.None);
+        await WaitCycle();
+        Assert.True(svc.OwnSentBackfillComplete);
+        await svc.RebuildAsync(A, TestContext.Current.CancellationToken);
+        Assert.True(svc.OwnSentBackfillComplete);
+        await svc.RebuildAsync("", TestContext.Current.CancellationToken);
+        Assert.False(svc.OwnSentBackfillComplete);
+        // The rebuild wakes the loop; wait for the next finished cycle.
+        await WaitCycle();
+        while (!svc.OwnSentBackfillComplete) await Task.Delay(20, TestContext.Current.CancellationToken);
+        Assert.Equal(2, Volatile.Read(ref count));
+    }
+
+    [Fact]
+    public async Task OwnSent_ThrowingHandlerDoesNotAbort()
+    {
+        OwnSentSetup();
+        var count = 0;
+        var svc = MakeWithCompleted();
+        svc.OwnSentBackfillCompleted += () => throw new InvalidOperationException("boom");
+        svc.OwnSentBackfillCompleted += () => Interlocked.Increment(ref count);
+        await svc.StartAsync(CancellationToken.None);
+        var r = await WaitCycle();
+        Assert.False(r.Aborted);
+        Assert.True(await _completedSem.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public async Task OwnSent_MissingSentFolder_FlagTrueNoEvent()
+    {
+        OwnSentSetup(withSentFolder: false);
+        var count = 0;
+        var svc = Make();
+        svc.OwnSentBackfillCompleted += () => Interlocked.Increment(ref count);
+        await svc.StartAsync(CancellationToken.None);
+        await WaitCycle();
+        Assert.True(svc.OwnSentBackfillComplete);
+        Assert.Equal(0, count);
+    }
 }
