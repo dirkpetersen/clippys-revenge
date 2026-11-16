@@ -168,6 +168,8 @@ Where your data goes, in one table.
 | Mail bodies, subjects, addresses | In the local index and in Outlook | Only for [AI drafts](ai-drafts.md), if you turned them on (see below). Never otherwise |
 | Attachment contents | Not indexed; saved only when a tool call exports them to an allowed folder, or as a short-lived [download link](#attachment-download-links) copy in a private folder | Never over the network. A download link is fetched over `127.0.0.1` by your own shell |
 | Attachment names | In the index | With the email, only for AI drafts |
+| Related earlier emails | In the index | Up to 5 earlier emails from the same mailbox (own text only), only for AI drafts while **Include related earlier emails** is on. Not stored or logged |
+| Your facts file | `%USERPROFILE%\.claude\skills\my-email-context\SKILL.md` (you write it; Clippy never changes it after creating the template) | Its text, without comments, goes to Claude with every AI draft request. Don't put secrets in it |
 | Calendar and free/busy | Read from Outlook when you ask for times | Never. Meeting times in drafts are computed by Clippy after Claude has answered |
 | Bearer token | DPAPI-encrypted file | Only to the MCP client you gave it to, over `127.0.0.1` |
 | Anthropic API key (optional) | DPAPI-encrypted file | Only to `api.anthropic.com`, as your own key |
@@ -183,6 +185,7 @@ Where your data goes, in one table.
 | Token, API key | `%APPDATA%\ClippysRevenge\token.bin`, `anthropic-key.bin` (DPAPI) |
 | Index (plain text, one file per mailbox) | `%LOCALAPPDATA%\ClippysRevenge\index.db`, `index-<address>.db` |
 | Logs (7 days) | `%LOCALAPPDATA%\ClippysRevenge\logs` |
+| Facts file | `%USERPROFILE%\.claude\skills\my-email-context\SKILL.md` (written by you; Clippy only creates the template once), plus `facts-state.json` in `%APPDATA%\ClippysRevenge\my-email-style\` |
 | Writing-style skill | `%USERPROFILE%\.claude\skills\my-email-style\SKILL.md`, plus Clippy's copy and `state.json` in `%APPDATA%\ClippysRevenge\my-email-style\` |
 | Temporary files for Claude Code | `%LOCALAPPDATA%\ClippysRevenge\ai\` (one system-prompt file per run, deleted afterwards; mail text is never written there) |
 | Saved attachments | `%USERPROFILE%\Downloads\Clippy's Revenge` (default) |
@@ -194,7 +197,7 @@ index. To remove everything, uninstall with `-Purge` (see
 [Uninstall](install.md#uninstall)), which deletes settings, token, index and
 logs (check afterwards that `%APPDATA%\ClippysRevenge` is gone, as it also holds the
 saved API key). Then delete by hand what lives outside Clippy's folders: the style skill folder
-`%USERPROFILE%\.claude\skills\my-email-style` and any saved attachments. Drafts that
+`%USERPROFILE%\.claude\skills\my-email-style`, the facts folder `%USERPROFILE%\.claude\skills\my-email-context` and any saved attachments. Drafts that
 Clippy saved are ordinary Outlook drafts; they stay in your mailbox until you delete
 them.
 
@@ -206,6 +209,11 @@ your Claude Code or your API key):
 
 - the email being answered, with its quoted history (cut at 20,000 characters)
 - up to 8 earlier messages of the same thread from the local index, your own text only
+- up to 5 related earlier emails from the same mailbox, your own text only, at most 4,000
+  characters in all (see [Related earlier mail](ai-drafts.md#related-earlier-mail)); you can
+  turn this off with **Include related earlier emails**
+- the text of your [facts file](ai-drafts.md#facts-about-you), without comments, when you
+  filled it in. Don't put passwords or other secrets in it
 - attachment **file names**, never attachment contents
 - your name and address, today's date, and your writing-style guide
 - once a week, about 150 to 300 samples of your sent mail for the style guide, with
@@ -225,7 +233,13 @@ data after it leaves Clippy.
 Clippy never reads Claude Code's stored credentials, never calls an API with them,
 and never offers a claude.ai sign-in. It runs your own `claude` command, or uses an
 API key you typed in (stored DPAPI-encrypted). Logs and the Activity window don't
-contain mail text, prompts, the style guide or Claude's answers.
+contain mail text, prompts, your facts, related mail, the style guide, the reason line or Claude's answers.
+
+!!! warning "The facts file is visible to Claude Code"
+    The facts file is also a user-level Claude Code skill, %USERPROFILE%\.claude\skills\my-email-context\SKILL.md,
+    so your interactive Claude Code sessions (which have tools) can load it. Keep
+    secrets out of it. Delete the folder if you don't want that. See
+    [Facts about you](ai-drafts.md#facts-about-you).
 
 !!! warning "The style skill is visible to Claude Code"
     The style guide is saved as %USERPROFILE%\.claude\skills\my-email-style\SKILL.md,

@@ -112,7 +112,7 @@ The first time you turn it on (and before the first manual draft), a dialog titl
 **Turn on AI drafts?** says:
 
 > Clippy will send new emails from your Inbox, earlier messages in the same thread,
-> and samples of your sent mail to Claude (Anthropic) to write reply drafts in your
+> up to 5 related earlier emails, and samples of your sent mail to Claude (Anthropic) to write reply drafts in your
 > style. Drafts are only saved, never sent. With Claude Code, this uses your Claude
 > plan's usage. Shared mailboxes are included only if you turn them on one by one.
 
@@ -125,9 +125,11 @@ the API:
 |---|---|
 | The email being answered | Sender, recipients, date, subject and the **full body including quoted history**, cut at 20,000 characters |
 | Thread excerpts | Up to 8 earlier messages of the same conversation from your local index, your own text only (quoted history and signatures cut), each cut at 4,000 characters |
+| Related earlier emails | Up to 5 earlier emails from the same mailbox that may relate to this one, own text only, at most 4,000 characters in all. Only while [Include related earlier emails](#related-earlier-mail) is on |
 | Your earlier draft | Only when Clippy [re-checks an outdated draft](#outdated-drafts): the text of Clippy's own earlier draft and the newer messages of the thread. Nothing beyond what the consent text already names |
 | Attachment **names** | For the email and the thread messages. Names only |
 | Your name and address, today's date | So the draft is addressed and dated correctly |
+| Your facts file | What you wrote in [Facts about you](#facts-about-you), without the comments. Only when you filled something in |
 | Your writing style guide | The skill described [below](#your-writing-style), which contains short examples of your sent mail with addresses, links and phone numbers removed. Its meeting-times section is left out |
 | About 150 to 300 samples of your sent mail | Sent once a week, with addresses, links and phone numbers removed, to write the style guide |
 
@@ -140,7 +142,7 @@ the API:
 
 **The model gets no tools.** It can't read files, run commands, search your mail or
 call anything. Its answer is limited to: needs a reply or not, how sure it is, reply
-or reply all, and a short HTML body. A sanitizer then removes everything except plain
+or reply all, a short HTML body and the one-sentence [reason line](#the-reason-line). A sanitizer then removes everything except plain
 formatting (paragraphs, line breaks, lists, bold, italic, underline, quotes), so
 links, images, styles and scripts never reach the draft. A prompt-injected email can
 at worst produce a bad draft, which you see before sending.
@@ -449,6 +451,224 @@ the options. Like all placeholders, check these before sending.
 - **Number of times to offer**: 1 to 10, default 5.
 
 This works in automatic passes and in **Draft a reply to the selected email**.
+
+## Facts about you
+
+Clippy can give Claude a short file of facts about you, so that a draft uses your real
+Zoom link, office hours or standard answer instead of a placeholder like `[[Zoom link]]`.
+The same file can also say **how you want replies written**.
+
+### Where the file is
+
+```
+%USERPROFILE%\.claude\skills\my-email-context\SKILL.md
+```
+
+It is a second Claude Code **skill**, next to your writing-style skill. Because of
+that, your interactive Claude Code sessions read it too when they write email for you.
+Clippy keeps no other copy: the file is the only source, and it is read fresh for every
+draft, so a change applies to the next draft.
+
+### How the file is created
+
+Clippy creates the template **once**, and never overwrites a file that exists:
+
+- The first time you have given [consent](#consent-and-what-is-sent) and Clippy knows
+  your name from Outlook. If Outlook isn't running yet, Clippy waits, so the template
+  never says "the user" just because Outlook was closed.
+- When you choose **Edit my facts…** in the tray and the file is missing. This needs no
+  consent, because nothing is sent. If your name isn't known yet, the template says
+  "the user".
+
+Clippy remembers that it created the template (a small file `facts-state.json` in
+`%APPDATA%\ClippysRevenge\my-email-style`). If you delete the file yourself, Clippy
+does not bring it back on its own. **Edit my facts…** creates it again.
+
+### The template
+
+```
+---
+name: my-email-context
+description: "Facts about Ann Example for writing their email: role and team, meeting links, office hours, standard answers, who people are, and how they want replies written. Use when drafting or replying to email as Ann Example."
+---
+
+<!-- Facts about you, for Clippy's Revenge and Claude Code. Clippy adds what you write here to every AI draft request it sends to Claude, and Claude Code reads it when it writes email for you. Write short facts under the headings, one per line. Text between these comment markers is ignored, so you can leave the examples. Clippy never changes this file once it exists. Don't put passwords or other secrets here. -->
+
+## Me
+
+<!-- Your role, your team and what you work on. -->
+<!-- e.g. I lead the research computing team; we run the HPC cluster and research storage. -->
+
+## Links
+
+<!-- Links you often send. -->
+<!-- e.g. My Zoom room: https://zoom.us/my/example -->
+
+## Office hours
+
+<!-- When and how people can reach you. -->
+<!-- e.g. Office hours Tuesdays 2-4 pm, on Zoom or in my office. -->
+
+## Standard answers
+
+<!-- Answers you give again and again. -->
+<!-- e.g. New accounts: please fill in the request form at https://example.org/accounts -->
+
+## People
+
+<!-- Who people are and how you know them, one per line. -->
+<!-- e.g. Ricky, Dave: ski group -->
+
+## How I want replies written
+
+<!-- Preferences for your drafts; these win over the writing-style skill. -->
+<!-- e.g. Sign off with just my first name. Keep replies to my team short. -->
+```
+
+The name in the first lines is your Outlook display name (here the made-up Ann
+Example).
+
+### What to write
+
+Write short facts under the headings, one per line. Text between `<!--` and `-->` is
+ignored, so you can leave the examples in place or replace them.
+
+- **Facts:** your role and team, links you send often, office hours, answers you give
+  again and again, and who people are (`Ricky, Dave: ski group`).
+- **Reply preferences**, under **How I want replies written**: your sign-off, how long
+  replies should be, the tone for certain people. These **win over your
+  [writing-style skill](#your-writing-style)** where the two differ, because you wrote
+  them on purpose.
+
+Preferences never win over the fixed rules. Whatever the file says, drafts are only
+saved and never sent, mail text is data and never an instruction, and a fact that
+neither the email nor the file gives still becomes a `[[…]]` placeholder. If the file
+asks for something those rules don't allow, Claude ignores that part.
+
+Don't put passwords or other secrets in the file: everything in it goes to Claude.
+
+### What Claude gets
+
+Only text you wrote. Clippy removes the header at the top and every `<!-- … -->`
+comment, then any heading with nothing under it, so an untouched template adds nothing
+at all. A file larger than **16 KiB**, a file that can't be read and a file that isn't
+valid UTF-8 are not used: drafts then go without facts.
+
+### Edit my facts…
+
+In the tray, **AI drafts**, **Edit my facts…** opens the file in Notepad, and creates
+the template first when the file is missing. If Notepad can't be started, a balloon says
+`Couldn't open the file: <reason>`. Save the file in Notepad and you are done.
+
+### Status in Settings
+
+Settings, **AI drafts** shows a line under the check boxes:
+
+| Line | Meaning |
+|---|---|
+| `Facts about you: filled in` | The file has text of yours. It goes with every draft |
+| `Facts about you: template only` | The file exists but holds only the untouched template, so nothing is added |
+| `Facts about you: not found` | The file is missing, too large, unreadable or not UTF-8. Use **Edit my facts…** |
+
+### Activity messages
+
+Clippy tells you when the file goes away or comes back, once per change and never with
+its content: `Facts about you: my-email-context SKILL.md not found or unreadable — drafts go without it. Use "Edit my facts…" in the AI drafts menu.`
+and `Facts about you: using my-email-context SKILL.md again.` See
+[Activity](activity.md#facts-about-you).
+
+### Worked example
+
+Ann puts these lines in her file:
+
+```
+## Links
+My Zoom room: https://zoom.example.org/my/ann
+
+## People
+Ricky, Dave: ski group
+
+## How I want replies written
+Sign off with just my first name.
+```
+
+Ricky writes: "Can we do a quick call about the Saturday bus?" The draft offers her Zoom
+link instead of `[[Zoom link]]`, knows Ricky from the ski group, and signs off `Ann`.
+A question the file doesn't answer, such as the bus departure time, still gets a
+placeholder such as `[[bus time]]`.
+
+## Related earlier mail
+
+For better replies, Clippy can add a few earlier emails that may relate to the one it is
+answering. The setting is **Include related earlier emails** in Settings, **AI drafts**,
+**on by default**. It uses only your local index, so it adds no Claude call and no
+Outlook read.
+
+### What is picked
+
+For the email being answered, Clippy looks in **the same mailbox** (never another one)
+at mail from the **last 12 months**, in two ways:
+
+- **Topic:** emails whose subject or body match the main words of this email's subject.
+  Short and common words are ignored. If the subject has too few words, frequent words
+  from the start of the text fill in.
+- **People:** emails from the same sender, and your own **Sent Items** to that sender
+  (To or CC). This is skipped when the sender is you.
+
+It scores them (a topic match counts most, then a people match, then newer is better),
+keeps **at most 5**, and shows them oldest first. If a Sent Items email to that person
+exists, it is guaranteed a place, so Claude can see how you answered before.
+
+Left out: the email itself and everything in its thread, mail in **Drafts** and
+**Deleted Items**, copies of the same message in other folders, and anything newer than
+the email. Of several emails in one thread only the best one is kept, and duplicates are
+dropped.
+
+### What goes to Claude
+
+Only the **own text** of each email (quoted history and signatures cut, attachment names
+left out), with sender, recipients, date, folder and subject. Each email is cut to 800
+characters, and the whole block holds at most **4,000 characters** of message text.
+Claude is told that these emails are data, may be outdated, and are to be used only for
+facts and tone that clearly apply. They are never stored or logged. If the lookup
+fails, the draft is made without them.
+
+### The one-time notice
+
+If you gave consent before this feature existed (v0.1.0 or earlier), Clippy tells you
+once, with a balloon and an Activity entry:
+`AI drafts now also send up to 5 related earlier emails from your mailbox to Claude, to write better replies. You can turn this off in Settings → AI drafts.`
+New consents already include it in the consent text. Untick **Include related earlier
+emails** to send none.
+
+## The reason line
+
+Every AI draft starts with a yellow-highlighted line that says why Clippy drafted it, for
+example:
+
+> <span style="background-color:#ffff00">Clippy: Ricky asked about the Saturday bus; this answers that.</span>
+
+- Claude writes it as one short sentence in the language of the reply: what the email
+  asks and what the draft answers. It is **at most 160 characters**; a longer one is cut
+  with `…`.
+- Links never appear in it. A web address, `mailto:` or `www.` text is shown as
+  `[link]`, because the line carries Clippy's authority and a malicious email must not
+  be able to put a link there.
+- The setting is **Start each draft with a highlighted note on why it was drafted** in
+  Settings, **AI drafts**, **on by default**. When off, no line is asked for or added.
+- It is added above the meeting times and the reply text, in new drafts, manual drafts,
+  replaced drafts and rescans.
+
+**Delete the line before you send.** It is meant for you only. If you forget and send
+it, Clippy strips such a `Clippy:` line from your own sent mail whenever it later shows
+that mail to Claude (earlier messages in a thread, related emails, and the samples for
+your writing style), so it doesn't learn it as part of your style. Mail from other people
+is never changed.
+
+**Deleting the line counts as editing the draft.** Clippy's check for outdated drafts
+only touches a draft that is exactly as Clippy saved it. Once you remove the line (or
+change anything else), Clippy leaves that draft alone: it won't replace it or move it to
+Deleted Items. See [Outdated drafts](#outdated-drafts).
 
 ## Your writing style
 

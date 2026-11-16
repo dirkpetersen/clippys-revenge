@@ -187,6 +187,22 @@ If a click only shows a balloon, read it: `There are no emails from the last 24 
 to rescan.`, `Today's AI draft limit (<n>) is used up.` or `Claude isn't ready: …`. A
 rescan stops early for the reasons in [Activity](activity.md#rescan).
 
+### The draft has a placeholder where my Zoom link should be
+
+Check **Facts about you** in Settings, AI drafts. `not found` means the file
+`%USERPROFILE%\.claude\skills\my-email-context\SKILL.md` is missing, larger than
+16 KiB or not valid UTF-8: use **Edit my facts…** in the tray. `template only` means you
+haven't written anything outside the `<!-- … -->` comments yet. Activity shows
+`Facts about you: my-email-context SKILL.md not found or unreadable — drafts go without it.`
+when the file goes away. See [Facts about you](ai-drafts.md#facts-about-you).
+
+### There is no yellow `Clippy:` line, or a draft isn't updated any more
+
+No line: **Start each draft with a highlighted note on why it was drafted** may be off
+in Settings, AI drafts, or Claude gave no note for that email. A draft you removed the
+line from (or changed in any way) counts as edited, so Clippy leaves it alone and never
+replaces or moves it. That is intended. See [The reason line](ai-drafts.md#the-reason-line).
+
 ### The writing style isn't there yet
 
 Clippy builds your writing-style skill from your sent mail, and waits until your **Sent
