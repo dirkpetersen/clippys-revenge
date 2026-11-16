@@ -9,8 +9,8 @@ namespace ClippysRevenge.App;
 /// sets a property, saves, closes or deletes.</summary>
 internal sealed partial class OutlookMail
 {
-    /// <summary>SPEC 23.4: DraftFingerprint of Subject, To, CC, BCC, HTMLBody, Categories, (int)Importance and the
-    /// attachment file names in position order. The one place it is read (at creation and at every check).</summary>
+    /// <summary>SPEC 23.4: DraftFingerprint of Subject, To, CC, BCC, HTMLBody, Categories, (int)Importance,
+    /// SentOnBehalfOfName (From), (int)Sensitivity and the attachment file names in position order. The one place it is read (at creation and at every check).</summary>
     /// <exception cref="ArgumentNullException">item is null.</exception>
     /// <exception cref="COMException">Any COM read failed (incl. Outlook gone).</exception>
     internal static string ReadDraftFingerprint(Outlook.MailItem item)
@@ -23,6 +23,8 @@ internal sealed partial class OutlookMail
         var html = item.HTMLBody;
         var categories = item.Categories;
         var importance = (int)item.Importance;
+        var from = item.SentOnBehalfOfName;
+        var sensitivity = (int)item.Sensitivity;
         var names = new List<string?>();
         Outlook.Attachments? atts = null;
         try
@@ -48,7 +50,7 @@ internal sealed partial class OutlookMail
         {
             Release(atts);
         }
-        return DraftFingerprint.Compute(new DraftFingerprintInput(subject, to, cc, bcc, html, categories, importance, names));
+        return DraftFingerprint.Compute(new DraftFingerprintInput(subject, to, cc, bcc, html, categories, importance, from, sensitivity, names));
     }
 
     /// <summary>ReadDraftFingerprint, or null when it threw anything other than an Outlook-gone COMException
