@@ -26,6 +26,7 @@ public static class AiMenuTexts
     public const string Settings = "AI drafts settings…";
     public const string DontDraftSender = "Don't draft for this sender";
     public const string DontDraftDomain = "Don't draft for this sender's domain…";
+    public const string EditFacts = "Edit my facts…";
 
     public static string ToggleFailed(string reason) => "Couldn't change AI drafts: " + reason;
 }
@@ -35,7 +36,8 @@ public sealed record AiDraftsMenuModel(bool AutoChecked, bool AutoEnabled, bool 
     string RescanText = RescanTexts.MenuItem,   // "Rescan emails from the last 24 hours…" or "Cancel rescan (d/t)"
     bool RescanEnabled = true,
     bool RescanCancels = false,                 // true: a click calls CancelRescan
-    bool DontDraftEnabled = false);             // the two "Don't draft for" items (SPEC 27.7)
+    bool DontDraftEnabled = false,              // the two "Don't draft for" items (SPEC 27.7)
+    bool EditFactsEnabled = false);             // "Edit my facts…" (SPEC 25.2): needs the AI services only
 
 /// <summary>SPEC 23.8: what the tray shows before and after a rescan. Pure.</summary>
 public static class RescanFlow
@@ -85,7 +87,8 @@ public static class AiDraftsMenu
             RescanText: running ? RescanTexts.CancelItem(rescan!.Done, rescan.Total) : RescanTexts.MenuItem,
             RescanEnabled: running || (available && !outlookUnavailable && !starting),
             RescanCancels: running,
-            DontDraftEnabled: available && !outlookUnavailable && !running && !starting);
+            DontDraftEnabled: available && !outlookUnavailable && !running && !starting,
+            EditFactsEnabled: available);
     }
 }
 
@@ -154,7 +157,9 @@ public static class AiTabTexts
     public const string TabTitle = "AI drafts";
     public const string EnableText = "Draft replies to new email automatically";
     public const string ReviseDraftsText = "Update or remove my AI drafts when a thread moves on";
-    public const string MeetingTimesText = "Offer meeting times when an email asks for a meeting";
+    public const string RelatedMailText = "Include related earlier emails";
+    public const string ReasonLineText = "Start each draft with a highlighted note on why it was drafted";
+    public const string MeetingTimesText ="Offer meeting times when an email asks for a meeting";
     public const string MeetingCountLabel = "Number of times to offer";
     public const string UseLabel = "Use:";
     public const string UseClaudeCode = "Claude Code on this PC (your Claude subscription)";

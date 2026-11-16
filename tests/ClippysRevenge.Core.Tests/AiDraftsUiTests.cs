@@ -124,7 +124,7 @@ public sealed class AiDraftsUiTests : IDisposable
     public void Menu_defaults()
     {
         var m = AiDraftsMenu.Build(Ai(), available: true, outlookUnavailable: false, busy: false);
-        Assert.Equal(new AiDraftsMenuModel(false, true, true, true, true, DontDraftEnabled: true), m);
+        Assert.Equal(new AiDraftsMenuModel(false, true, true, true, true, DontDraftEnabled: true, EditFactsEnabled: true), m);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public sealed class AiDraftsUiTests : IDisposable
     public void Menu_busy_disables_only_auto()
     {
         var m = AiDraftsMenu.Build(Ai(), true, false, busy: true);
-        Assert.Equal(new AiDraftsMenuModel(false, false, true, true, true, DontDraftEnabled: true), m);
+        Assert.Equal(new AiDraftsMenuModel(false, false, true, true, true, DontDraftEnabled: true, EditFactsEnabled: true), m);
     }
 
     [Fact]
