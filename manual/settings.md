@@ -97,6 +97,7 @@ API key take effect at once, not only when you press OK.
 | **Mailboxes** | **My mailbox** | Your own mailbox is always on while AI drafts are on. Each shared mailbox you index has a check box, off by default |
 | **Writing style** | | Status line: `Generated <date> from <n> sent emails`, `Edited by you` or `Not generated yet`. See below |
 | **Update weekly** | On | Refreshes your writing-style skill about once a week |
+| **Learn from how I edit Clippy's drafts** | On | Sits to the right of **Update weekly**. Clippy keeps a redacted copy of each AI draft it saves, compares it with the reply you send, and the next writing-style update sends up to 20 of your edited replies (at least 3 needed, addresses, links and phone numbers removed) to Claude to add an "Edits I usually make to drafts" section to your style. Off: nothing new is recorded or matched and no edits are sent; what is already stored ages out or goes with **Rebuild index…** (it is not deleted at once). See [Learning from how you edit drafts](ai-drafts.md#learning-from-how-you-edit-drafts). This is the `LearnFromEdits` setting in `settings.json` |
 | **View** | | Shows the style text read-only |
 | **Regenerate…** | | Builds the style skill now. If you edited it, Clippy asks `You edited your writing style skill. Replace your edits with a new version?` with **Replace** and **Keep mine** |
 | **Open in editor** | | Opens your `SKILL.md` in Notepad. If there is no skill yet, it says so |
@@ -114,3 +115,7 @@ because Sent Items are indexed before the Inbox. See
 One AI setting has no box in the window: `AiDrafting.TimeoutSeconds` (default `180`, 30
 to 900), the time limit of one drafting call. You can change it in `settings.json`
 while Clippy is not running.
+
+`AiDrafting.EditsNoticeShown` is internal: it records that the one-time
+[notice about learning from edits](ai-drafts.md#notice-for-existing-users) was shown.
+Leave it alone.

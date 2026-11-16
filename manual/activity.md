@@ -170,11 +170,22 @@ An untouched template is normal and reports nothing.
 | `Ai` | `AI drafts now also read attachments and shared files synced to this PC, and send their text to Claude, to write better replies. You can turn this off in Settings → AI drafts.` Shown once (with a balloon), if you consented before v0.1.1 and **Read attachments and synced shared files for drafts** is on |
 | `Ai` | `AI drafts: added an entry to "Never draft for" (<n> entries).` You used [Don't draft for this sender](ai-drafts.md#dont-draft-for-this-sender). The address is not shown |
 
+### Learning from your edits
+
+See [Learning from how you edit drafts](ai-drafts.md#learning-from-how-you-edit-drafts).
+These lines hold counts only, never text, subjects or addresses.
+
+| Kind | Text |
+|---|---|
+| `Ai` | `AI drafts: noted how you edited 1 sent draft.` or `AI drafts: noted how you edited <n> sent drafts.` (for example `12`, or `1,234`). After a check of your sent mail that matched at least one sent reply to an AI draft. The number counts every draft you sent, including those sent unchanged. At most one check every 5 minutes, so several sent drafts usually appear in one line |
+| `Ai` | `AI drafts now learn from how you edit Clippy's drafts before sending. The next writing-style update sends up to 20 of your edited replies (addresses, links and phone numbers removed) to Claude. You can turn this off in Settings → AI drafts.` Shown once (with a balloon) at the first AI draft Clippy saves after the update, if you consented before v0.1.1 and **Learn from how I edit Clippy's drafts** is on |
+
 ### Writing style
 
 | Kind | Text |
 |---|---|
 | `Ai` | `writing style updated from 240 sent emails (52 s)` |
+| `Ai` | `writing style updated from 240 sent emails and 7 edited drafts (52 s)`. The edited drafts were given to Claude (at least 3, at most 20) |
 | `Ai` | `writing style not updated: only 12 sent emails (need 20)` |
 | `Ai` | `writing style not updated: you edited it. Use Regenerate in Settings to replace it.` |
 | `Ai` | `writing style not updated: <reason>`. The reason is `Claude's usage limit was reached`, `Claude isn't signed in`, `a Claude call failed (<kind>)`, `Claude's answer wasn't usable`, `couldn't save the skill file`, `couldn't read the index` or `couldn't prepare your sent emails` |
