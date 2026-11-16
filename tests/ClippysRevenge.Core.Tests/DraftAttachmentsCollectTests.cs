@@ -47,7 +47,10 @@ public class DraftAttachmentsCollectTests : IDisposable
     private DraftAttachments Make(ILogger? logger = null,
         Func<string, ReadOnlyMemory<byte>, CancellationToken, ExtractedText>? extract = null,
         Func<MappedLink.Local, long, CancellationToken, SyncedFileResult>? readSynced = null) =>
-        new(_src, _clock, logger, extract, readSynced);
+        new(_src, _clock, logger, extract, readSynced, _gate);
+
+    // Own gate: the abandoned-PDF flag must not leak into other tests (the default is process-wide).
+    private readonly PdfAbandonGate _gate = new();
 
     private static AiAttachmentRead.File Bytes(string s) => new(Encoding.UTF8.GetBytes(s));
 
@@ -171,7 +174,7 @@ public class DraftAttachmentsCollectTests : IDisposable
             }
             var first = await task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             Assert.Equal(AttachmentReasons.TookTooLong, first.Items[0].Reason);
-            Assert.True(DraftAttachments.PdfAbandoned);
+            Assert.True(_gate.IsAbandoned);
 
             // A second PDF is skipped without being extracted; other formats still work.
             var second = await Make(extract: (n, b, t) =>
@@ -186,10 +189,21 @@ public class DraftAttachmentsCollectTests : IDisposable
         finally
         {
             release.Set();
-            for (var i = 0; i < 200 && DraftAttachments.PdfAbandoned; i++)
+            for (var i = 0; i < 200 && _gate.IsAbandoned; i++)
                 await Task.Delay(25, TestContext.Current.CancellationToken);
         }
-        Assert.False(DraftAttachments.PdfAbandoned);
+        Assert.False(_gate.IsAbandoned);
+    }
+
+    [Fact]
+    public async Task Unsupported_attachment_type_is_not_damaged()
+    {
+        var log = new CaptureLogger();
+        _src.Returns("A", 1, new AiAttachmentRead.Failed("UnsupportedAttachmentType"));
+        var set = await Make(log).CollectAsync(AttFx.Req(anchor: [AttFx.A(1, "Quarterly review")]), CancellationToken.None);
+        Assert.Equal(AttachmentReasons.UnknownKind, Assert.Single(set.Items).Reason);
+        Assert.Empty(set.Notes);
+        Assert.DoesNotContain(log.Lines, l => l.StartsWith("Warning|", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -39,7 +39,7 @@ public static class DraftAttachmentPlan
             }
             // Links only from the message's own text: a link in quoted history belongs to an earlier sender.
             var own = anchor ? ownText : MailText.OwnText(body ?? "", request.SignatureText);
-            foreach (var link in OneDriveLinks.Find(own))
+            foreach (var link in OneDriveLinks.Find(WithoutQuotedLines(own)))
             {
                 candidates.Add(new PlannedAttachment(TierOf(link.Name), origin, entryId, senderName, senderEmail, time,
                     shared, null, link, null, null));
@@ -93,6 +93,20 @@ public static class DraftAttachmentPlan
         return kept;
     }
 
+    /// <summary>Own text without lines that start with ">": an inline reply keeps the quoted lines (MailText.OwnText cuts
+    /// only a trailing quote block), and a link there belongs to the earlier sender.</summary>
+    private static string WithoutQuotedLines(string text)
+    {
+        if (!text.Contains('>')) return text;
+        var lines = text.Replace("\r\n", "\n").Split('\n');
+        return string.Join('\n', lines.Where(l => !l.TrimStart(' ', '\t', '\u00A0').StartsWith('>')));
+    }
+
+    // InlineAttachments.FileNameFor's last-resort name "attachment-<position>" (no FileName, no DisplayName).
+    private static bool IsFallbackName(string name) =>
+        name.StartsWith("attachment-", StringComparison.Ordinal)
+        && name.Length > 11 && name.AsSpan(11).IndexOfAnyExceptInRange('0', '9') < 0;
+
     private static PlannedAttachment PreRead(PlannedAttachment p, IReadOnlyList<SyncedRoot> roots)
     {
         if (p.Link is { } link)
@@ -113,8 +127,9 @@ public static class DraftAttachmentPlan
             case AttachmentFormat.UnsupportedNoted:
                 var ext = AttachmentText.Extension(name);
                 // No extension: older index rows hold an embedded item's bare display name; the COM read
-                // knows the real type, so let it through. Other unreadable extensions are skipped here.
-                if (ext != "msg" && ext.Length > 0) return p with { SkipReason = AttachmentReasons.CantRead(ext) };
+                // knows the real type, so let it through. The "attachment-<n>" fallback name has no name to
+                // go on at all, so it is skipped here as well, as are other unreadable extensions.
+                if (ext != "msg" && (ext.Length > 0 || IsFallbackName(name))) return p with { SkipReason = AttachmentReasons.CantRead(ext) };
                 break;
         }
         return p;
@@ -146,6 +161,10 @@ public static class DraftAttachmentPlan
     [
         "outlook.com", "hotmail.com", "live.com", "msn.com", "gmail.com", "googlemail.com", "yahoo.com",
         "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com", "web.de",
+        "hotmail.co.uk", "hotmail.fr", "hotmail.de", "outlook.de", "outlook.fr", "live.co.uk", "live.de",
+        "live.fr", "yahoo.co.uk", "yahoo.de", "yahoo.fr", "ymail.com", "rocketmail.com", "mail.com",
+        "t-online.de", "qq.com", "163.com", "126.com", "yandex.ru", "yandex.com", "mail.ru",
+        "comcast.net", "verizon.net", "att.net", "fastmail.com", "zoho.com",
     ];
 
     private static bool IsConsumerDomain(string domain)
@@ -153,7 +172,14 @@ public static class DraftAttachmentPlan
         foreach (var c in ConsumerMailDomains)
             if (domain == c || domain.EndsWith("." + c, StringComparison.Ordinal)) return true;
         // gmx.com, gmx.net, gmx.de, ...
-        return domain.StartsWith("gmx.", StringComparison.Ordinal);
+        if (domain.StartsWith("gmx.", StringComparison.Ordinal)) return true;
+        // Regional variants of the big providers: <name>.<cc>, <name>.co.<cc>, <name>.com.<cc> (exactly that
+        // second-level shape, so outlook.<cc> is consumer but a corporate name like outlook.contoso.com is not).
+        var parts = domain.Split('.');
+        if (parts.Length is < 2 or > 3 || parts[0] is not ("hotmail" or "outlook" or "live" or "yahoo")) return false;
+        var cc = parts[^1];
+        if (cc.Length != 2 || !char.IsAsciiLetter(cc[0]) || !char.IsAsciiLetter(cc[1])) return false;
+        return parts.Length == 2 || parts[1] is "co" or "com";
     }
 
     private static string? DomainOf(string? address)
