@@ -16,7 +16,7 @@ internal sealed record FilterSql(string From, string Where, DynamicParameters Pa
 /// <summary>SQLite + FTS5 index for one mailbox (SPEC §9).</summary>
 public sealed partial class EmailIndex
 {
-    public const int SchemaVersion = 4;
+    public const int SchemaVersion = 5;
     public const string ThreadMetaCompleteKey = "thread_meta_complete";
     public static readonly TimeSpan DecisionRetention = TimeSpan.FromDays(30);
     public const int MaxDecisionAttempts = 3;
@@ -145,8 +145,32 @@ public sealed partial class EmailIndex
     private static void Step4(SqliteConnection conn, SqliteTransaction tx) =>
         conn.Execute(Step4Ddl, transaction: tx);
 
+    // Learning from edits (SPEC 9.1, 27.2): redacted own text, capped and purged.
+    private const string Step5Ddl = """
+        CREATE TABLE IF NOT EXISTS ai_draft_texts (
+          draft_entry_id TEXT PRIMARY KEY,
+          mailbox TEXT NOT NULL,
+          source_imid TEXT NOT NULL,
+          created INTEGER NOT NULL,
+          text TEXT NOT NULL,
+          state TEXT NOT NULL,
+          updated INTEGER NOT NULL);
+        CREATE INDEX IF NOT EXISTS ix_ai_draft_texts_imid ON ai_draft_texts(source_imid, state);
+        CREATE TABLE IF NOT EXISTS ai_edits (
+          id INTEGER PRIMARY KEY,
+          sent_entry_id TEXT NOT NULL UNIQUE,
+          sent INTEGER NOT NULL,
+          similarity REAL NOT NULL,
+          draft_chars INTEGER NOT NULL, sent_chars INTEGER NOT NULL,
+          draft_text TEXT, sent_text TEXT);
+        CREATE INDEX IF NOT EXISTS ix_ai_edits_sent ON ai_edits(sent);
+        """;
+
+    private static void Step5(SqliteConnection conn, SqliteTransaction tx) =>
+        conn.Execute(Step5Ddl, transaction: tx);
+
     // Step n upgrades n-1 -> n.
-    private static readonly Action<SqliteConnection, SqliteTransaction>[] Migrations = [Step1, Step2, Step3, Step4];
+    private static readonly Action<SqliteConnection, SqliteTransaction>[] Migrations = [Step1, Step2, Step3, Step4, Step5];
 
     private const string UpsertSql = """
         INSERT INTO emails (entry_id, store_id, internet_message_id, folder, subject, sender_name, sender_email,

@@ -68,6 +68,12 @@ public sealed partial class AiDraftingSettings
     /// <summary>Internal: the one-time attachments notice was shown (SPEC 26.10). Not in the Settings window.</summary>
     public bool AttachmentsNoticeShown { get; set; }
 
+    /// <summary>Keep redacted draft/sent pairs of sent AI drafts for the style skill (SPEC 19.2, 27).</summary>
+    public bool LearnFromEdits { get; set; } = true;
+
+    /// <summary>Internal: the one-time edits notice was shown (SPEC 27.6). Not in the Settings window.</summary>
+    public bool EditsNoticeShown { get; set; }
+
     [JsonIgnore] public bool HasConsent => ConsentedAtUtc is not null;
 
     [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9._\[\]-]*\z")]

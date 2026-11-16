@@ -466,6 +466,7 @@ public sealed partial class DraftWorker
         {
             _log?.LogWarning("AI drafts: couldn't record a revisit ({Type}).", ex.GetType().Name);
         }
+        RecordDraftText(detail.InternetMessageId, html, attachments.Counts, made);
         try
         {
             s.Index.AddRevisit(id, created, AiRevisitOutcome.Replace, 1);

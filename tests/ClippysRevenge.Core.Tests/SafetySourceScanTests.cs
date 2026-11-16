@@ -1422,4 +1422,64 @@ public class SafetySourceScanTests
         Assert.Matches(@"AiDraft\s*\.\s*ReadAttachments\s*=", f.Code);
         Assert.Matches(@"\.Checked\s*=\s*d\s*\.\s*ReadAttachments", f.Code);
     }
+
+    // ---- Learning from edits (M20.1, SPEC 27) ----
+
+    private const string EditLearningFile = "src/ClippysRevenge.Core/EditLearning.cs";
+    private const string EditIndexFile = "src/ClippysRevenge.Core/EmailIndex.Edits.cs";
+    private const string EditWorkerFile = "src/ClippysRevenge.Core/DraftWorker.Edits.cs";
+
+    private static readonly Regex EditsForbiddenType = new(
+        @"\b(IAiMailbox|IReplyDraftWriter|IMailSource|IReconcileSource|IAttachmentSource|IFreeBusySource|IDraftModel|ComWorker)\b|Microsoft\.Office\.Interop");
+
+    private static readonly Regex EditsLogStatement = new(@"\bLog(Debug|Information|Warning|Error|Trace|Critical)\s*\(");
+    private static readonly Regex EditsLogBad = new(@"Text|Body|Html|Imid|InReplyTo|EntryId", RegexOptions.IgnoreCase);
+
+    /// <summary>Log statements (up to their ");") whose arguments, with string literals removed, name a text or an id.</summary>
+    internal static List<string> EditLogHits(string code, string rel)
+    {
+        var hits = new List<string>();
+        foreach (Match m in EditsLogStatement.Matches(code))
+        {
+            var end = code.IndexOf(");", m.Index, StringComparison.Ordinal);
+            var call = code[m.Index..(end < 0 ? code.Length : end)];
+            if (EditsLogBad.IsMatch(call)) hits.Add($"{rel}:{LineOf(code, m.Index)}: {call.Trim()}");
+        }
+        return hits;
+    }
+
+    [Fact]
+    public void EditLearning_IsIndexOnly()
+    {
+        foreach (var rel in new[] { EditLearningFile, EditIndexFile })
+        {
+            var f = Scan.Value.Files.Single(x => x.Rel == rel);
+            Assert.DoesNotMatch(EditsForbiddenType, f.Code);
+        }
+        Assert.Matches(EditsForbiddenType, "private readonly IAiMailbox _m;");
+        Assert.Matches(EditsForbiddenType, "using Microsoft.Office.Interop.Outlook;");
+        Assert.Matches(EditsForbiddenType, "ComWorker w;");
+
+        var ctors = typeof(EditLearning).GetConstructors();
+        Assert.NotEmpty(ctors);
+        foreach (var p in ctors.SelectMany(c => c.GetParameters()))
+            Assert.False(p.ParameterType.IsInterface && p.ParameterType != typeof(Microsoft.Extensions.Logging.ILogger),
+                "EditLearning must not take a COM-side interface: " + p.ParameterType.Name);
+    }
+
+    [Fact]
+    public void EditFiles_LogNoTexts()
+    {
+        var hits = new List<string>();
+        foreach (var rel in new[] { EditLearningFile, EditIndexFile, EditWorkerFile })
+        {
+            var f = Scan.Value.Files.Single(x => x.Rel == rel);
+            hits.AddRange(EditLogHits(f.Code, rel));
+        }
+        AssertNone(hits, "Log statements in the edit-learning files must not take a text, body, imid or entry id.");
+        Assert.Single(EditLogHits("_log?.LogWarning(\"x {T}\", sentText);", "x"));
+        Assert.Single(EditLogHits("_log?.LogDebug(\"x\", row.InReplyTo);", "x"));
+        Assert.Single(EditLogHits("_log?.LogWarning(\"x\", made.EntryId);", "x"));
+        Assert.Empty(EditLogHits("_log?.LogWarning(\"x {Type}\", ex.GetType().Name);", "x"));
+    }
 }

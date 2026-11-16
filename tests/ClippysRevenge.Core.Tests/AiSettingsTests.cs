@@ -591,6 +591,30 @@ public class AiSettingsTests
     }
 
     [Fact]
+    public void LearnFromEdits_and_EditsNoticeShown_defaults_json_and_clone()
+    {
+        var a = new AiDraftingSettings();
+        Assert.True(a.LearnFromEdits);
+        Assert.False(a.EditsNoticeShown);
+        Assert.Empty(a.Validate());
+
+        var defaults = Settings.FromJson("{\"AiDrafting\":{}}").AiDrafting;
+        Assert.True(defaults.LearnFromEdits);
+        Assert.False(defaults.EditsNoticeShown);
+
+        var s = Settings.FromJson("{\"AiDrafting\":{\"LearnFromEdits\":false,\"EditsNoticeShown\":true}}");
+        Assert.False(s.AiDrafting.LearnFromEdits);
+        Assert.True(s.AiDrafting.EditsNoticeShown);
+        var c = s.Clone().AiDrafting;
+        Assert.False(c.LearnFromEdits);
+        Assert.True(c.EditsNoticeShown);
+        var back = Settings.FromJson(s.ToJson()).AiDrafting;
+        Assert.False(back.LearnFromEdits);
+        Assert.True(back.EditsNoticeShown);
+        Assert.Contains("\"LearnFromEdits\": true", S().ToJson());
+    }
+
+    [Fact]
     public void ReasonLine_defaults_validation_json_and_clone()
     {
         var a = new AiDraftingSettings();
