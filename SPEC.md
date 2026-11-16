@@ -3176,7 +3176,7 @@ What leaves the PC, and only while the feature is on: to Anthropic (via
 Claude Code or the API), the email being answered, its thread excerpts,
 the user's name and address, the current date, and the style skill (which
 contains short redacted examples of the user's sent mail); for the style
-skill, about 150–300 redacted sent-mail samples once a week. Nothing else
+skill, up to 200 redacted sent-mail samples (last 12 months) once a week. Nothing else
 from the index, no attachment content, no files. Later milestones add,
 each while its setting is on: up to 5 related earlier emails (M18,
 §25.3); the text of the user's facts file `my-email-context` (M18,
