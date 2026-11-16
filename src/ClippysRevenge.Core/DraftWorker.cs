@@ -408,6 +408,18 @@ public sealed partial class DraftWorker : BackgroundService
         public int Moved { get; set; }
         public int Kept { get; set; }
         public int Revisits { get; set; }   // revisits that made a model call
+        public bool Rescan { get; init; }
+        public WorkPriority Priority { get; init; } = WorkPriority.Background;
+        public CancellationToken? CallToken { get; init; }   // rescan: cancelled by CancelRescan; null = the pass's ct
+        public int FailedCallsInRow { get; set; }            // model-call failures since the last parsed Ok
+    }
+
+    /// <summary>A parsed model result: ends the failure streak and, in a rescan, the NotSignedIn hold.</summary>
+    private void CallSucceeded(PassState p)
+    {
+        _consecutiveFailures = 0;
+        p.FailedCallsInRow = 0;
+        if (p.Rescan) ReleaseHold();
     }
 
     /// <summary>One automatic pass, serialized with the loop and the manual path. Exposed for tests.</summary>
@@ -618,7 +630,7 @@ public sealed partial class DraftWorker : BackgroundService
         CandidateFacts? facts;
         try
         {
-            facts = await _s.Mailbox.GetFactsAsync(key, c.EntryId, WorkPriority.Background, ct).ConfigureAwait(false);
+            facts = await _s.Mailbox.GetFactsAsync(key, c.EntryId, p.Priority, ct).ConfigureAwait(false);
         }
         catch (OutlookUnavailableException)
         {
@@ -631,6 +643,11 @@ public sealed partial class DraftWorker : BackgroundService
         catch (Exception ex)
         {
             _log?.LogWarning("AI drafts: reading a mail's properties failed ({Type}, HResult {HResult}).", ex.GetType().Name, ex.HResult);
+            if (p.Rescan)
+            {
+                p.Failed++;
+                return null;
+            }
             return DraftPassEnd.Failed;
         }
         factsImid = facts?.InternetMessageId;
@@ -656,7 +673,7 @@ public sealed partial class DraftWorker : BackgroundService
         }
 
         // 4. Backoff.
-        if (_retryAt is { } retry && retry > now) return DraftPassEnd.Backoff;
+        if (!p.Rescan && _retryAt is { } retry && retry > now) return DraftPassEnd.Backoff;
 
         // 5. Model call.
         var detail = index.Get(c.EntryId);
@@ -670,12 +687,20 @@ public sealed partial class DraftWorker : BackgroundService
         var request = BuildRequest(ai, cur, index, key, email, c.ConversationTopic ?? facts!.ConversationTopic, c.EventTime,
             c.EntryId, identity, userSmtp, manual: false);
 
-        p.Scope ??= _s.Hub.Begin(ActivityState.Drafting, ActivityHub.DraftingLabel);
-        p.Total++;
-        _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
-        var result = await _s.Model.RunAsync(request, ct).ConfigureAwait(false);
-        p.Done++;
-        _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
+        var callCt = p.CallToken ?? ct;
+        if (callCt.IsCancellationRequested) return DraftPassEnd.Cancelled;
+        if (!p.Rescan)
+        {
+            p.Scope ??= _s.Hub.Begin(ActivityState.Drafting, ActivityHub.DraftingLabel);
+            p.Total++;
+            _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
+        }
+        var result = await _s.Model.RunAsync(request, callCt).ConfigureAwait(false);
+        if (!p.Rescan)
+        {
+            p.Done++;
+            _s.Hub.Report(ActivityState.Drafting, p.Done, p.Total);
+        }
 
         // 6. Result.
         now = _time.GetUtcNow();
@@ -694,13 +719,13 @@ public sealed partial class DraftWorker : BackgroundService
                 }
                 if (!reply.NeedsReply)
                 {
-                    _consecutiveFailures = 0;
+                    CallSucceeded(p);
                     Write(p, index, c, factsImid, prior, AiOutcome.NoReply, calls: 1, confidence: reply.Confidence);
                     return null;
                 }
                 if (reply.Confidence < ai.MinConfidence)
                 {
-                    _consecutiveFailures = 0;
+                    CallSucceeded(p);
                     Write(p, index, c, factsImid, prior, AiOutcome.LowConfidence, calls: 1, confidence: reply.Confidence);
                     p.HighestLow = Math.Max(p.HighestLow, reply.Confidence);
                     p.LowMinimum = ai.MinConfidence;
@@ -714,7 +739,7 @@ public sealed partial class DraftWorker : BackgroundService
                     failure = ModelFailure.BadOutput;
                     break;
                 }
-                _consecutiveFailures = 0;
+                CallSucceeded(p);
                 break;
 
             case ModelResult.RateLimited rl:
@@ -727,7 +752,7 @@ public sealed partial class DraftWorker : BackgroundService
                 EnterHold();
                 return DraftPassEnd.NotSignedIn;
 
-            case ModelResult.Failed { Kind: ModelFailure.Cancelled } when ct.IsCancellationRequested:
+            case ModelResult.Failed { Kind: ModelFailure.Cancelled } when callCt.IsCancellationRequested:
                 return DraftPassEnd.Cancelled;
 
             case ModelResult.Failed f:
@@ -744,6 +769,8 @@ public sealed partial class DraftWorker : BackgroundService
         if (failure is { } kind)
         {
             Write(p, index, c, factsImid, prior, AiOutcome.Failed, calls: 1, failed: 1);
+            p.FailedCallsInRow++;
+            if (p.Rescan) return null;
             _consecutiveFailures++;
             var minutes = FailureBackoffMinutes[Math.Min(_consecutiveFailures - 1, FailureBackoffMinutes.Count - 1)];
             _retryAt = now + TimeSpan.FromMinutes(minutes);
@@ -758,7 +785,7 @@ public sealed partial class DraftWorker : BackgroundService
             {
                 var europe = SenderRegion.IsEurope(c.SenderEmail, facts!.TransportHeaders);
                 var mt = await _meetings.ApplyAsync(new MeetingTimesRequest(html, reply!.Meeting, userSmtp, key, c.SenderEmail,
-                    c.To, c.Cc, reply.ReplyAll ?? false, europe, now, cur), WorkPriority.Background, ct).ConfigureAwait(false);
+                    c.To, c.Cc, reply.ReplyAll ?? false, europe, now, cur), p.Priority, ct).ConfigureAwait(false);
                 html = mt.Html;
                 LogMeetingTimes(mt);
             }
@@ -778,7 +805,7 @@ public sealed partial class DraftWorker : BackgroundService
         CandidateFacts? facts2;
         try
         {
-            facts2 = await _s.Mailbox.GetFactsAsync(key, c.EntryId, WorkPriority.Background, ct).ConfigureAwait(false);
+            facts2 = await _s.Mailbox.GetFactsAsync(key, c.EntryId, p.Priority, ct).ConfigureAwait(false);
         }
         catch (OutlookUnavailableException)
         {
@@ -794,7 +821,7 @@ public sealed partial class DraftWorker : BackgroundService
         {
             _log?.LogWarning("AI drafts: re-reading a mail's properties failed ({Type}, HResult {HResult}).", ex.GetType().Name, ex.HResult);
             Write(p, index, c, factsImid, prior, AiOutcome.Failed, calls: 1, failed: 1);
-            return DraftPassEnd.Failed;
+            return p.Rescan ? null : DraftPassEnd.Failed;
         }
         rule = DraftRules.EvaluateBeforeCreate(facts2);
         if (rule is not null)
@@ -807,7 +834,7 @@ public sealed partial class DraftWorker : BackgroundService
         // 8. Create.
         try
         {
-            var made = await _s.Writer.ReplyAsync(MakePlan(c.EntryId, reply!.ReplyAll ?? false, html, WorkPriority.Background), ct)
+            var made = await _s.Writer.ReplyAsync(MakePlan(c.EntryId, reply!.ReplyAll ?? false, html, p.Priority), ct)
                 .ConfigureAwait(false);
             var created = _time.GetUtcNow();
             Write(p, index, c, factsImid, prior, AiOutcome.Drafted, calls: 1, confidence: reply.Confidence,
