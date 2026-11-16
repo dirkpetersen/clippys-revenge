@@ -114,4 +114,11 @@ public class OneDriveMapTests
     [Fact]
     public void QueryAndFragmentDropped() =>
         AssertLocal(OneDriveMap.Map(Docs + "/Q4.xlsx?web=1#x", [Team]), Team, "Q4.xlsx");
+
+    [Fact]
+    public void NotSyncedReason_IsTheAttachmentReason()
+    {
+        Assert.Equal(AttachmentReasons.NotSynced, OneDriveMap.NotSyncedReason);
+        Assert.Equal(AttachmentReasons.NotSynced, Assert.IsType<MappedLink.Unmappable>(OneDriveMap.Map(null, [Team])).Reason);
+    }
 }
