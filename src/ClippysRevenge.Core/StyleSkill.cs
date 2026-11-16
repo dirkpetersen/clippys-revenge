@@ -894,6 +894,7 @@ public sealed class StyleSkill
     public const int MinNewSentForRefresh = 20;
 
     private readonly Func<EmailIndex> _ownIndex;
+    private readonly Func<bool>? _sentIndexed;
     private readonly Func<IDraftModel> _model;
     private readonly Func<AiDraftingSettings> _settings;
     private readonly Func<IReadOnlyList<string>> _signatureTexts;
@@ -907,11 +908,14 @@ public sealed class StyleSkill
     private bool _editReported;
     private string? _editReportedHash;
 
-    /// <exception cref="ArgumentNullException">Any argument except time/logger is null.</exception>
+    /// <param name="sentIndexed">SPEC 19.6 "Sent Items first": automatic runs wait while it returns false. Null = always
+    /// ready (the behavior before M16.11).</param>
+    /// <exception cref="ArgumentNullException">Any argument except time/logger/sentIndexed is null.</exception>
     public StyleSkill(StyleSkillFiles files, Func<EmailIndex> ownIndex, Func<IDraftModel> model,
         Func<AiDraftingSettings> settings, Func<IReadOnlyList<string>> signatureTexts, ActivityHub activity,
-        TimeProvider? time = null, ILogger? logger = null)
+        TimeProvider? time = null, ILogger? logger = null, Func<bool>? sentIndexed = null)
     {
+        _sentIndexed = sentIndexed;
         Files = files ?? throw new ArgumentNullException(nameof(files));
         _ownIndex = ownIndex ?? throw new ArgumentNullException(nameof(ownIndex));
         _model = model ?? throw new ArgumentNullException(nameof(model));
@@ -975,12 +979,21 @@ public sealed class StyleSkill
         return RegenerateCoreAsync(owner, replaceEdits, ct);
     }
 
+    /// <summary>SPEC 19.6 "Sent Items first". A throwing delegate counts as ready.</summary>
+    private bool SentIndexedReady()
+    {
+        if (_sentIndexed is null) return true;
+        try { return _sentIndexed(); }
+        catch (Exception) { return true; }
+    }
+
     private async Task<StyleRunResult> RunIfDueCoreAsync(Recipient owner, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         RefreshMeetingSection();
         var s = _settings();
         if (!(s.Enabled && s.AutoRegenerateStyle && s.HasConsent)) return new StyleRunResult.NotDue();
+        if (!SentIndexedReady()) return new StyleRunResult.NotDue();
         var now = _time.GetUtcNow();
         lock (_timers)
             if (now < _nextAutoAttemptUtc) return new StyleRunResult.NotDue();

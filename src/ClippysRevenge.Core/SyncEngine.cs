@@ -50,7 +50,8 @@ public sealed class SyncEngine
     /// One §10 cycle for one mailbox. Throws OperationCanceledException (ct), MailSourceUnavailableException,
     /// and anything the index or source throws; every ActivityHub scope it opened is disposed first.
     /// </summary>
-    public async Task<MailboxSyncResult> SyncMailboxAsync(MailboxPlan plan, EmailIndex index, CancellationToken ct)
+    public async Task<MailboxSyncResult> SyncMailboxAsync(MailboxPlan plan, EmailIndex index, CancellationToken ct,
+        Action<SentGroupResult>? sentGroup = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(index);
@@ -69,15 +70,25 @@ public sealed class SyncEngine
         index.SetMeta("mailbox_smtp", mb.Smtp);
         index.SetMeta("store_id", mb.StoreId);
 
-        var results = new List<FolderSyncResult>();
-        var runs = new List<FolderRun>();
-        foreach (var path in plan.Folders.Distinct(StringComparer.OrdinalIgnoreCase))
+        var configured = plan.Folders.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var order = SyncPlanner.ProcessingOrder(configured);
+        var resultByPath = new Dictionary<string, FolderSyncResult>(StringComparer.OrdinalIgnoreCase);
+        var runByPath = new Dictionary<string, FolderRun>(StringComparer.OrdinalIgnoreCase);
+        var sentTotal = order.Count(FolderPaths.IsUnderSentItems);
+        var sentSeen = 0;
+        var sentComplete = true;
+        var sentStartedIncomplete = false;
+        if (sentTotal == 0) RaiseSentGroup(sentGroup, new SentGroupResult(plan.Mailbox, true, false));
+        foreach (var path in order)
         {
             ct.ThrowIfCancellationRequested();
+            var isSent = FolderPaths.IsUnderSentItems(path);
             var f = await _source.GetFolderAsync(mb, path, ct).ConfigureAwait(false);
             if (f is null)
             {
-                results.Add(new FolderSyncResult(path, true, 0, 0, false));
+                resultByPath[path] = new FolderSyncResult(path, true, 0, 0, false);
+                if (isSent && ++sentSeen == sentTotal)
+                    RaiseSentGroup(sentGroup, new SentGroupResult(plan.Mailbox, sentComplete, sentComplete && sentStartedIncomplete));
                 continue;
             }
 
@@ -102,9 +113,19 @@ public sealed class SyncEngine
             state = await ChangesPassAsync(plan, prefix, f, path, state, index, cutoff, run, ct).ConfigureAwait(false);
             await BackfillPassAsync(plan, prefix, f, path, state, index, cutoff, now, run, ct).ConfigureAwait(false);
             await ReconcileAsync(plan, f, path, index, cutoff, ct).ConfigureAwait(false);
-            runs.Add(run);
-            results.Add(new FolderSyncResult(path, false, run.Upserted, run.UnreadUpdated, run.Complete));
+            runByPath[path] = run;
+            resultByPath[path] = new FolderSyncResult(path, false, run.Upserted, run.UnreadUpdated, run.Complete);
+            if (isSent)
+            {
+                if (!run.Complete) sentComplete = false;
+                if (run.StartedIncomplete) sentStartedIncomplete = true;
+                if (++sentSeen == sentTotal)
+                    RaiseSentGroup(sentGroup, new SentGroupResult(plan.Mailbox, sentComplete, sentComplete && sentStartedIncomplete));
+            }
         }
+
+        var results = configured.Select(p => resultByPath[p]).ToList();
+        var runs = configured.Where(runByPath.ContainsKey).Select(p => runByPath[p]).ToList();
 
         await RefreshThreadMetaAsync(plan, prefix, index, cutoff, now, runs, ct).ConfigureAwait(false);
 
@@ -136,6 +157,16 @@ public sealed class SyncEngine
         _log?.LogDebug("Sync of mailbox {Mailbox} done: {Folders} folders, {Purged} purged.",
             plan.Mailbox.Length == 0 ? "(own)" : plan.Mailbox, runs.Count, purged);
         return new MailboxSyncResult(plan.Mailbox, false, results, purged, finished, elapsed);
+    }
+
+    private void RaiseSentGroup(Action<SentGroupResult>? callback, SentGroupResult result)
+    {
+        if (callback is null) return;
+        try { callback(result); }
+        catch (Exception ex)
+        {
+            _log?.LogWarning("The Sent group callback failed ({Type}).", ex.GetType().Name);
+        }
     }
 
     /// <summary>Step 5. A source failure is logged and the next folder carries on.</summary>
