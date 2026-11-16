@@ -124,7 +124,7 @@ public sealed class AiDraftsUiTests : IDisposable
     public void Menu_defaults()
     {
         var m = AiDraftsMenu.Build(Ai(), available: true, outlookUnavailable: false, busy: false);
-        Assert.Equal(new AiDraftsMenuModel(false, true, true, true, true), m);
+        Assert.Equal(new AiDraftsMenuModel(false, true, true, true, true, DontDraftEnabled: true), m);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public sealed class AiDraftsUiTests : IDisposable
     public void Menu_busy_disables_only_auto()
     {
         var m = AiDraftsMenu.Build(Ai(), true, false, busy: true);
-        Assert.Equal(new AiDraftsMenuModel(false, false, true, true, true), m);
+        Assert.Equal(new AiDraftsMenuModel(false, false, true, true, true, DontDraftEnabled: true), m);
     }
 
     [Fact]
@@ -413,4 +413,14 @@ public sealed class AiDraftsUiTests : IDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             AiOwner.ResolveAsync(new OwnerMailbox(), ix, WorkPriority.Background, cts.Token));
     }
-}
+
+    [Fact]
+    public void DontDraftEnabled_follows_draft_selected()
+    {
+        Assert.True(AiDraftsMenu.Build(Ai(), true, false, false).DontDraftEnabled);
+        Assert.True(AiDraftsMenu.Build(Ai(), true, false, busy: true).DontDraftEnabled);
+        Assert.False(AiDraftsMenu.Build(Ai(), true, false, false, new RescanProgress(1, 5)).DontDraftEnabled);
+        Assert.False(AiDraftsMenu.Build(Ai(), true, false, false, rescanStarting: true).DontDraftEnabled);
+        Assert.False(AiDraftsMenu.Build(Ai(), true, outlookUnavailable: true, busy: false).DontDraftEnabled);
+        Assert.False(AiDraftsMenu.Build(Ai(), available: false, outlookUnavailable: false, busy: false).DontDraftEnabled);
+    }}

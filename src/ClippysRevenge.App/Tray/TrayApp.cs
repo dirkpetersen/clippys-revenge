@@ -14,7 +14,8 @@ internal sealed record AiTrayServices(
     Func<RescanPlan> PlanRescan,                                     // drafts.PlanRescan
     Func<CancellationToken, Task<RescanResult>> Rescan,              // drafts.RescanAsync
     Action CancelRescan,                                             // drafts.CancelRescan
-    Func<RescanProgress?> CurrentRescan);                            // () => drafts.CurrentRescan
+    Func<RescanProgress?> CurrentRescan,                             // () => drafts.CurrentRescan
+    DontDraftService? DontDraft = null);
 
 internal sealed record DraftInviteTrayServices(
     DraftInvites Invites,
@@ -460,6 +461,7 @@ internal sealed partial class TrayApp : ApplicationContext
         _ai.DropDownOpening += (_, _) => ApplyAiMenu();
         _aiRescan.Click += (_, _) => RescanClicked();
         _ai.DropDownItems.AddRange([_aiAuto, _aiDraftSelected, _aiRescan, _aiShowDrafts, new ToolStripSeparator(), _aiSettings]);
+        BuildDontDraftItems();
     }
 
     private void ApplyAiMenu()
@@ -474,6 +476,7 @@ internal sealed partial class TrayApp : ApplicationContext
         _aiDraftSelected.Enabled = m.DraftSelectedEnabled;
         _aiShowDrafts.Visible = m.ShowDraftsVisible;
         _aiShowDrafts.Enabled = m.ShowDraftsEnabled;
+        ApplyDontDraftItems(m);
     }
 
     /// <summary>Draft replies automatically: consent first, then a backend check, then Enabled (SPEC 19.10).</summary>

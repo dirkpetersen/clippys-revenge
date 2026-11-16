@@ -21,6 +21,8 @@ public static class AiMenuTexts
     public const string DraftSelected = "Draft a reply to the selected email";
     public const string ShowDrafts = "Show Drafts in Outlook";
     public const string Settings = "AI drafts settings…";
+    public const string DontDraftSender = "Don't draft for this sender";
+    public const string DontDraftDomain = "Don't draft for this sender's domain…";
 
     public static string ToggleFailed(string reason) => "Couldn't change AI drafts: " + reason;
 }
@@ -29,7 +31,8 @@ public sealed record AiDraftsMenuModel(bool AutoChecked, bool AutoEnabled, bool 
     bool ShowDraftsVisible, bool ShowDraftsEnabled,
     string RescanText = RescanTexts.MenuItem,   // "Rescan emails from the last 24 hours…" or "Cancel rescan (d/t)"
     bool RescanEnabled = true,
-    bool RescanCancels = false);                // true: a click calls CancelRescan
+    bool RescanCancels = false,                 // true: a click calls CancelRescan
+    bool DontDraftEnabled = false);             // the two "Don't draft for" items (SPEC 27.7)
 
 /// <summary>SPEC 23.8: what the tray shows before and after a rescan. Pure.</summary>
 public static class RescanFlow
@@ -78,7 +81,8 @@ public static class AiDraftsMenu
             ShowDraftsEnabled: available,
             RescanText: running ? RescanTexts.CancelItem(rescan!.Done, rescan.Total) : RescanTexts.MenuItem,
             RescanEnabled: running || (available && !outlookUnavailable && !starting),
-            RescanCancels: running);
+            RescanCancels: running,
+            DontDraftEnabled: available && !outlookUnavailable && !running && !starting);
     }
 }
 
@@ -379,13 +383,38 @@ public sealed class AiDraftingToggler
         if (did) _changed();
     }
 
-    private bool Mutate(Func<AiDraftingSettings, bool> edit)
+    /// <summary>The normal settings path for a tray edit of AiDrafting (SPEC 27.7). Under Settings.Gate: clone live,
+    /// run edit on the clone's AiDrafting. edit false: nothing saved, returns null. Else clone.Validate(): errors,
+    /// nothing saved, returns them. Else save(clone), live.AiDrafting = clone.AiDrafting, release the gate, changed(),
+    /// returns an empty list.</summary>
+    /// <exception cref="ArgumentNullException">edit is null.</exception>
+    /// <exception cref="IOException">The save failed. Live is unchanged.</exception>
+    /// <exception cref="UnauthorizedAccessException">Same.</exception>
+    public IReadOnlyList<SettingsError>? EditAi(Func<AiDraftingSettings, bool> edit)
+    {
+        ArgumentNullException.ThrowIfNull(edit);
+        IReadOnlyList<SettingsError>? errors = null;
+        var did = Mutate(ai => edit(ai), next =>
+        {
+            var e = next.Validate();
+            if (e.Count == 0) return true;
+            errors = e;
+            return false;
+        });
+        if (errors is not null) return errors;
+        if (!did) return null;
+        _changed();
+        return [];
+    }
+
+    private bool Mutate(Func<AiDraftingSettings, bool> edit, Func<Settings, bool>? accept = null)
     {
         _settings.Gate.Wait();
         try
         {
             var next = _settings.Clone();
             if (!edit(next.AiDrafting)) return false;
+            if (accept is not null && !accept(next)) return false;
             _save(next);
             _settings.AiDrafting = next.AiDrafting;
             return true;
